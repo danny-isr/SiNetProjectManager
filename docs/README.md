@@ -31,6 +31,8 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) | PROD vs DEV machine roles, config placement, allowed ops, Google/ACC isolation target |
 | [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) | Publish gates, versioning, rollback; who may run `publish-all.ps1` |
 | [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) | Live log tails, System Status, Workflow Ops, pilot routines |
+| [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) | **Agent:** incremental UNC Llog sweep (state in `artifacts/llog-review/`) |
+| [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) | **Documentation-only:** material ACC/filing failures must reach Llog at Warning+ (Trace is not ops) |
 | [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) | How to restore AccService Autodesk 3-legged refresh token on PROD |
 | [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | **Planning (DEV):** admin startup alerts for sync / AccService / ops gaps |
 | [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) | Open DEV defects / implementation requests (index) |
@@ -56,6 +58,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md) | DB backup / restore drill (P0) |
 | [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) | MasterPlan API key rotation (P0) |
 | [`LOGGING.md`](./LOGGING.md) | New System logging architecture (IAppLogger + Serilog) |
+| [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) | Material failures → Llog Warning+; gap catalogue (docs-only 13.08.2026) |
 | [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md) | «מצב מערכת» design and contributors |
 | [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md) | «בריאות תהליכים» runtime ops |
 | [`DEV_TOOLS.md`](./DEV_TOOLS.md) | DEBUG-only Reset & Seed — not for production DB |

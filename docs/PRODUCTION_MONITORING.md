@@ -2,11 +2,11 @@
 
 > **Title:** Production Monitoring  
 > **Date:** 02.08.2026  
-> **Updated:** 02.08.2026 (keep central log level Warning for early pilot)  
+> **Updated:** 13.08.2026 (material-failure Llog principles)  
 > **Status:** Active  
 > **Scope:** How the PROD workstation watches real-time logs and subsystem / workflow health during the pilot. Complements architecture docs; does not replace them.
 
-Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`LOGGING.md`](./LOGGING.md), [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md), [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md), [`SiNetProjectManagerV2/Docs/LOGGING.md`](../SiNetProjectManagerV2/Docs/LOGGING.md).
+Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`LOGGING.md`](./LOGGING.md), [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) (material failures must be Warning+ on Llog), [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md), [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md), [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) (Cursor incremental Llog sweep), [`SiNetProjectManagerV2/Docs/LOGGING.md`](../SiNetProjectManagerV2/Docs/LOGGING.md).
 
 ---
 
@@ -54,6 +54,12 @@ Enrichers on desktop lines include `App`, `Host=SiNet.App.Wpf`, `Machine`, `User
 **Pilot decision (02.08.2026):** keep **`Logging.Client.CentralLevel` = Warning** (default). Do **not** lower it to Information during the early pilot — noise vs value is not worth it yet. Rely on Warning/Error/`[UI]`/`Fatal` on the central share; enable per-user local logging when investigating a specific machine.
 
 Per-user `LoggingEnabled=false` must **not** silence the central sink (design in [`LOGGING.md`](./LOGGING.md) §9).
+
+**Material failures vs quiet sessions:** an Information-only session with no central file is OK. Failing to upload to ACC, failing MoveToProject/FileMaterial, failing Ensure Inbox, or failing Gmail File/Unfile is **not** OK if it only appears in the UI or in `System.Diagnostics.Trace`. Trace is **not** an ops channel. Catalogue and target: [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md). Do **not** lower central to Information to compensate.
+
+### 2.2 Agent incremental review (Cursor)
+
+Do **not** list “today only” by hand. Use [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) / skill `llog-review`: byte cursor in `artifacts/llog-review/state.json`, findings in `ledger.json`. Old files absent from state are unread (that is how a June Lilach file is still in scope).
 
 ---
 
@@ -191,7 +197,8 @@ Use it when a user reports repeated Civil 3D crashes or a machine that reboots o
 
 | Gap | Impact | Recommended follow-up |
 | --- | --- | --- |
-| Central default level Warning; lifecycle often Information | Quiet central share during “healthy” sessions | **Accepted for early pilot** (keep Warning). Later optional: lifecycle markers at Warning in code — not an ops level change now |
+| Central default level Warning; lifecycle often Information | Quiet central share during “healthy” sessions | **Accepted for early pilot** (keep Warning). Later optional: one Client session-start Warning — [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) §8. Do **not** lower central to Information |
+| Material ACC/filing failures logged only via Trace / UI | MoveToProject, some ingest Failed paths, Gmail File/Unfile missing from Llog | Documentation-only catalogue: [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md). Code slices after that doc is approved |
 | OS title shows version (As-Is) | Operators can confirm build from window title; UNC/MSIX still useful | Version comes from `NewShellWindowTitle` / assembly informational version -- optional About polish only |
 | No `Environment` enricher | DEV noise on same share hard to filter | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) §6.1 |
 | No in-app log viewer | Operators need PowerShell / Explorer on UNC | Acceptable for pilot; optional later |

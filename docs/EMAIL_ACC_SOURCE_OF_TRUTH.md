@@ -4,7 +4,7 @@
 > **Canonical domain docs:**  
 > [`EmailSystemPrinciples` §6.1 / §6.5 / §6.6](../SiNetProjectManagerV2/Docs/Domains/Email/EmailSystemPrinciples-2026-05-26.md) ·  
 > [`AccSystemPrinciples`](../SiNetProjectManagerV2/Docs/Domains/ACC/AccSystemPrinciples-2026-05-26.md)  
-> **Ops / migration detail:** [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md) · [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md)
+> **Ops / migration detail:** [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md) · [`ACC_BOUNDARY.md`](./ACC_BOUNDARY.md) · Llog when SoT writes fail: [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md)
 
 ## Three non-negotiable rules
 
@@ -75,3 +75,7 @@ Summary aligned with SoT above:
 | Task / window close | Files verified **and** `CompleteAsync` with `TaskClosed` **and** workflow advance not pending (not `AllFilesTransferred` alone) |
 | Mailbox association | Unchanged — Gmail project label |
 | Email body PDF | Optional tagged `00_Email.pdf` only — never automatic required material |
+
+## Ops: failures of these SoT writes must reach Llog
+
+Gmail File/Unfile and ACC physical upload/Move are the operations this page defines. If they fail, operators on the PROD workstation must see Warning/Error on the central share — not only UI Status or `System.Diagnostics.Trace`. As-Is gaps (e.g. `SqlEmailFilingService` returning `EmailFilingResult(false)` without `IAppLogger`, MoveToProject Trace-only): [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md). Do not “fix” diagnosability by treating SQL `ProjectId` as filed.

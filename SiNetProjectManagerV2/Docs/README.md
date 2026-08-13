@@ -38,6 +38,8 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | [`docs/MASTERPLAN_SYNC_WATERMARKS.md`](../../docs/MASTERPLAN_SYNC_WATERMARKS.md) | SyncEngine watermarks, hours lookback window, weekly reconciliation |
 | [`docs/README.md`](../../docs/README.md) | Full index of repository `docs/*.md` |
 | [`docs/DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](../../docs/DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) | **DEV-027 Planning:** employee `.secrets` import; AccService 401 vs TLS in System Status |
+| [`docs/OPS_LLOG_REVIEW.md`](../../docs/OPS_LLOG_REVIEW.md) | **Agent:** incremental central Llog sweep |
+| [`docs/LOGGING_MATERIAL_FAILURES.md`](../../docs/LOGGING_MATERIAL_FAILURES.md) | **Documentation-only:** material ACC/filing failures must reach Llog at Warning+ |
 
 Cross-domain deployment principles: [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](Domains/Deployment/DeploymentPrinciples-2026-05-26.md) -- **Superseded for desktop production SoT** (use `docs/RELEASE_PROCESS.md` + root `DEPLOYMENT.md` / `SiNet.App.Wpf`). Kept for cross-cutting install/auth principles.
 

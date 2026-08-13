@@ -3,7 +3,7 @@
 > **Status:** Target (documentation source of truth) — **2026-08-07**  
 > **Audience:** Agents and developers implementing `PRP.FileMaterial` / `FileQuoteMaterial` filing via Email MoveToProject  
 > **Host:** `SiNet.App.Wpf` (production). V2 Legacy handler is reference only.  
-> **Related SoT:** [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) · ingest slices [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) · workflow stage map [`manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md`](./manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md)  
+> **Related SoT:** [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) · ingest slices [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) · workflow stage map [`manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md`](./manual-tests/PROPOSAL_WORKFLOW_MANUAL_TEST.md) · Llog on filing/upload failure: [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md)  
 > **Missing historical log:** V2 `MoveToProject-Decisions-2026-05-24.md` is **not in repo**; this document is the interim + current Target for FileMaterial six decisions.
 
 ---
@@ -310,6 +310,8 @@ After SQL inbox load and mailbox refresh:
 
 Hebrew formatting: `EmailMoveToProjectOutcomeDisplay` (+ dialogs in `EmailDetailViewModel`).
 
+**Ops (Llog):** UI copy is not a substitute for the central log. As-Is, `NativeEmailMoveToProjectExecutor` uses `System.Diagnostics.Trace` for download/file/metadata failures — those lines **do not** reach `\\si-win-2k19\AutoCAD Data\log`. Target Warning/Error via `IAppLogger`: [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) §4.1.
+
 ---
 
 ## 14. Mechanisms to reuse / extend (only)
@@ -419,3 +421,4 @@ Hebrew formatting: `EmailMoveToProjectOutcomeDisplay` (+ dialogs in `EmailDetail
 | Date | Change |
 | --- | --- |
 | 2026-08-07 | Initial full Target document (Documentation First halt). Supersedes the short bullet list previously only in `NATIVE_EMAIL_ACC_INGEST.md` as the detailed SoT. |
+| 2026-08-13 | Pointer: MoveToProject failures must reach Llog (`LOGGING_MATERIAL_FAILURES.md`). No behavior change in this round. |
