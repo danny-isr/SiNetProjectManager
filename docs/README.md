@@ -2,7 +2,7 @@
 
 > **Title:** docs/ README -- New System & ops documentation index
 > **Date:** 02.08.2026
-> **Updated:** 12.08.2026
+> **Updated:** 13.08.2026
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
 As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
@@ -42,6 +42,8 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md`](./DEV_PLAN_EMAIL_TRIAGE_TWO_STAGE.md) | **DEV-016:** two-stage triage, FYI, mark-read on completion, leaf group title |
 | [`DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md`](./DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md) | **DEV-017:** group order/membership, project-switch stuck, refresh, selector widths |
 | [`DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md`](./DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md) | **DEV-021:** test-replica verify checklist (monthly + sample IDs + R02) |
+| [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) | **DEV-024:** R02 vs MP gap after monthly+reconcile (source-split diagnosis) |
+| [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) | **DEV-025:** Replica-first reports; orphan DELETE + 30-day JSON under MasterPlanBakup |
 | [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) | **DEV-019:** safe orphan DELETE after full hours reconcile (caps / age / 2-sightings) |
 | [`DEV_PLAN_WORKSTATION_CRASH_REPORT.md`](./DEV_PLAN_WORKSTATION_CRASH_REPORT.md) | **DEV-010:** «דוח קריסות תחנה» — Event Log crash report + AI export |
 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | **DEV-014:** crash report round 2 — BIOS/WHEA/CER evidence, incident grouping |

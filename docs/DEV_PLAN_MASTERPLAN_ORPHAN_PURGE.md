@@ -2,8 +2,8 @@
 
 > **Title:** Reconcile orphan purge with safety gates (DEV-019)
 > **Date:** 12.08.2026
-> **Updated:** 12.08.2026 (implementing on `development`; locked defaults below)
-> **Status:** Implementing (on `development`; not on PROD until shipped)
+> **Updated:** 13.08.2026 (DEV-025 Replica SoT directive)
+> **Status:** **Superseded intent by [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) (DEV-025)** — keep this file for history of gates; implement DEV-025 end state (API align + JSON archive; drop hard 10% / 2-sighting / age-defer).
 > **Scope:** After a **full unfiltered** hours reconcile (`FromDate=null`), optionally **delete** replica rows (`MP_ProjectHours`, `MP_ProjectHoursExtended`) whose IDs were **not** returned by the API — under hard safety gates. Today orphans are only counted and logged (`CountOrphanCandidatesAsync` — never deleted) unless gates + CLI allow purge.
 
 Related: [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) (DEV-018), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md).

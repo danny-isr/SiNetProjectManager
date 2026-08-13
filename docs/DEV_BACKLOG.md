@@ -2,7 +2,7 @@
 
 > **Title:** Development backlog index (App.Wpf pilot gaps)
 > **Date:** 03.08.2026
-> **Updated:** 12.08.2026 (DEV-023 post-monthly API reconcile; DEV-022 SQL ACL; DEV-021 hours)
+> **Updated:** 13.08.2026 (DEV-025 Replica SoT + orphan JSON archive directive; DEV-024 R02 gap)
 > **Status:** Active / Operational Checklist
 > **Classification:** Operational Checklist (engineering index; not rollout sign-off)
 > **Scope:** Single index of product/engineering items for the `development` / `release` lines. Each item points to a focused doc. Not a substitute for GitHub Issues.
@@ -48,11 +48,13 @@ Status vocabulary:
 | DEV-011 | Job-type remove: strong warning, no workflow hard-delete, orphan-track mark + data-integrity list | Implementing | P2 | [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §5 | Warning + `[ORPHAN-TRACK]` + Ops filter done; broader checklist later |
 | DEV-014 | Crash report round 2 Ship 2: context form, plugin inventory, CER/WER/dump index | Ship 1 on tip; Ship 2 pending | P2 | [`DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md`](./DEV_PLAN_WORKSTATION_CRASH_DEEP_DIAGNOSTICS.md) | Ship 1 via 1.0.21 line |
 | DEV-018 | Monthly MasterPlan restore: pre-ETL replica mismatch log (same `--monthly`, no extra DB) | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) | SyncEngine 1.0.19 / App.Wpf 1.0.26 |
-| DEV-019 | Reconcile orphan purge with safety gates (API full pull = SoT; max 10%, age, 2-sightings) | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) | SyncEngine 1.0.19 |
+| DEV-019 | Reconcile orphan purge — **intent → DEV-025** (API align + 30-day JSON; drop 10%/2-sighting hard gates) | Planning — follow DEV-025 | P1 | [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) · [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) | SyncEngine |
 | DEV-020 | Monthly bak staging: move to `N:\MasterPlanBakup` ↔ SQL `D:\SharedFolder\ProjectsData\MasterPlanBakup`, retain 10 | On release tip — ops verify Needs Review | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1b | SyncEngine **1.0.20** |
 | DEV-021 | HoursReports.Hours = **milliseconds** (ETL); PHE.LastUpdated not stamped from bak; daily MERGE repair null Duration/TotalHours | Implementing — unit tests green; DB verify pending | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1c · [`DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md`](./DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md) | SyncEngine on `development` |
 | DEV-022 | After monthly restore: ensure `SI-ENG\שרטטים` has db_datareader+db_datawriter on `Db_Mp_SiEng` and `Replica_DB` | Implementing | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1d | SyncEngine on `development` |
 | DEV-023 | After successful `--monthly`, run existing API daily sync with **forced full reconcile** (internet) | Implementing | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1e | SyncEngine on `development` |
+| DEV-024 | R02 July gap — live MP preferred over Replica (proven on PROD) | Diagnosis done — fix via DEV-025 Rule B | P1 | [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) | App.Wpf |
+| DEV-025 | **Directive:** Replica-first queries; orphan DELETE + 30-day JSON under MasterPlanBakup | Planning / Directive | P1 | [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) | SyncEngine + App.Wpf |
 ## 2b. On `release` tip — ops verify (Needs Review)
 
 Code for these IDs is present on `origin/release` @ `127dc0e` (App.Wpf **1.0.23** and prior ship commits). **Do not** treat as Done until operator verify is recorded.
