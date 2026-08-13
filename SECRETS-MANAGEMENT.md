@@ -45,6 +45,8 @@ powershell -ExecutionPolicy Bypass -File "\\SI-WIN-2K19\AppFolder\AppNet\SiOffic
 
 **הכלל:** Windows Credential Manager הוא **per-user** (DPAPI). השירות חייב לרוץ כאותו משתמש שהסודות נשמרו אצלו, אחרת הוא לא יראה אותם.
 
+**Pilot gap (13.08.2026):** משתמש בלי `System.Settings.Write` לא יכול לפתוח Secret Setup ולייבא מפתחות (ליLach / 401 AccService). יעד: [`docs/DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](docs/DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) — ייצוא אדמין כמו היום; ייבוא `.secrets` לכל משתמש מחובר בלי חלון הסודות, עם שתי אפשרויות: עדכון כל המפתחות שבקובץ, או החלפה כך שישאר רק מה שבקובץ.
+
 ---
 
 ## 2. הסודות

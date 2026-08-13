@@ -10,5 +10,7 @@ internal sealed class WindowsCredentialVaultStore : ISecretVaultStore
 
     public void SetSecret(string key, string value) => WindowsCredentialManagerVault.SetSecret(key, value);
 
+    public void DeleteSecret(string key) => WindowsCredentialManagerVault.DeleteSecret(key);
+
     public IReadOnlyDictionary<string, bool> GetVaultStatus() => WindowsCredentialManagerVault.GetVaultStatus();
 }

@@ -32,6 +32,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.WorkflowOpsRetry] = AppRole.Administrator,
             [AppFeatureCodes.WorkflowOpsStart] = AppRole.Administrator,
             [AppFeatureCodes.ShellOpenMasterPlanMonthlyRestore] = AppRole.Management,
+            [AppFeatureCodes.ShellImportWorkstationSecrets] = AppRole.Employee,
         };
 
     /// <summary>

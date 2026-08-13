@@ -48,4 +48,7 @@ public static class AppFeatureCodes
 
     /// <summary>Monthly MasterPlan bak restore + replica mismatch log («שחזור חודשי MasterPlan»).</summary>
     public const string ShellOpenMasterPlanMonthlyRestore = "Shell.OpenMasterPlanMonthlyRestore";
+
+    /// <summary>Employee import of a workstation <c>.secrets</c> package («ייבוא מפתחות תחנה»).</summary>
+    public const string ShellImportWorkstationSecrets = "Shell.ImportWorkstationSecrets";
 }

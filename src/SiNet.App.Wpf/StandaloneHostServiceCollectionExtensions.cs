@@ -94,6 +94,7 @@ public static class StandaloneHostServiceCollectionExtensions
         services.AddSiNetSecrets();
         services.AddTransient<SecretSetupViewModel>();
         services.AddTransient<SecretSetupWindow>();
+        services.AddTransient<WorkstationSecretsImportHost>();
 
         return services;
     }

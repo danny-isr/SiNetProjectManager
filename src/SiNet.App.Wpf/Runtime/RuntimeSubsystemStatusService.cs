@@ -21,11 +21,17 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
     /// <summary>Default upper bound for a single contributor probe, so one unreachable share cannot stall the panel.</summary>
     internal static readonly TimeSpan DefaultContributorTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>Deep probes (AccService diag, replica SQL) get a longer bound.</summary>
+    internal static readonly TimeSpan DefaultDeepContributorTimeout = TimeSpan.FromSeconds(20);
+
     /// <summary>Delay before the first automatic full probe after the service is constructed.</summary>
     internal static readonly TimeSpan DefaultStartupRefreshDelay = TimeSpan.FromSeconds(3);
 
-    /// <summary>Interval between automatic full probes while the host is running.</summary>
+    /// <summary>Interval between automatic Fast probes while the host is running.</summary>
     internal static readonly TimeSpan DefaultPeriodicRefreshInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>Interval between automatic Deep probes (also runs on the first cycle and on Refresh).</summary>
+    internal static readonly TimeSpan DefaultDeepRefreshInterval = TimeSpan.FromMinutes(30);
 
     private readonly TimeSpan _contributorTimeout;
     private readonly IReadOnlyList<ISubsystemStatusContributor> _contributors;
@@ -47,6 +53,8 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
     private AccServiceHealthResult? _cachedAccHealth;
     private IReadOnlyList<WorkflowAssigneeReadinessIssueDto>? _cachedAssigneeIssues;
     private bool _assigneeProbeAttempted;
+    private DateTimeOffset _lastDeepUtc;
+    private Dictionary<string, SubsystemRuntimeStatus> _contributorRowsByKey = new(StringComparer.OrdinalIgnoreCase);
 
     public RuntimeSubsystemStatusService(
         IStartupTaskRegistry startupTasks,
@@ -113,14 +121,15 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
     public event EventHandler? Changed;
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
+        => await RefreshAsync(includeDeep: true, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Fast cycle skips Deep-tier contributors (keeps last row). Deep cycle runs everyone, including
+    /// AccService <c>/v1/acc/diag</c>. Window Refresh always uses Deep.
+    /// </summary>
+    internal async Task RefreshAsync(bool includeDeep, CancellationToken cancellationToken = default)
     {
-        // Coalesce: a window open + periodic tick must not run two full probe waves in parallel.
-        if (!await _refreshGate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
-        {
-            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            _refreshGate.Release();
-            return;
-        }
+        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -135,6 +144,10 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
                 }
                 catch (Exception ex)
                 {
+                    Trace.TraceWarning(
+                        "[RuntimeStatus] AccService health failed (non-fatal): {0} {1}",
+                        ex.GetType().Name,
+                        ex.Message);
                     _cachedAccHealth = new AccServiceHealthResult(
                         IsConfigured: true,
                         AccServiceHealthState.Offline,
@@ -148,7 +161,10 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
             }
 
             await RefreshAssigneeReadinessAsync(cancellationToken).ConfigureAwait(false);
-            await RefreshContributorsAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshContributorsAsync(includeDeep, cancellationToken).ConfigureAwait(false);
+
+            if (includeDeep)
+                _lastDeepUtc = DateTimeOffset.UtcNow;
 
             Rebuild();
             Changed?.Invoke(this, EventArgs.Empty);
@@ -169,14 +185,15 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
             if (startupDelay > TimeSpan.Zero)
                 await Task.Delay(startupDelay, cancellationToken).ConfigureAwait(false);
 
-            await RefreshAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshAsync(includeDeep: true, cancellationToken).ConfigureAwait(false);
 
             using var timer = new PeriodicTimer(interval);
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
                 try
                 {
-                    await RefreshAsync(cancellationToken).ConfigureAwait(false);
+                    var includeDeep = DateTimeOffset.UtcNow - _lastDeepUtc >= DefaultDeepRefreshInterval;
+                    await RefreshAsync(includeDeep, cancellationToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -198,33 +215,55 @@ public sealed class RuntimeSubsystemStatusService : IRuntimeSubsystemStatusServi
     /// Runs every contributor concurrently under its own timeout. A contributor that fails yields a
     /// Degraded row for its own key so one broken probe never removes the rest of the panel.
     /// </summary>
-    private async Task RefreshContributorsAsync(CancellationToken cancellationToken)
+    private async Task RefreshContributorsAsync(bool includeDeep, CancellationToken cancellationToken)
     {
         if (_contributors.Count == 0)
         {
             _contributorRows = [];
+            _contributorRowsByKey = new(StringComparer.OrdinalIgnoreCase);
             return;
         }
 
-        var rows = await Task.WhenAll(_contributors.Select(c => RunContributorAsync(c, cancellationToken)))
+        var context = new SubsystemProbeContext(includeDeep);
+        var rows = await Task.WhenAll(
+                _contributors.Select(c => RunContributorAsync(c, context, cancellationToken)))
             .ConfigureAwait(false);
         _contributorRows = rows;
+        _contributorRowsByKey = rows
+            .GroupBy(r => r.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
     }
 
     private async Task<SubsystemRuntimeStatus> RunContributorAsync(
         ISubsystemStatusContributor contributor,
+        SubsystemProbeContext context,
         CancellationToken cancellationToken)
     {
+        if (!context.IncludeDeep && contributor.Tier == SubsystemProbeTier.Deep)
+        {
+            if (_contributorRowsByKey.TryGetValue(contributor.Key, out var cached))
+                return cached;
+
+            return new SubsystemRuntimeStatus(
+                contributor.Key,
+                contributor.DisplayNameHe,
+                SubsystemRuntimeState.Idle,
+                null,
+                "טרם נבדק — רענון עמוק",
+                DateTimeOffset.UtcNow);
+        }
+
+        var timeoutLength = context.IncludeDeep ? DefaultDeepContributorTimeout : _contributorTimeout;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(_contributorTimeout);
+        timeout.CancelAfter(timeoutLength);
 
         try
         {
-            return await contributor.ContributeAsync(timeout.Token).ConfigureAwait(false);
+            return await contributor.ContributeAsync(context, timeout.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return FailureRow(contributor, $"הבדיקה חרגה מ-{_contributorTimeout.TotalSeconds:0} שניות");
+            return FailureRow(contributor, $"הבדיקה חרגה מ-{timeoutLength.TotalSeconds:0} שניות");
         }
         catch (Exception ex)
         {

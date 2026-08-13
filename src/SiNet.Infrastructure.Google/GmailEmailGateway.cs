@@ -178,7 +178,7 @@ public sealed class GmailEmailGateway : IEmailGateway
                 "Messages.List(mailbox page)",
                 cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.Error($"[Gmail] Messages.List(mailbox page) failed: {ex.Message}", ex);
             return new EmailMailboxPage(Array.Empty<EmailSummary>(), pageSize, null, false);
@@ -307,7 +307,7 @@ public sealed class GmailEmailGateway : IEmailGateway
                         $"Messages.List(label '{logLabel}')",
                         cancellationToken).ConfigureAwait(false);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.Error($"[Gmail] Messages.List failed for label '{logLabel}': {ex.Message}", ex);
                     break;
@@ -585,6 +585,10 @@ public sealed class GmailEmailGateway : IEmailGateway
                     logger,
                     "Messages.List(unread count)",
                     cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {

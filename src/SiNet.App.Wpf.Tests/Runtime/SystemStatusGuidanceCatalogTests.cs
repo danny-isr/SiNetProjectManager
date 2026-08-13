@@ -47,6 +47,33 @@ public sealed class SystemStatusGuidanceCatalogTests
     }
 
     [Fact]
+    public void Resolve_acc_service_401_returns_api_key_guidance_not_tls()
+    {
+        var guidance = SystemStatusGuidanceCatalog.Resolve(
+            "acc-service",
+            SubsystemRuntimeState.Degraded,
+            "זמין — HTTP 401, המפתח נדחה");
+
+        Assert.NotNull(guidance);
+        Assert.Contains("ייבוא מפתחות תחנה", guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain("thumbprint", guidance, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Pinned Certificate", guidance, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Resolve_google_timeout_returns_timeout_guidance_not_empty_mailbox()
+    {
+        var guidance = SystemStatusGuidanceCatalog.Resolve(
+            "google",
+            SubsystemRuntimeState.Degraded,
+            "הבדיקה חרגה מ-10 שניות");
+
+        Assert.NotNull(guidance);
+        Assert.Contains("רענון", guidance, StringComparison.Ordinal);
+        Assert.Contains("לא אומר שאין הודעות", guidance, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Resolve_idle_healthy_returns_null()
     {
         var guidance = SystemStatusGuidanceCatalog.Resolve(

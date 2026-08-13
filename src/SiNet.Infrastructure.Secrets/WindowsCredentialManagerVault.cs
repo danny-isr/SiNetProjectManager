@@ -102,11 +102,34 @@ internal static class WindowsCredentialManagerVault
     public static IReadOnlyDictionary<string, bool> GetVaultStatus()
         => SecretCatalog.AllKeys.ToDictionary(k => k, HasSecret);
 
+    public static void DeleteSecret(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        if (CredDeleteW(key, CredTypeGeneric, 0))
+        {
+            return;
+        }
+
+        var error = Marshal.GetLastWin32Error();
+        if (error is 1168 or 1169)
+        {
+            // ERROR_NOT_FOUND / ERROR_NO_SUCH_LOGON_SESSION — already absent.
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"CredDelete failed for '{key}'. Win32 error code: {error}");
+    }
+
     [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern bool CredWriteW(ref Credential credential, uint flags);
 
     [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern bool CredReadW(string target, uint type, uint flags, out IntPtr credential);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool CredDeleteW(string target, uint type, uint flags);
 
     [DllImport("advapi32.dll")]
     private static extern void CredFree(IntPtr buffer);

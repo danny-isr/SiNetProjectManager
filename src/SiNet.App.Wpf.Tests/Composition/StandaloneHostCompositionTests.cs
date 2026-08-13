@@ -172,6 +172,7 @@ public sealed class StandaloneHostCompositionTests
                     "google",
                     "google_account",
                     "google_config",
+                    "masterplan-replica",
                     "masterplan-reports-drive",
                     "ollama",
                     "seed-baseline",

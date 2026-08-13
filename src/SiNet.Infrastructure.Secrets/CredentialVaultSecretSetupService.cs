@@ -196,13 +196,15 @@ public sealed class CredentialVaultSecretSetupService(
     public Task<SecretImportResultDto> ImportAsync(
         string filePath,
         string password,
-        bool overwrite,
+        SecretImportMode mode,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var decrypted = SecretProvisioningFileService.DecryptSecrets(filePath, password);
         var catalogKeys = SecretCatalog.AllKeys.ToHashSet(StringComparer.Ordinal);
-        var imported = 0;
+        var presentInFile = new HashSet<string>(StringComparer.Ordinal);
+        var added = 0;
+        var updated = 0;
         var skipped = 0;
         var skippedSummaries = new List<string>();
 
@@ -222,27 +224,56 @@ public sealed class CredentialVaultSecretSetupService(
                 continue;
             }
 
-            if (_vault.HasSecret(key) && !overwrite)
-            {
-                skipped++;
-                skippedSummaries.Add($"דולג {key}: כבר קיים ב-Vault (overwrite=false)");
-                continue;
-            }
-
+            presentInFile.Add(key);
+            var existed = _vault.HasSecret(key);
             var entry = SecretCatalog.All.First(e => e.Key == key);
             var normalized = entry.Kind == SecretKind.ConnectionString
                 ? ConnectionStringNormalizer.Normalize(value)
                 : value.Trim();
 
             _vault.SetSecret(key, normalized);
-            imported++;
+            if (existed)
+            {
+                updated++;
+            }
+            else
+            {
+                added++;
+            }
         }
 
+        var deletedKeys = new List<string>();
+        if (mode == SecretImportMode.ReplaceCatalogWithFile)
+        {
+            foreach (var catalogKey in SecretCatalog.AllKeys)
+            {
+                if (presentInFile.Contains(catalogKey))
+                {
+                    continue;
+                }
+
+                if (!_vault.HasSecret(catalogKey))
+                {
+                    continue;
+                }
+
+                _vault.DeleteSecret(catalogKey);
+                deletedKeys.Add(catalogKey);
+            }
+        }
+
+        var imported = added + updated;
+        var message =
+            $"עודכנו {updated}, נוספו {added}, נמחקו {deletedKeys.Count}, דולגו {skipped}.";
         return Task.FromResult(new SecretImportResultDto(
             imported,
             skipped,
             skippedSummaries,
-            $"יובאו {imported} מפתחות, דולגו {skipped}."));
+            message,
+            added,
+            updated,
+            deletedKeys.Count,
+            deletedKeys));
     }
 
     public Task<string> GenerateAccServiceApiKeyAsync(CancellationToken cancellationToken = default)
@@ -290,7 +321,15 @@ public sealed class CredentialVaultSecretSetupService(
                 IsKnown: true));
         }
 
-        return new SecretImportPreviewDto(items, unknown.Count, unknown, items.Count);
+        var presentInFile = decrypted
+            .Where(kv => catalogKeys.Contains(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+            .Select(kv => kv.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var absentFromFile = SecretCatalog.AllKeys
+            .Where(key => _vault.HasSecret(key) && !presentInFile.Contains(key))
+            .ToList();
+
+        return new SecretImportPreviewDto(items, unknown.Count, unknown, items.Count, absentFromFile);
     }
 
     private static SecretValidationResultDto ToResult(

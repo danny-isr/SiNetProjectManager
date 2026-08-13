@@ -229,6 +229,7 @@ Initial menu (P3 + P6 + native admin):
 | Add user | `Users.Manage` | Administrator | `AddUserDialogWindow` → native `AddUserView` |
 | Action permissions | `ActionPermissions.Manage` | Administrator | `ActionPermissionsWindow` → native `ActionPermissionsView` |
 | Keys and secrets | `System.Settings.Write` | Administrator | `SecretSetupWindow` → native `SecretSetupView` |
+| Workstation secrets import (DEV-027) | `Shell.ImportWorkstationSecrets` | Employee | `WorkstationSecretsImportHost` → `.secrets` upsert/replace into this Windows user's vault. Does **not** open Secret Setup. |
 | ACC status | `System.Settings.Write` | Administrator | `AccControlPlaneStatusWindow` → native ACC control/status + inbox reconciliation window |
 | System health | Authenticated user | Any signed-in user | `SystemStatusWindow` → native subsystem status + background work |
 | Workflow ops health | `Shell.OpenWorkflowOpsDashboard` | Administrator | `WorkflowOpsDashboardWindow` → read-only instance grid + stalled badge (complements System health; see [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md)) |
@@ -249,6 +250,13 @@ backed by `SqlUserManagementService` in Infrastructure.Sql — not legacy window
 **Action permissions (native):** Administrators see **הרשאות פעולה** when `ActionPermissions.Manage` is
 authorized. Opens native `ActionPermissionsWindow` in `SiNet.App.Wpf.Admin.Permissions` backed by
 `SqlActionPermissionAdminService` → `IActionPermissionAdminService` in Infrastructure.Sql.
+
+**Workstation secrets import (DEV-027 Planning):** employees cannot open Secret Setup. Target is a
+separate **«ייבוא מפתחות תחנה»** action (`Shell.ImportWorkstationSecrets`, Employee) that reuses
+`ISecretSetupService` `.secrets` import without the editor. After preview the user picks
+**UpsertFromFile** (update keys in the file, leave others) or **ReplaceCatalogWithFile** (leave only
+keys that exist in the file; delete other catalog keys after confirm). See
+[`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md).
 
 **Keys and secrets (native, implemented):** Administrators see **מפתחות וסודות** when
 `System.Settings.Write` is authorized. Opens native `SecretSetupWindow` in `SiNet.App.Wpf.Admin.Security`

@@ -27,11 +27,11 @@ public static class SystemStatusGuidanceCatalog
         if (string.Equals(keyNorm, "acc-service", StringComparison.OrdinalIgnoreCase)
             || string.Equals(keyNorm, "acc", StringComparison.OrdinalIgnoreCase))
         {
-            if (LooksLikeTlsFailure(summary)
-                || state is SubsystemRuntimeState.Degraded or SubsystemRuntimeState.Stopped)
-            {
+            if (LooksLikeApiKeyFailure(summary))
+                return AccServiceApiKeyGuidance;
+
+            if (LooksLikeTlsFailure(summary))
                 return AccServiceTlsGuidance;
-            }
 
             if (summary.Contains("מקומי", StringComparison.Ordinal)
                 || summary.Contains("Local", StringComparison.OrdinalIgnoreCase))
@@ -43,6 +43,15 @@ public static class SystemStatusGuidanceCatalog
                 || summary.Contains("לא הוגדר", StringComparison.Ordinal))
             {
                 return AccServiceNotConfiguredGuidance;
+            }
+        }
+
+        if (string.Equals(keyNorm, "masterplan-replica", StringComparison.OrdinalIgnoreCase))
+        {
+            if (state is SubsystemRuntimeState.Degraded or SubsystemRuntimeState.NotConfigured
+                or SubsystemRuntimeState.Stopped)
+            {
+                return ReplicaSqlGuidance;
             }
         }
 
@@ -80,6 +89,9 @@ public static class SystemStatusGuidanceCatalog
         if (string.Equals(keyNorm, "gmail", StringComparison.OrdinalIgnoreCase)
             || string.Equals(keyNorm, "google", StringComparison.OrdinalIgnoreCase))
         {
+            if (LooksLikeTimeout(summary))
+                return GmailTimeoutGuidance;
+
             if (state is SubsystemRuntimeState.Stopped or SubsystemRuntimeState.NotConfigured
                 or SubsystemRuntimeState.Degraded)
             {
@@ -100,14 +112,44 @@ public static class SystemStatusGuidanceCatalog
         return status with { GuidanceHe = guidance };
     }
 
+    private static bool LooksLikeApiKeyFailure(string summary) =>
+        summary.Contains("401", StringComparison.Ordinal)
+        || summary.Contains("ApiKeyRejected", StringComparison.OrdinalIgnoreCase)
+        || summary.Contains("חסר מפתח", StringComparison.Ordinal)
+        || summary.Contains("נדחה", StringComparison.Ordinal)
+        || summary.Contains("X-AccService-Key", StringComparison.OrdinalIgnoreCase)
+        || summary.Contains("API key", StringComparison.OrdinalIgnoreCase);
+
     private static bool LooksLikeTlsFailure(string summary) =>
         summary.Contains("SSL", StringComparison.OrdinalIgnoreCase)
         || summary.Contains("TLS", StringComparison.OrdinalIgnoreCase)
         || summary.Contains("certificate", StringComparison.OrdinalIgnoreCase)
         || summary.Contains("thumbprint", StringComparison.OrdinalIgnoreCase)
-        || summary.Contains("לא זמין", StringComparison.Ordinal)
-        || summary.Contains("Offline", StringComparison.OrdinalIgnoreCase)
+        || summary.Contains("AuthenticationException", StringComparison.OrdinalIgnoreCase)
+        || summary.Contains("trust relationship", StringComparison.OrdinalIgnoreCase)
         || summary.Contains("connection cannot be established", StringComparison.OrdinalIgnoreCase);
+
+    private static bool LooksLikeTimeout(string summary) =>
+        summary.Contains("חרגה", StringComparison.Ordinal)
+        || summary.Contains("Timeout", StringComparison.OrdinalIgnoreCase)
+        || summary.Contains("canceled", StringComparison.OrdinalIgnoreCase)
+        || summary.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
+        || summary.Contains("בוטל", StringComparison.Ordinal);
+
+    internal const string AccServiceApiKeyGuidance =
+        "המפתח ל־AccService חסר או נדחה (TLS הצליח). "
+        + "מנהלה → «ייבוא מפתחות תחנה»: בחר קובץ .secrets וסיסמה מהמנהל, "
+        + "ואז «עדכן את כל מה שמופיע בקובץ». אין לפתוח «מפתחות וסודות» בלי הרשאת מנהל, "
+        + "ואין לפרש את זה כתקלת SSL.";
+
+    internal const string ReplicaSqlGuidance =
+        "אין הרשאת SQL לרפליקת MasterPlan עבור המשתמש הזה. "
+        + "פנה ל־IT להוספה לקבוצה SI-ENG\\שרטטים (מיפוי login). "
+        + "זה לא נפתר בייבוא מפתחות.";
+
+    internal const string GmailTimeoutGuidance =
+        "בדיקת Gmail חרגה מהזמן או בוטלה (רשת / תגובה איטית). "
+        + "לחץ רענון ב«מצב מערכת». זה לא אומר שאין הודעות בתיבה.";
 
     internal const string AccServiceTlsGuidance =
         "חיבור TLS ל־AccService נכשל (נפוץ אחרי DB נקי שמוחק את ה־pins). "

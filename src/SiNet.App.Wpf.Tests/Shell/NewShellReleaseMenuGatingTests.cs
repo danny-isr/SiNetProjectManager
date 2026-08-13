@@ -38,6 +38,7 @@ public sealed class NewShellReleaseMenuGatingTests
     [InlineData("ניהול קבצים", AppFeatureCodes.ShellOpenFileCatalogAdmin)]
     [InlineData("בריאות תהליכים", AppFeatureCodes.ShellOpenWorkflowOpsDashboard)]
     [InlineData("מדיניות סוג↔תהליך", AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy)]
+    [InlineData("ייבוא מפתחות תחנה", AppFeatureCodes.ShellImportWorkstationSecrets)]
     public void WhenFeatureGrantedThenMenuItemIsVisible(string title, string featureCode)
     {
         var items = BuildFlattened(granted: [featureCode], authenticated: true);
@@ -56,10 +57,21 @@ public sealed class NewShellReleaseMenuGatingTests
     [InlineData("ניהול קבצים")]
     [InlineData("בריאות תהליכים")]
     [InlineData("מדיניות סוג↔תהליך")]
+    [InlineData("ייבוא מפתחות תחנה")]
     public void WhenNoFeaturesGrantedThenGatedMenuItemsAreHidden(string title)
     {
         var items = BuildFlattened(granted: [], authenticated: true);
         Assert.DoesNotContain(items, i => i.Title == title);
+    }
+
+    [Fact]
+    public void WhenImportFeatureGrantedWithoutSettingsWriteThenSecretSetupHidden()
+    {
+        var items = BuildFlattened(
+            granted: [AppFeatureCodes.ShellImportWorkstationSecrets],
+            authenticated: true);
+        Assert.Contains(items, i => i.Title == "ייבוא מפתחות תחנה" && i.IsAvailable);
+        Assert.DoesNotContain(items, i => i.Title == "מפתחות וסודות");
     }
 
     [Fact]

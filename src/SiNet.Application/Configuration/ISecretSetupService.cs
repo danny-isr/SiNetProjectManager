@@ -24,7 +24,7 @@ public interface ISecretSetupService
     Task<SecretImportResultDto> ImportAsync(
         string filePath,
         string password,
-        bool overwrite,
+        SecretImportMode mode,
         CancellationToken cancellationToken = default);
 
     Task<string> GenerateAccServiceApiKeyAsync(CancellationToken cancellationToken = default);

@@ -129,7 +129,7 @@ public sealed class NativeSecretSetupControlPlaneTests
         public Task<SecretImportPreviewDto> PreviewImportAsync(string filePath, string password, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<SecretImportResultDto> ImportAsync(string filePath, string password, bool overwrite, CancellationToken cancellationToken = default) =>
+        public Task<SecretImportResultDto> ImportAsync(string filePath, string password, SecretImportMode mode, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<string> GenerateAccServiceApiKeyAsync(CancellationToken cancellationToken = default) =>

@@ -41,13 +41,18 @@ public sealed record SecretImportPreviewDto(
     IReadOnlyList<SecretImportPreviewItemDto> Items,
     int UnknownKeyCount,
     IReadOnlyList<string> UnknownKeys,
-    int KeysToImportCount);
+    int KeysToImportCount,
+    IReadOnlyList<string> CatalogKeysAbsentFromFile);
 
 public sealed record SecretImportResultDto(
     int ImportedCount,
     int SkippedCount,
     IReadOnlyList<string> SkippedSummaries,
-    string Message);
+    string Message,
+    int AddedCount = 0,
+    int UpdatedCount = 0,
+    int DeletedCount = 0,
+    IReadOnlyList<string>? DeletedKeys = null);
 
 public sealed record AccServiceDiagnosticResultDto(
     bool Success,

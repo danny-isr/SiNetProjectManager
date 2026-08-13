@@ -381,6 +381,7 @@ public interface IAuthorizationQueryService
 | `WorkflowOps.Start` | Administrator |
 | `ShellOpenProjectsDashboard` | Management |
 | `ShellOpenMasterPlanMonthlyRestore` | Management |
+| `ShellImportWorkstationSecrets` | Employee |
 
 **Host adapter:** `SiNetProjectManagerV2/Services/LegacyAuthorizationQueryService.cs` → legacy `CurrentUserContext` (hierarchical `Role >= required`).
 

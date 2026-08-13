@@ -35,6 +35,7 @@ public sealed class AppFeatureCodesCoverageTests
             AppFeatureCodes.WorkflowOpsRetry,
             AppFeatureCodes.WorkflowOpsStart,
             AppFeatureCodes.ShellOpenMasterPlanMonthlyRestore,
+            AppFeatureCodes.ShellImportWorkstationSecrets,
         }.Select(c => new object[] { c });
 
     [Theory]
@@ -73,6 +74,8 @@ public sealed class AppFeatureCodesCoverageTests
     [InlineData(AppRole.Management, AppFeatureCodes.WorkflowOpsStart, false)]
     [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenMasterPlanMonthlyRestore, true)]
     [InlineData(AppRole.Employee, AppFeatureCodes.ShellOpenMasterPlanMonthlyRestore, false)]
+    [InlineData(AppRole.Employee, AppFeatureCodes.ShellImportWorkstationSecrets, true)]
+    [InlineData(AppRole.Unauthorized, AppFeatureCodes.ShellImportWorkstationSecrets, false)]
     public void Feature_role_matrix(AppRole role, string featureCode, bool expected)
     {
         Assert.Equal(expected, AppFeatureAuthorization.CanAccessFeature(role, featureCode));

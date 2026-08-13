@@ -16,5 +16,17 @@ public interface ISubsystemStatusContributor
 
     string DisplayNameHe { get; }
 
+    /// <summary>Fast (default) runs every 5-minute cycle. Deep runs on startup, every 30 minutes, and on Refresh.</summary>
+    SubsystemProbeTier Tier => SubsystemProbeTier.Fast;
+
     Task<SubsystemRuntimeStatus> ContributeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Default forwards to <see cref="ContributeAsync(CancellationToken)"/>. Contributors that do extra
+    /// Deep work (AccService diag) override this.
+    /// </summary>
+    Task<SubsystemRuntimeStatus> ContributeAsync(
+        SubsystemProbeContext context,
+        CancellationToken cancellationToken = default)
+        => ContributeAsync(cancellationToken);
 }

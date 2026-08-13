@@ -229,35 +229,16 @@ public sealed class SecretSetupViewModel : ObservableObject
                 .PreviewImportAsync(dialog.FileName, passwordDialog.EnteredPassword)
                 .ConfigureAwait(true);
 
-            var previewText = BuildImportPreviewMessage(preview);
-            var existingCount = preview.Items.Count(i => i.ExistsInVault);
-            var overwrite = existingCount == 0;
-
-            if (existingCount > 0)
+            var owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
+                ?? System.Windows.Application.Current?.MainWindow;
+            var mode = SecretImportModeWindow.ChooseMode(owner, preview);
+            if (mode is null)
             {
-                var answer = MessageBox.Show(
-                    previewText + Environment.NewLine + Environment.NewLine +
-                    "חלק מהמפתחות כבר קיימים ב-Vault. לדרוס?",
-                    "אישור ייבוא",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
-                overwrite = answer == MessageBoxResult.Yes;
-            }
-            else
-            {
-                var answer = MessageBox.Show(
-                    previewText,
-                    "אישור ייבוא",
-                    MessageBoxButton.OKCancel,
-                    MessageBoxImage.Information);
-                if (answer != MessageBoxResult.OK)
-                {
-                    return;
-                }
+                return;
             }
 
             var result = await _secretSetupService
-                .ImportAsync(dialog.FileName, passwordDialog.EnteredPassword, overwrite)
+                .ImportAsync(dialog.FileName, passwordDialog.EnteredPassword, mode.Value)
                 .ConfigureAwait(true);
 
             await RefreshAfterImportAsync().ConfigureAwait(true);
@@ -280,25 +261,6 @@ public sealed class SecretSetupViewModel : ObservableObject
         {
             IsBusy = false;
         }
-    }
-
-    private static string BuildImportPreviewMessage(SecretImportPreviewDto preview)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"מפתחות לייבוא: {preview.KeysToImportCount}");
-        foreach (var item in preview.Items)
-        {
-            var status = item.ExistsInVault ? "(קיים ב-Vault)" : "(חדש)";
-            sb.AppendLine($"• {item.DisplayName} {status}");
-        }
-
-        if (preview.UnknownKeyCount > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"מפתחות לא מוכרים שידולגו: {preview.UnknownKeyCount}");
-        }
-
-        return sb.ToString().Trim();
     }
 
     private async Task RefreshAfterImportAsync()

@@ -14,6 +14,9 @@ public static class CredentialVault
     public static void SetSecret(string key, string value) =>
         WindowsCredentialManagerVault.SetSecret(key, value);
 
+    public static void DeleteSecret(string key) =>
+        WindowsCredentialManagerVault.DeleteSecret(key);
+
     public static IReadOnlyDictionary<string, bool> GetVaultStatus() =>
         WindowsCredentialManagerVault.GetVaultStatus();
 }

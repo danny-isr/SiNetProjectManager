@@ -454,6 +454,7 @@ public sealed class AccFileTransferTests : IDisposable
         public bool HasSecret(string key) => _secrets.ContainsKey(key);
         public string? GetSecret(string key) => _secrets.GetValueOrDefault(key);
         public void SetSecret(string key, string value) => _secrets[key] = value;
+        public void DeleteSecret(string key) => _secrets.Remove(key);
         public IReadOnlyDictionary<string, bool> GetVaultStatus() =>
             _secrets.Keys.ToDictionary(static key => key, static _ => true);
     }

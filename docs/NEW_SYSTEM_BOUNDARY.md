@@ -66,6 +66,7 @@ Native permissions SQL must **not** use `SiNetSQL.Data`, `SiNetSQL.Models`, or `
 | Google OAuth | `GoogleClientSecretsMaterializer` + `VaultGoogleClientSecretsPathProvider` |
 
 Menu item **מפתחות וסודות** in `NewShellFactory` is gated by `AppFeatureCodes.SystemSettingsWrite`.
+Menu item **ייבוא מפתחות תחנה** is gated by `AppFeatureCodes.ShellImportWorkstationSecrets` (Employee) and does not open Secret Setup.
 Opens native `SecretSetupWindow` — **not** legacy `SiNetProjectManagerV2.WPF_Window.SecretSetupWindow`.
 
 **Credential Vault is the single source of truth** for secret values. Google OAuth follows:

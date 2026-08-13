@@ -309,6 +309,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 "מיפוי סוג פרויקט (JobType) להגדרת תהליך ברירת מחדל"));
         }
 
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellImportWorkstationSecrets, cancellationToken).ConfigureAwait(true))
+        {
+            admin.Add(new NewShellMenuItem(
+                "ייבוא מפתחות תחנה",
+                OpenNativeWorkstationSecretsImport,
+                "ייבוא חבילת .secrets ל-Vault של המשתמש הזה (בלי חלון מפתחות וסודות)"));
+        }
+
         if (HasAuthenticatedUser())
         {
             admin.Add(new NewShellMenuItem(
@@ -601,6 +609,24 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             throw;
+        }
+    }
+
+    private async void OpenNativeWorkstationSecretsImport()
+    {
+        try
+        {
+            var host = _services.GetRequiredService<WorkstationSecretsImportHost>();
+            await host.RunAsync(System.Windows.Application.Current?.MainWindow).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בייבוא מפתחות תחנה: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 

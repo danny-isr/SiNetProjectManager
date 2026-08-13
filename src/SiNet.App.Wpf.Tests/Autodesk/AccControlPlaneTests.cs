@@ -937,6 +937,8 @@ public sealed class AccControlPlaneTests
 
         public void SetSecret(string key, string value) => _secrets[key] = value;
 
+        public void DeleteSecret(string key) => _secrets.Remove(key);
+
         public IReadOnlyDictionary<string, bool> GetVaultStatus() =>
             _secrets.Keys.ToDictionary(k => k, _ => true);
     }

@@ -8,7 +8,8 @@ Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) (pilot ops rou
 [`STANDALONE_NEW_SYSTEM_HOST.md`](./STANDALONE_NEW_SYSTEM_HOST.md),
 [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md),
 [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md),
-[`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md).
+[`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md),
+[`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) (**DEV-027 Planning** — 401 vs TLS guidance; Fast/Deep probes; employee secrets import).
 
 ---
 
@@ -54,6 +55,10 @@ Google Drive folder permissions.
 AccService Autodesk token missing (V2 had `ShowSyncFailureAlertIfAdmin`). Tracked as Planning in
 [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md). Token restore procedure:
 [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md).
+
+**Pilot log gap (13.08.2026):** `/v1/acc/health` is auth-exempt, so `acc-service` can look Idle while
+inbox ensure returns 401 (missing `X-AccService-Key` on the workstation vault). `SystemStatusGuidanceCatalog`
+also maps every Degraded `acc-service` row to TLS text. Target: [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md).
 
 ### 1.4 Duplicate contracts (pre-existing defect)
 
@@ -174,14 +179,13 @@ staleness.
 `RefreshAsync` is **not** window-gated. `NewShellFactory` calls
 `IRuntimeSubsystemStatusService.StartPeriodicRefresh()` when the shell is created:
 
-1. **Startup probe** — first full refresh ~3 seconds later, so the footer already reflects real I/O
-   before the user opens «מצב מערכת».
-2. **Periodic probe** — every **5 minutes** thereafter, so a drive that loses write access mid-day
-   surfaces without requiring the user to open the status window.
+1. **Startup probe** — first **Deep** refresh ~3 seconds later, so the footer already reflects real I/O
+   before the user opens «מצב מערכת» (includes AccService `/v1/acc/diag` and replica SQL).
+2. **Periodic Fast probe** — every **5 minutes** thereafter (cheap probes only; Deep-tier rows keep the last result).
+3. **Periodic Deep probe** — every **30 minutes**, and whenever the user clicks Refresh in «מצב מערכת».
 
-Concurrent refreshes coalesce (one in-flight at a time). Opening the status window still calls
-`RefreshAsync` for an on-demand update; it does not own the schedule. Composition/unit tests that
-only resolve the service do **not** start the loop until `StartPeriodicRefresh` is called.
+Concurrent refreshes wait for the in-flight cycle, then run (window Refresh is always Deep).
+Composition/unit tests that only resolve the service do **not** start the loop until `StartPeriodicRefresh` is called.
 
 ### 2.7 MasterPlan write probe (aligned with generation)
 

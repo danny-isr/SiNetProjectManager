@@ -87,7 +87,7 @@ public sealed class NativeSecretSetupGapTests
                 },
                 path,
                 "pw-123456");
-            var result = await service.ImportAsync(path, "pw-123456", overwrite: true);
+            var result = await service.ImportAsync(path, "pw-123456", SecretImportMode.UpsertFromFile);
 
             Assert.Equal(1, result.ImportedCount);
             Assert.Equal(1, result.SkippedCount);
@@ -99,6 +99,89 @@ public sealed class NativeSecretSetupGapTests
             {
                 File.Delete(path);
             }
+        }
+    }
+
+    [Fact]
+    public async Task UpsertFromFile_updates_keys_in_file_and_leaves_others()
+    {
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.GeminiApiKey, "keep-me");
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "old-acc");
+        var service = new CredentialVaultSecretSetupService(vault, NullHost.Instance);
+        var path = Path.Combine(Path.GetTempPath(), $"sinet-test-{Guid.NewGuid():N}.secrets");
+        try
+        {
+            SecretProvisioningFileService.WriteEncryptedDictionary(
+                new Dictionary<string, string> { [SecretCatalog.AccServiceApiKey] = "new-acc" },
+                path,
+                "pw-123456");
+
+            var result = await service.ImportAsync(path, "pw-123456", SecretImportMode.UpsertFromFile);
+
+            Assert.Equal(1, result.UpdatedCount);
+            Assert.Equal(0, result.DeletedCount);
+            Assert.Equal("new-acc", vault.GetSecret(SecretCatalog.AccServiceApiKey));
+            Assert.Equal("keep-me", vault.GetSecret(SecretCatalog.GeminiApiKey));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ReplaceCatalogWithFile_deletes_catalog_keys_absent_from_file()
+    {
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.GeminiApiKey, "gone");
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "old-acc");
+        var service = new CredentialVaultSecretSetupService(vault, NullHost.Instance);
+        var path = Path.Combine(Path.GetTempPath(), $"sinet-test-{Guid.NewGuid():N}.secrets");
+        try
+        {
+            SecretProvisioningFileService.WriteEncryptedDictionary(
+                new Dictionary<string, string> { [SecretCatalog.AccServiceApiKey] = "new-acc" },
+                path,
+                "pw-123456");
+
+            var result = await service.ImportAsync(path, "pw-123456", SecretImportMode.ReplaceCatalogWithFile);
+
+            Assert.Equal("new-acc", vault.GetSecret(SecretCatalog.AccServiceApiKey));
+            Assert.False(vault.HasSecret(SecretCatalog.GeminiApiKey));
+            Assert.Contains(SecretCatalog.GeminiApiKey, result.DeletedKeys!);
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ReplaceCatalogWithFile_does_not_delete_unknown_non_catalog_vault_keys()
+    {
+        var vault = new InMemorySecretVaultStore();
+        vault.SetSecret(SecretCatalog.AccServiceApiKey, "old-acc");
+        vault.SetSecret("SiNet/Not/InCatalog", "keep-outside-catalog");
+        var service = new CredentialVaultSecretSetupService(vault, NullHost.Instance);
+        var path = Path.Combine(Path.GetTempPath(), $"sinet-test-{Guid.NewGuid():N}.secrets");
+        try
+        {
+            SecretProvisioningFileService.WriteEncryptedDictionary(
+                new Dictionary<string, string> { [SecretCatalog.AccServiceApiKey] = "new-acc" },
+                path,
+                "pw-123456");
+
+            await service.ImportAsync(path, "pw-123456", SecretImportMode.ReplaceCatalogWithFile);
+
+            Assert.Equal("keep-outside-catalog", vault.GetSecret("SiNet/Not/InCatalog"));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
         }
     }
 
@@ -302,6 +385,8 @@ public sealed class NativeSecretSetupGapTests
         public string? GetSecret(string key) => _secrets.GetValueOrDefault(key);
 
         public void SetSecret(string key, string value) => _secrets[key] = value;
+
+        public void DeleteSecret(string key) => _secrets.Remove(key);
 
         public IReadOnlyDictionary<string, bool> GetVaultStatus()
             => SecretCatalog.AllKeys.ToDictionary(k => k, HasSecret);

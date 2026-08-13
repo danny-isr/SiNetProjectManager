@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Configuration;
+using SiNet.Application.Runtime;
 
 namespace SiNet.Infrastructure.Secrets;
 
@@ -28,6 +29,8 @@ public static class SecretsServiceCollectionExtensions
         services.TryAddSingleton<IGoogleClientSecretsMaterializer, GoogleClientSecretsMaterializer>();
         services.TryAddSingleton<IGoogleClientSecretsPathProvider, VaultGoogleClientSecretsPathProvider>();
         services.TryAddSingleton<ISecretSetupService, CredentialVaultSecretSetupService>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<ISubsystemStatusContributor, MasterPlanReplicaStatusContributor>());
 
         return services;
     }

@@ -190,6 +190,8 @@ public sealed class NativeSecretSetupCatalogTests
 
         public void SetSecret(string key, string value) => _secrets[key] = value;
 
+        public void DeleteSecret(string key) => _secrets.Remove(key);
+
         public IReadOnlyDictionary<string, bool> GetVaultStatus()
             => SecretCatalog.AllKeys.ToDictionary(k => k, HasSecret);
     }

@@ -14,6 +14,7 @@ public static class SecretAdminServiceCollectionExtensions
         services.AddTransient<SecretSetupViewModel>();
         services.AddTransient<SecretSetupView>();
         services.AddTransient<SecretSetupWindow>();
+        services.AddTransient<WorkstationSecretsImportHost>();
 
         return services;
     }

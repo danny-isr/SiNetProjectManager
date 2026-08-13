@@ -9,5 +9,8 @@ public interface ISecretVaultStore
 
     void SetSecret(string key, string value);
 
+    /// <summary>Removes a catalog key from this Windows user's vault. No-op if the key is absent.</summary>
+    void DeleteSecret(string key);
+
     IReadOnlyDictionary<string, bool> GetVaultStatus();
 }

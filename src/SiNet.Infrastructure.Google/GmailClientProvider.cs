@@ -404,7 +404,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
             .ConfigureAwait(false);
     }
 
-    private async Task<(ClientSecrets Secrets, FileDataStore DataStore)?> TryPrepareAuthAsync(
+    private async Task<(ClientSecrets Secrets, IDataStore DataStore)?> TryPrepareAuthAsync(
         CancellationToken cancellationToken)
     {
         var secretsPath = await ResolveSecretsPathAsync(cancellationToken).ConfigureAwait(false);
@@ -429,7 +429,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
             return null;
         }
 
-        return (secrets, new FileDataStore(tokenPath, fullPath: true));
+        return (secrets, new SerializedDataStore(new FileDataStore(tokenPath, fullPath: true)));
     }
 
     private async Task<string?> ResolveSecretsPathAsync(CancellationToken cancellationToken)
