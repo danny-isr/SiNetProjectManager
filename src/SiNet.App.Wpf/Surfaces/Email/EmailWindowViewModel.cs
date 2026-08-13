@@ -136,7 +136,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             TryGetService<IAccResolvedDocsUrlLauncher>(services),
             TryGetService<IProjectWorkSurfaceHost>(services),
             TryGetService<IEmailGmailModifyService>(services),
-            TryGetService<IProjectGmailLabelSyncService>(services));
+            TryGetService<IProjectGmailLabelSyncService>(services),
+            TryGetService<IGmailMailboxLabelAuditService>(services));
     }
 
     private static T? TryGetService<T>(IServiceProvider services) where T : class
@@ -188,7 +189,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IAccResolvedDocsUrlLauncher? accResolvedDocsUrlLauncher = null,
         IProjectWorkSurfaceHost? projectWorkHost = null,
         IEmailGmailModifyService? gmailModify = null,
-        IProjectGmailLabelSyncService? projectLabelSync = null)
+        IProjectGmailLabelSyncService? projectLabelSync = null,
+        IGmailMailboxLabelAuditService? labelAudit = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -217,7 +219,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             accIngestQueue,
             ingestSessionEnsurer,
             threadMappingSync,
-            projectLabelSync);
+            projectLabelSync,
+            labelAudit);
 
         EmailDetail = new EmailDetailViewModel(
             EmailList,

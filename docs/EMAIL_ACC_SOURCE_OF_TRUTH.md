@@ -54,6 +54,13 @@ During FileQuoteMaterial QA (2026-07), a proposed fix treated SQL `ProjectId` as
 - Move gate: `EmailDetailViewModel` passes `_selectedEmail.IsFiledToProject` into eligibility
 - ACC move: `NativeEmailMoveToProjectExecutor` verifies ACC; Move/Lock attributes are SoT for “already moved”
 - Label name sync: `IProjectGmailLabelSyncService` (DEV-009)
+- Mailbox label audit table (DEV-026): [`DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md`](./DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md) — read-only list of **this mailbox’s** user labels mapped by `(Number)`; duplicate labels for one project are a note only (not keep/delete)
+
+## Mailbox label audit (DEV-026)
+
+- Entry: Email window **«בדיקת תיוג»** after Gmail is connected (same connect gate as the list).
+- Product: sortable table — one row per **user** Gmail label, columns for mapped SiNet project. A label without a project is OK. A project without a label is OK and is **not** listed as something to create.
+- The only required defect: two user labels whose leaf `(Number)` maps to the same `Project.Number`. This window does **not** rename, merge, or delete (DEV-009 keep/delete stays separate).
 
 ## FileMaterial / MoveToProject (six decisions)
 

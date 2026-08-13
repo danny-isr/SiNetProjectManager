@@ -21,7 +21,7 @@ public sealed class NativeGoogleSheetsRtlTests
     }
 
     [Fact]
-    public void CreateRightToLeftRequestsForSheets_one_request_per_sheetId()
+    public void CreateRightToLeftRequestsForSheets_rtl_and_right_align_per_sheetId()
     {
         var sheets = new List<Sheet>
         {
@@ -32,11 +32,40 @@ public sealed class NativeGoogleSheetsRtlTests
 
         var requests = NativeGoogleSheetsWriter.CreateRightToLeftRequestsForSheets(sheets);
 
-        Assert.Equal(2, requests.Count);
+        Assert.Equal(4, requests.Count);
         Assert.Equal(10, requests[0].UpdateSheetProperties!.Properties.SheetId);
-        Assert.Equal(20, requests[1].UpdateSheetProperties!.Properties.SheetId);
-        Assert.All(requests, r => Assert.True(r.UpdateSheetProperties!.Properties.RightToLeft));
-        Assert.All(requests, r => Assert.Equal("rightToLeft", r.UpdateSheetProperties!.Fields));
+        Assert.Equal(10, requests[1].RepeatCell!.Range.SheetId);
+        Assert.Equal(20, requests[2].UpdateSheetProperties!.Properties.SheetId);
+        Assert.Equal(20, requests[3].RepeatCell!.Range.SheetId);
+        Assert.All(
+            requests.Where(r => r.UpdateSheetProperties is not null),
+            r => Assert.True(r.UpdateSheetProperties!.Properties.RightToLeft));
+        Assert.All(
+            requests.Where(r => r.RepeatCell is not null),
+            r => Assert.Equal("RIGHT", r.RepeatCell!.Cell.UserEnteredFormat.HorizontalAlignment));
+    }
+
+    [Fact]
+    public void CreateRightAlignCellsRequest_sets_horizontal_alignment_right_on_whole_sheet()
+    {
+        var request = NativeGoogleSheetsWriter.CreateRightAlignCellsRequest(17);
+
+        Assert.NotNull(request.RepeatCell);
+        Assert.Equal(17, request.RepeatCell.Range.SheetId);
+        Assert.Null(request.RepeatCell.Range.StartRowIndex);
+        Assert.Null(request.RepeatCell.Range.StartColumnIndex);
+        Assert.Equal("RIGHT", request.RepeatCell.Cell.UserEnteredFormat.HorizontalAlignment);
+        Assert.Equal("userEnteredFormat.horizontalAlignment", request.RepeatCell.Fields);
+    }
+
+    [Fact]
+    public void CreateHebrewSheetPresentationRequests_pairs_rtl_and_right_align()
+    {
+        var requests = NativeGoogleSheetsWriter.CreateHebrewSheetPresentationRequests(9);
+
+        Assert.Equal(2, requests.Count);
+        Assert.True(requests[0].UpdateSheetProperties!.Properties.RightToLeft);
+        Assert.Equal("RIGHT", requests[1].RepeatCell!.Cell.UserEnteredFormat.HorizontalAlignment);
     }
 
     [Fact]

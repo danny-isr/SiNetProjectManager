@@ -1,0 +1,82 @@
+<Window x:Class="SiNet.App.Wpf.Surfaces.Email.GmailMailboxLabelAuditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="בדיקת תיוג Gmail"
+        Width="980" Height="620"
+        MinWidth="720" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False"
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
+    <DockPanel Margin="14">
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <TextBlock Text="{Binding StatusMessage}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource SiSecondaryBrush}"
+                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                       Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal">
+                <Button Content="העתק נבחרות"
+                        Click="CopySelected_Click"
+                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                        Padding="14,8"
+                        Margin="0,0,8,0"/>
+                <Button Content="העתק הכל"
+                        Command="{Binding CopyAllCommand}"
+                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                        Padding="14,8"
+                        Margin="0,0,8,0"/>
+                <Button Content="סגור"
+                        IsCancel="True"
+                        Padding="14,8"
+                        Click="Close_Click"/>
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock Text="תוויות המשתמש בתיבה מול פרויקטים ב-SiNet. תווית בלי פרויקט ופרויקט בלי תווית — תקינים. כפילות (שתי תוויות לאותו פרויקט) מופיעה בהערה."
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="חיפוש:" VerticalAlignment="Center" Margin="0,0,8,0"
+                           FontSize="{DynamicResource SiTextSmallFontSize}"/>
+                <TextBox Width="280"
+                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalContentAlignment="Center"/>
+            </StackPanel>
+        </StackPanel>
+
+        <DataGrid x:Name="AuditGrid"
+                  ItemsSource="{Binding FilteredRows}"
+                  SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  CanUserSortColumns="True"
+                  SelectionMode="Extended"
+                  SelectionUnit="FullRow"
+                  EnableRowVirtualization="True"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  Background="{DynamicResource SiBackgroundBrush}">
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsDuplicate}" Value="True">
+                            <Setter Property="Background" Value="#FFF8E1"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="תווית" Binding="{Binding LabelName}" Width="2.4*"/>
+                <DataGridTextColumn Header="מספר פרויקט" Binding="{Binding ParsedProjectNumber}" Width="90"/>
+                <DataGridTextColumn Header="פרויקט" Binding="{Binding ProjectDisplayName}" Width="1.4*"/>
+                <DataGridTextColumn Header="יישוב" Binding="{Binding PlaceName}" Width="0.9*"/>
+                <DataGridTextColumn Header="הערה" Binding="{Binding Note}" Width="2*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Window>

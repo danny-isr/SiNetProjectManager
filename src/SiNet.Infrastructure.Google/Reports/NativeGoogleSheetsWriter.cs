@@ -44,7 +44,34 @@ public sealed class NativeGoogleSheetsWriter
     }
 
     /// <summary>
-    /// Builds <see cref="Request"/> list that sets RTL on every sheet currently in the spreadsheet
+    /// Builds a <c>repeatCell</c> request that right-aligns every cell on the sheet.
+    /// Sheet RTL alone does not change cell <c>horizontalAlignment</c> (default stays LEFT).
+    /// </summary>
+    public static Request CreateRightAlignCellsRequest(int sheetId)
+    {
+        return new Request
+        {
+            RepeatCell = new RepeatCellRequest
+            {
+                Range = new GridRange { SheetId = sheetId },
+                Cell = new CellData
+                {
+                    UserEnteredFormat = new CellFormat
+                    {
+                        HorizontalAlignment = "RIGHT",
+                    },
+                },
+                Fields = "userEnteredFormat.horizontalAlignment",
+            },
+        };
+    }
+
+    /// <summary>RTL sheet direction plus right-aligned cell text for one tab.</summary>
+    public static IList<Request> CreateHebrewSheetPresentationRequests(int sheetId)
+        => [CreateRightToLeftRequest(sheetId), CreateRightAlignCellsRequest(sheetId)];
+
+    /// <summary>
+    /// Builds RTL + right-align requests for every sheet currently in the spreadsheet
     /// (report export only — caller must pass sheets from the report spreadsheet Get response).
     /// </summary>
     public static IList<Request> CreateRightToLeftRequestsForSheets(IEnumerable<Sheet> sheets)
@@ -56,10 +83,32 @@ public sealed class NativeGoogleSheetsWriter
             var sheetId = sheet.Properties?.SheetId;
             if (sheetId is null)
                 continue;
-            requests.Add(CreateRightToLeftRequest(sheetId.Value));
+            requests.AddRange(CreateHebrewSheetPresentationRequests(sheetId.Value));
         }
 
         return requests;
+    }
+
+    /// <summary>
+    /// After data (and pivots) are written, apply RTL + right alignment to every tab.
+    /// Covers rows added after the initial grid size.
+    /// </summary>
+    public async Task ApplyHebrewPresentationAsync(
+        string spreadsheetId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(spreadsheetId);
+        var info = await _sheets.Spreadsheets.Get(spreadsheetId).ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var requests = CreateRightToLeftRequestsForSheets(info.Sheets ?? []);
+        if (requests.Count == 0)
+            return;
+
+        await _sheets.Spreadsheets.BatchUpdate(
+                new BatchUpdateSpreadsheetRequest { Requests = requests },
+                spreadsheetId)
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task ClearRangeAsync(string spreadsheetId, string range, CancellationToken cancellationToken = default)
@@ -148,7 +197,7 @@ public sealed class NativeGoogleSheetsWriter
             await _sheets.Spreadsheets.BatchUpdate(
                     new BatchUpdateSpreadsheetRequest
                     {
-                        Requests = [CreateRightToLeftRequest(existingSheetId)],
+                        Requests = CreateHebrewSheetPresentationRequests(existingSheetId),
                     },
                     spreadsheetId)
                 .ExecuteAsync(cancellationToken)
@@ -244,14 +293,22 @@ public sealed class NativeGoogleSheetsWriter
             await _sheets.Spreadsheets.BatchUpdate(rename, spreadsheetId)
                 .ExecuteAsync(cancellationToken)
                 .ConfigureAwait(false);
+            await _sheets.Spreadsheets.BatchUpdate(
+                    new BatchUpdateSpreadsheetRequest
+                    {
+                        Requests = [CreateRightAlignCellsRequest(sheetId)],
+                    },
+                    spreadsheetId)
+                .ExecuteAsync(cancellationToken)
+                .ConfigureAwait(false);
             return;
         }
 
-        // Already named Data (blank create or template): still force RTL.
+        // Already named Data (blank create or template): still force RTL + right-aligned cells.
         await _sheets.Spreadsheets.BatchUpdate(
                 new BatchUpdateSpreadsheetRequest
                 {
-                    Requests = [CreateRightToLeftRequest(sheetId)],
+                    Requests = CreateHebrewSheetPresentationRequests(sheetId),
                 },
                 spreadsheetId)
             .ExecuteAsync(cancellationToken)
@@ -334,6 +391,7 @@ public sealed class NativeGoogleSheetsWriter
                     },
                 },
             });
+            requests.Add(CreateRightAlignCellsRequest(newPivotSheetId));
 
             var sourceRange = new GridRange
             {

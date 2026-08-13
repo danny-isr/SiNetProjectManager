@@ -52,6 +52,14 @@ public interface IEmailGateway
     Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Lists every Gmail <b>user</b> label in the signed-in mailbox (DEV-026 audit).
+    /// Excludes Gmail system labels. Does not filter to the office root.
+    /// Default: empty list so existing fakes need not implement this port.
+    /// </summary>
+    Task<IReadOnlyList<GmailLabelInfo>> GetAllUserLabelsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
+
+    /// <summary>
     /// Gets unread count for the mailbox scope in <paramref name="query"/>.
     /// Uses a separate Gmail query from paged list fetch — not derived from the current page.
     /// </summary>

@@ -151,6 +151,8 @@ public sealed class NativeR02ReportService(
                     $"הנתונים וטבלת הסיכום נכתבו, אך יצירת טבלת הציר «{R02PivotTableConfigs.DetailSheetName}» נכשלה: {detail}\n{url}");
             }
 
+            await sheets.ApplyHebrewPresentationAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
+
             _logger.Info(
                 $"[R02] completed rows={rows.Count} cols={headers.Count} client={request.IsClientExport} " +
                 $"pivots=[{R02PivotTableConfigs.SummarySheetName},{R02PivotTableConfigs.DetailSheetName}] url={url}");

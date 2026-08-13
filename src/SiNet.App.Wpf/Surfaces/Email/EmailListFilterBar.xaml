@@ -146,6 +146,10 @@
                             Style="{StaticResource ActionButton}"
                             Visibility="{Binding IsConnected, Converter={StaticResource BoolToVis}}"
                             ToolTip="מעדכן שמות לייבלים לפי NameAndNumber של הפרויקטים" />
+                    <Button Content="בדיקת תיוג"
+                            Command="{Binding AuditMailboxLabelsCommand}"
+                            Style="{StaticResource ActionButton}"
+                            ToolTip="טבלת תוויות התיבה מול פרויקטים — כפילות מסומנות בהערה" />
                     <Button Content="התנתק"
                             Command="{Binding DisconnectCommand}"
                             Style="{StaticResource ActionButton}"

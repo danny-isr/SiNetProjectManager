@@ -6,6 +6,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Email;
 using SiNet.Domain.ValueObjects;
 
 namespace SiNet.Infrastructure.Google;
@@ -243,6 +244,28 @@ public sealed class GmailEmailGateway : IEmailGateway
             .Where(label =>
                 string.Equals(label.Name, "INBOX", StringComparison.OrdinalIgnoreCase)
                 || label.Name!.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static label => label.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(static label => new GmailLabelInfo(
+                label.Id ?? string.Empty,
+                label.Name ?? string.Empty,
+                label.Color?.BackgroundColor,
+                label.Color?.TextColor))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<GmailLabelInfo>> GetAllUserLabelsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (gmail == null)
+        {
+            return Array.Empty<GmailLabelInfo>();
+        }
+
+        var labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
+        return labelMap.Values
+            .Where(static label => !string.IsNullOrWhiteSpace(label.Id) && !string.IsNullOrWhiteSpace(label.Name))
+            .Where(static label => !GmailSystemLabelNames.IsSystemLabel(label.Name, label.Type))
             .OrderBy(static label => label.Name, StringComparer.OrdinalIgnoreCase)
             .Select(static label => new GmailLabelInfo(
                 label.Id ?? string.Empty,

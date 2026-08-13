@@ -111,6 +111,8 @@ public sealed class NativeR01ReportService(
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            await sheets.ApplyHebrewPresentationAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
+
             var url = await drive.GetFileUrlAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
             _logger.Info($"[R01] completed rows={rows.Count} cols={R01PortfolioRow.GetHeaderRow().Count} source={rows[0].DataSource} url={url}");
             return MasterPlanReportGenerationResult.Ok(spreadsheetId, fileName, url, rows.Count);

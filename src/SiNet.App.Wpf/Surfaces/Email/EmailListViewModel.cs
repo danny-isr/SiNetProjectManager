@@ -38,6 +38,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private readonly ICurrentProjectContext? _currentProject;
     private readonly ICurrentUserContext? _currentUser;
     private readonly IProjectGmailLabelSyncService? _projectLabelSync;
+    private readonly IGmailMailboxLabelAuditService? _labelAudit;
 
     private readonly EmailListRowDisplayCoordinator _display;
     private readonly EmailListGroupingCoordinator _grouping;
@@ -96,12 +97,14 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         IEmailAccIngestQueue? accIngestQueue = null,
         IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null,
         IEmailThreadMappingSyncService? threadMappingSync = null,
-        IProjectGmailLabelSyncService? projectLabelSync = null)
+        IProjectGmailLabelSyncService? projectLabelSync = null,
+        IGmailMailboxLabelAuditService? labelAudit = null)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
         _threadMappingSync = threadMappingSync;
         _projectLabelSync = projectLabelSync;
+        _labelAudit = labelAudit;
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _filingService = filingService;
         _statusService = statusService;
@@ -161,6 +164,9 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         SyncProjectLabelNamesCommand = new AsyncRelayCommand(
             () => TrySyncProjectLabelNamesAsync(force: true),
             () => IsConnected && !IsBusy && _projectLabelSync is not null);
+        AuditMailboxLabelsCommand = new AsyncRelayCommand(
+            AuditMailboxLabelsAsync,
+            () => !IsBusy && _labelAudit is not null);
         ToggleGroupByLabelCommand = new RelayCommand(_ => _grouping.ToggleGroupByLabel());
         ToggleAttachmentsOnlyCommand = new AsyncRelayCommand(() => _paging.ToggleAttachmentsOnlyAsync(), CanLoadEmails);
         ToggleUnreadOnlyCommand = new AsyncRelayCommand(() => _paging.ToggleUnreadOnlyAsync(), CanLoadEmails);
@@ -628,6 +634,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public ICommand ApplyFiltersCommand { get; }
     public ICommand ClearFiltersCommand { get; }
     public ICommand SyncProjectLabelNamesCommand { get; }
+    public ICommand AuditMailboxLabelsCommand { get; }
     public ICommand ToggleGroupByLabelCommand { get; }
     public ICommand ToggleAttachmentsOnlyCommand { get; }
     public ICommand ToggleUnreadOnlyCommand { get; }
@@ -725,6 +732,50 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         {
             System.Diagnostics.Trace.TraceWarning($"[EmailList] Label name sync failed: {ex}");
             SetLoadWarning($"סנכרון שמות לייבלים נכשל: {ex.Message}");
+        }
+    }
+
+    internal async Task AuditMailboxLabelsAsync()
+    {
+        const string notConnected = "Gmail לא מחובר. התחבר ונסה שוב.";
+        if (_labelAudit is null)
+            return;
+
+        if (!IsConnected)
+        {
+            SetLoadError(notConnected);
+            if (System.Windows.Application.Current is not null)
+            {
+                System.Windows.MessageBox.Show(
+                    notConnected,
+                    "בדיקת תיוג",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+            }
+
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            var rows = await _labelAudit.AuditAsync(CancellationToken.None).ConfigureAwait(true);
+            var dialog = new GmailMailboxLabelAuditWindow(rows);
+            var owner = System.Windows.Application.Current?.Windows
+                .OfType<System.Windows.Window>()
+                .FirstOrDefault(w => w.IsActive);
+            if (owner is not null)
+                dialog.Owner = owner;
+            dialog.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.TraceWarning($"[EmailList] Label audit failed: {ex}");
+            SetLoadWarning($"בדיקת תיוג נכשלה: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 

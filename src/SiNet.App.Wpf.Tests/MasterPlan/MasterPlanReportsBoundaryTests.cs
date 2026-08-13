@@ -56,6 +56,8 @@ public sealed class MasterPlanReportsBoundaryTests
         Assert.Contains("FilteredEmployees", window, StringComparison.Ordinal);
         Assert.Contains("ICurrentUserProfileService", vm, StringComparison.Ordinal);
         Assert.Contains("MasterPlanEmployeeId", vm, StringComparison.Ordinal);
+        Assert.Contains("Property=\"TextAlignment\" Value=\"Right\"", window, StringComparison.Ordinal);
+        Assert.DoesNotContain("Property=\"HorizontalAlignment\" Value=\"Center\"", window, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -152,10 +154,19 @@ public sealed class MasterPlanReportsBoundaryTests
         Assert.Contains("BuildSummary", native, StringComparison.Ordinal);
         Assert.Contains("BuildDetail", native, StringComparison.Ordinal);
 
-        // Hebrew report tabs: sheet direction RTL at AddSheet / UpdateSheetProperties (not cell alignment).
+        // Hebrew report tabs: sheet RTL + cell horizontalAlignment RIGHT (not left-stuck text).
         Assert.Contains("RightToLeft = true", writer, StringComparison.Ordinal);
         Assert.Contains("CreateRightToLeftRequest", writer, StringComparison.Ordinal);
+        Assert.Contains("CreateRightAlignCellsRequest", writer, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment = \"RIGHT\"", writer, StringComparison.Ordinal);
+        Assert.Contains("ApplyHebrewPresentationAsync", writer, StringComparison.Ordinal);
         Assert.Contains("title,rightToLeft", writer, StringComparison.Ordinal);
+        Assert.Contains("ApplyHebrewPresentationAsync", native, StringComparison.Ordinal);
+
+        var r01Native = ReadRepoFile("src/SiNet.Infrastructure.Google/Reports/NativeR01ReportService.cs");
+        var r03Native = ReadRepoFile("src/SiNet.Infrastructure.Google/Reports/NativeR03ReportService.cs");
+        Assert.Contains("ApplyHebrewPresentationAsync", r01Native, StringComparison.Ordinal);
+        Assert.Contains("ApplyHebrewPresentationAsync", r03Native, StringComparison.Ordinal);
 
         Assert.Contains("סיכום פרויקט-תת-חוזה", configs, StringComparison.Ordinal);
         Assert.Contains("פירוט דיווחים", configs, StringComparison.Ordinal);

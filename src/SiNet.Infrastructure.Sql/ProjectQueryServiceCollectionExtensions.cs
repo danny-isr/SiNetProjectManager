@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Email;
 using SiNet.Application.Projects;
 using SiNet.Infrastructure.Sql.Services.Projects;
 using SiNetSQL.Data;
@@ -76,6 +77,11 @@ public static class ProjectQueryServiceCollectionExtensions
                 sp.GetService<SiNet.Application.Abstractions.Autodesk.IAccFolderRenameService>(),
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<ProjectRenameOrchestrator>>()));
         services.AddTransient<IProjectGmailLabelSyncService, ProjectGmailLabelSyncService>();
+        services.AddTransient<IGmailMailboxLabelAuditService>(sp =>
+            new GmailMailboxLabelAuditService(
+                sp.GetRequiredService<SiNet.Application.Abstractions.Email.IEmailGateway>(),
+                sp.GetRequiredService<IProjectQueryService>(),
+                sp.GetService<IPlaceCatalogService>()));
 
         return services;
     }

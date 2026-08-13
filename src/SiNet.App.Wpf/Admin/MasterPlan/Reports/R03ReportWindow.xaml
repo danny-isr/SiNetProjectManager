@@ -161,16 +161,62 @@
                 VerticalScrollBarVisibility="Auto"
                 HorizontalScrollBarVisibility="Auto"
                 Margin="0,0,0,8">
+        <DataGrid.ColumnHeaderStyle>
+          <Style TargetType="DataGridColumnHeader">
+            <Setter Property="HorizontalContentAlignment" Value="Right"/>
+          </Style>
+        </DataGrid.ColumnHeaderStyle>
+        <DataGrid.CellStyle>
+          <Style TargetType="DataGridCell">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+          </Style>
+        </DataGrid.CellStyle>
         <DataGrid.Columns>
-          <DataGridTextColumn Header="עובד" Binding="{Binding EmployeeName}" Width="*" MinWidth="120"/>
-          <DataGridTextColumn Header="תאריך" Binding="{Binding Date, StringFormat=dd/MM/yyyy}" Width="90"/>
-          <DataGridTextColumn Header="יום" Binding="{Binding DayName}" Width="60"/>
-          <DataGridTextColumn Header="נוכחות" Binding="{Binding AttendanceHours, StringFormat=N2}" Width="80"/>
-          <DataGridTextColumn Header="מדווח" Binding="{Binding ReportedHours, StringFormat=N2}" Width="80"/>
+          <DataGridTextColumn Header="עובד" Binding="{Binding EmployeeName}" Width="*" MinWidth="120">
+            <DataGridTextColumn.ElementStyle>
+              <Style TargetType="TextBlock">
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+              </Style>
+            </DataGridTextColumn.ElementStyle>
+          </DataGridTextColumn>
+          <DataGridTextColumn Header="תאריך" Binding="{Binding Date, StringFormat=dd/MM/yyyy}" Width="90">
+            <DataGridTextColumn.ElementStyle>
+              <Style TargetType="TextBlock">
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+              </Style>
+            </DataGridTextColumn.ElementStyle>
+          </DataGridTextColumn>
+          <DataGridTextColumn Header="יום" Binding="{Binding DayName}" Width="60">
+            <DataGridTextColumn.ElementStyle>
+              <Style TargetType="TextBlock">
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+              </Style>
+            </DataGridTextColumn.ElementStyle>
+          </DataGridTextColumn>
+          <DataGridTextColumn Header="נוכחות" Binding="{Binding AttendanceHours, StringFormat=N2}" Width="80">
+            <DataGridTextColumn.ElementStyle>
+              <Style TargetType="TextBlock">
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+              </Style>
+            </DataGridTextColumn.ElementStyle>
+          </DataGridTextColumn>
+          <DataGridTextColumn Header="מדווח" Binding="{Binding ReportedHours, StringFormat=N2}" Width="80">
+            <DataGridTextColumn.ElementStyle>
+              <Style TargetType="TextBlock">
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+              </Style>
+            </DataGridTextColumn.ElementStyle>
+          </DataGridTextColumn>
           <DataGridTextColumn Header="הפרש" Binding="{Binding Difference, StringFormat=N2}" Width="80">
             <DataGridTextColumn.ElementStyle>
               <Style TargetType="TextBlock">
-                <Setter Property="HorizontalAlignment" Value="Center"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
                 <Style.Triggers>
                   <DataTrigger Binding="{Binding IsNegativeDifference}" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource SiDangerBrush}"/>

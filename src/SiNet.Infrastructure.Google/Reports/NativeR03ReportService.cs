@@ -139,6 +139,8 @@ public sealed class NativeR03ReportService(
             await WriteSummaryAsync(sheets, spreadsheetId, employeeSheets, request, cancellationToken)
                 .ConfigureAwait(false);
 
+            await sheets.ApplyHebrewPresentationAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
+
             var url = await drive.GetFileUrlAsync(spreadsheetId, cancellationToken).ConfigureAwait(false);
             var rowCount = employeeSheets.Sum(e => e.Days.Count);
             _logger.Info($"[R03] completed employees={employeeSheets.Count} url={url}");

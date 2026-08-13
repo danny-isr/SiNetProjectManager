@@ -2,7 +2,7 @@
 
 > **Title:** Development backlog index (App.Wpf pilot gaps)
 > **Date:** 03.08.2026
-> **Updated:** 13.08.2026 (DEV-025 Replica SoT + orphan JSON archive directive; DEV-024 R02 gap)
+> **Updated:** 13.08.2026 (DEV-026 Gmail label↔project audit table; DEV-025 Replica SoT)
 > **Status:** Active / Operational Checklist
 > **Classification:** Operational Checklist (engineering index; not rollout sign-off)
 > **Scope:** Single index of product/engineering items for the `development` / `release` lines. Each item points to a focused doc. Not a substitute for GitHub Issues.
@@ -55,6 +55,7 @@ Status vocabulary:
 | DEV-023 | After successful `--monthly`, run existing API daily sync with **forced full reconcile** (internet) | Implementing | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1e | SyncEngine on `development` |
 | DEV-024 | R02 July gap — live MP preferred over Replica (proven on PROD) | Diagnosis done — fix via DEV-025 Rule B (shared resolver) | P1 | [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) | App.Wpf **1.0.29** |
 | DEV-025 | Replica-first queries (all reports); orphan DELETE + 30-day JSON under MasterPlanBakup | Implementing | P1 | [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) | SyncEngine **1.0.23** + App.Wpf **1.0.29** |
+| DEV-026 | Gmail mailbox label audit — sortable table of user labels ↔ project; duplicate `(Number)` note | Implementing | P2 | [`DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md`](./DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md) | App.Wpf **1.0.30** |
 ## 2b. On `release` tip — ops verify (Needs Review)
 
 Code for these IDs is present on `origin/release` @ `127dc0e` (App.Wpf **1.0.23** and prior ship commits). **Do not** treat as Done until operator verify is recorded.
