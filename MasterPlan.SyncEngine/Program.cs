@@ -260,7 +260,8 @@ if (args.Contains("--monthly") || args.Contains("-m"))
                 replicaConnectionString,
                 siDataConnectionString,
                 apiClientLogger,
-                apiSyncLogger);
+                apiSyncLogger,
+                skipOrphanPurge: args.Contains("--skip-orphan-purge"));
             postSw.Stop();
             Log.Warning(
                 "MasterPlan.SyncEngine DB update finished — mode {Mode}, duration {Duration}.",
@@ -334,7 +335,7 @@ else if (args.Contains("--daily") || args.Contains("-d") || args.Contains("--dai
         configuration,
         forceReconcile: args.Contains("--reconcile"),
         skipReconcile: args.Contains("--no-reconcile"),
-        purgeOrphans: args.Contains("--purge-orphans"),
+        skipOrphanPurge: args.Contains("--skip-orphan-purge"),
         purgeOrphansDryRun: args.Contains("--purge-orphans-dry-run"),
         purgeOrphansIncludeLegacy: args.Contains("--purge-orphans-include-legacy"));
     Console.WriteLine(
@@ -747,6 +748,7 @@ else
     Console.WriteLine("      3b.[COMPARE] Post-ETL compare + stamp MonthlyRestore");
     Console.WriteLine("      4. [API]     Existing --daily --reconcile (full hours pull from internet)");
     Console.WriteLine("    --skip-post-reconcile  Skip Step 4 API force reconcile");
+    Console.WriteLine("    --skip-orphan-purge    After Step 4, do not DELETE replica orphans");
     Console.WriteLine();
     Console.WriteLine("  PHASE 2 - Daily Delta Sync (API → Replica_DB)");
     Console.WriteLine("  ─────────────────────────────────────────────────────────────────");
@@ -758,9 +760,9 @@ else
     Console.WriteLine("  --no-capture           Disable raw capture mode (skips saving API responses)");
     Console.WriteLine("  --reconcile            Force a full unfiltered pass over the hour entities");
     Console.WriteLine("  --no-reconcile         Suppress the weekly hour-entity reconciliation pass");
-    Console.WriteLine("  --purge-orphans        After full reconcile, DELETE gated orphans (requires OrphanPurge:Enabled)");
+    Console.WriteLine("  --skip-orphan-purge     After full reconcile, do not DELETE replica orphans (DEV-025 default is DELETE)");
     Console.WriteLine("  --purge-orphans-dry-run  Same gates + CSV; never DELETE");
-    Console.WriteLine("  --purge-orphans-include-legacy  Bypass ReportDate age window (G5) only");
+    Console.WriteLine("  --purge-orphans-include-legacy  Unused (G5 dropped); kept for CLI compatibility");
     Console.WriteLine();
     Console.WriteLine("  OFFLINE SIMULATION MODE (no API calls)");
     Console.WriteLine("  ─────────────────────────────────────────────────────────────────");

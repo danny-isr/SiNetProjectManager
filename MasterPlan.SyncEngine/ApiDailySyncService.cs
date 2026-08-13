@@ -1850,8 +1850,8 @@ public class ApiDailySyncService
     }
 
     /// <summary>
-    /// After an unfiltered pass, report replica rows the API no longer returns. The engine never
-    /// bulk-deletes here — DEV-019 gated purge runs separately via <see cref="TryPurgeOrphansAsync"/>.
+    /// After an unfiltered pass, report replica rows the API no longer returns, then
+    /// DEV-025 purge (JSON archive + DELETE) via <see cref="TryPurgeOrphansAsync"/>.
     /// </summary>
     private async Task<int> CountOrphanCandidatesAsync(string entityName, IEnumerable<int> apiIds)
     {
@@ -1868,7 +1868,7 @@ public class ApiDailySyncService
         {
             _logger.LogWarning(
                 "[RECONCILE] {Entity}: {OrphanCount} row(s) in {Table} were not returned by the API. " +
-                "Not deleted — review manually. Sample IDs: {SampleIds}",
+                "DEV-025 purge follows when gates pass (JSON archive then DELETE). Sample IDs: {SampleIds}",
                 entityName, orphans.Count, config.TableName, string.Join(", ", orphans.Take(20)));
         }
         else
@@ -1880,7 +1880,8 @@ public class ApiDailySyncService
     }
 
     /// <summary>
-    /// DEV-019: evaluate safety gates and optionally dry-run / DELETE orphans for PH / PHE only.
+    /// DEV-025: evaluate remaining fail-closed gates and DELETE orphans for PH / PHE
+    /// after writing the JSON archive.
     /// </summary>
     private async Task TryPurgeOrphansAsync(
         EntitySyncResult result,

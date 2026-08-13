@@ -6,9 +6,9 @@ using SiNet.Application.MasterPlan.Reports;
 namespace SiNet.Infrastructure.Sql.Services.MasterPlan.Reports;
 
 /// <summary>
-/// R02 hours: prefer MasterPlan HoursReports up to max date, then Replica MP_ProjectHours
-/// (parity with GoogleConnector R02DataMerger). One sheet row per hour report — not aggregated —
-/// so Description / SubContract / Step remain available.
+/// R02 hours via <see cref="MasterPlanReportSqlSourceResolver"/> (DEV-025 Replica-first).
+/// One sheet row per hour report — not aggregated — so Description / SubContract / Step remain available.
+/// Live <c>HoursReports</c> is last-resort only when Replica is not configured.
 /// </summary>
 public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider connectionProvider)
     : IR02ReportDataSource
@@ -20,39 +20,22 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
         R02ReportRequest request,
         CancellationToken cancellationToken = default)
     {
-        var settings = _connectionProvider.GetConnectionSettings();
-        var replica = settings.ReplicaDatabase;
-        var masterPlan = settings.MasterPlanDatabase;
-        if (string.IsNullOrWhiteSpace(replica))
-            throw new InvalidOperationException("ReplicaDatabase connection string is not configured in the vault.");
-
-        DateTime? mpMax = null;
-        if (!string.IsNullOrWhiteSpace(masterPlan))
-            mpMax = await GetMasterPlanMaxDateAsync(masterPlan, cancellationToken).ConfigureAwait(false);
-
-        var rows = new List<R02HoursRow>();
-        if (mpMax is null || string.IsNullOrWhiteSpace(masterPlan))
-        {
-            rows.AddRange(await QueryReplicaAsync(replica, request.StartDate, request.EndDate, request, cancellationToken)
-                .ConfigureAwait(false));
-        }
-        else if (request.EndDate.Date <= mpMax.Value.Date)
-        {
-            rows.AddRange(await QueryMasterPlanAsync(masterPlan, request.StartDate, request.EndDate, request, cancellationToken)
-                .ConfigureAwait(false));
-        }
-        else if (request.StartDate.Date > mpMax.Value.Date)
-        {
-            rows.AddRange(await QueryReplicaAsync(replica, request.StartDate, request.EndDate, request, cancellationToken)
-                .ConfigureAwait(false));
-        }
-        else
-        {
-            rows.AddRange(await QueryMasterPlanAsync(masterPlan, request.StartDate, mpMax.Value, request, cancellationToken)
-                .ConfigureAwait(false));
-            rows.AddRange(await QueryReplicaAsync(replica, mpMax.Value.Date.AddDays(1), request.EndDate, request, cancellationToken)
-                .ConfigureAwait(false));
-        }
+        var source = MasterPlanReportSqlSourceResolver.Resolve(_connectionProvider.GetConnectionSettings());
+        IReadOnlyList<R02HoursRow> rows = source.Kind == MasterPlanReportSqlSourceKind.Replica
+            ? await QueryReplicaAsync(
+                    source.ConnectionString,
+                    request.StartDate,
+                    request.EndDate,
+                    request,
+                    cancellationToken)
+                .ConfigureAwait(false)
+            : await QueryMasterPlanAsync(
+                    source.ConnectionString,
+                    request.StartDate,
+                    request.EndDate,
+                    request,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         if (request.ExcludeZeroHours)
             rows = rows.Where(r => r.Hours != 0m).ToList();
@@ -63,15 +46,6 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
             .ThenBy(r => r.EmployeeName)
             .ThenBy(r => r.HourReportId)
             .ToList();
-    }
-
-    private static async Task<DateTime?> GetMasterPlanMaxDateAsync(string cs, CancellationToken cancellationToken)
-    {
-        await using var conn = new SqlConnection(cs);
-        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var cmd = new SqlCommand("SELECT MAX(CAST([DateTime] AS date)) FROM dbo.HoursReports", conn);
-        var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return value is DateTime dt ? dt : null;
     }
 
     private static async Task<IReadOnlyList<R02HoursRow>> QueryMasterPlanAsync(

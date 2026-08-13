@@ -2,8 +2,9 @@
 
 > **Title:** Operator lock — Replica-first queries; API-aligned orphan delete with 30-day JSON archive  
 > **Date:** 13.08.2026  
-> **Status:** Planning / Directive (documentation only — implement on `development` after push)  
-> **Scope:** Two locked product rules for MasterPlan hours / reports. Supersedes the **protective multi-gate** stance of DEV-019 for the *desired end state*. Does not implement code in this round.  
+> **Updated:** 13.08.2026 (implementation: shared Replica-first resolver for R01/R02/R03; orphan JSON+DELETE)  
+> **Status:** Implementing  
+> **Scope:** Two locked product rules for MasterPlan hours / reports. Native App.Wpf reports use one shared Replica-first resolver. After a successful full reconcile, replica hours IDs are aligned to the API (JSON archive then DELETE).  
 > **Branch:** Write/merge on `development`; ship via normal `release` process later.
 
 Related: [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) (DEV-019 — **superseded intent**), [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) (DEV-024), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) (DEV-020 staging folder), [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md).
@@ -27,7 +28,7 @@ Lock two operator decisions so DEV can refactor without re-debating:
 | Orphan detection | `CountOrphanCandidatesAsync` — IDs on replica ∉ API ID set |
 | DEV-019 purge plan | Gates G1–G10, CSV pre-delete, dry-run — **too defensive for locked intent**; keep useful pieces (full-pull only, pre-delete artifact, logging) |
 | Bak staging folder (DEV-020) | Client: `N:\MasterPlanBakup` · SQL view: `D:\SharedFolder\ProjectsData\MasterPlanBakup` |
-| R02 data source | `SqlR02ReportDataSource` — currently **MasterPlan-first** when `EndDate <= mpMax` (root cause of DEV-024) |
+| R02 / R01 / R03 data sources | Shared `MasterPlanReportSqlSourceResolver` — **Replica first**. Live MP last-resort only if Replica is not configured (R03 is Replica-only). |
 | Live MP DB | `Db_Mp_SiEng` — monthly restore target; **not** default report SoT under this directive |
 
 ---
@@ -67,7 +68,7 @@ Lock two operator decisions so DEV can refactor without re-debating:
 | Item | Spec |
 | --- | --- |
 | Folder | **Same staging root as DEV-020** — client `N:\MasterPlanBakup` (configurable; SQL twin path already documented). Subfolder recommended: `OrphanArchive\` under that root |
-| Format | JSON (one file per purge event **or** rolling daily file — implementer’s choice; must be easy to find by date) |
+| Format | JSON — one file per purge event: `orphan-purge-{entity}-{yyyyMMdd-HHmmss}.json` |
 | Retention | **30 days** — delete/archive-rotate files older than 30 days on each successful purge write |
 | Content (minimum per deleted row) | `Entity`, `ID`, `DeletedAtUtc` (day of purge), plus useful restore fields: `ReportDate`, `EmployeeID`, `EmployeeName`, `ProjectID`, `ProjectNumber`, `Duration`, `TotalHours`, `LastUpdated`, and other non-secret columns available on the row |
 | Order of operations | **1)** Write JSON (flush to disk) **2)** then DELETE from replica **3)** log counts |
@@ -93,25 +94,28 @@ No silent “orphan left in table because first sighting / age”.
 
 | Consumer | Read from |
 | --- | --- |
-| R02 (and R03 hours-related if same pattern) | **`Replica_DB`** (`MP_ProjectHoursExtended` preferred) |
-| Any future MasterPlan hours report in App.Wpf | **Replica** |
-| Live `Db_Mp_SiEng.HoursReports` | **Not** default for product reports |
+| **All native MasterPlan product reports** (R01, R02, R03) | **`Replica_DB`** via `MasterPlanReportSqlSourceResolver` |
+| Any future MasterPlan report in App.Wpf | Same resolver — do **not** add a private live-MP-first split |
+| Live `Db_Mp_SiEng` | Last-resort only when Replica is **not** configured **and** the report still has a live-schema query. R03 has no live query → Replica required. |
 
 Live MasterPlan may still be used for:
 
 - Monthly restore / ETL **writers**
-- Explicit admin/diagnostics tools that label the source as live MP
+- Explicit admin/diagnostics tools that label the source as live MP (employee lookup already prefers Replica on duplicate IDs)
 - Connection health probes
 
-### 4.2 Required code change (implementation round — not this doc round)
+### 4.2 Required code change
 
 | File / area | Change |
 | --- | --- |
-| `SqlR02ReportDataSource.GetMergedHoursAsync` | Stop MasterPlan-first split on `mpMax`. Default: **Replica only** for the requested range |
-| Legacy GoogleConnector R02 merger (if still reachable) | Same policy or leave dead path documented |
-| Docs / comments claiming “prefer MasterPlan up to max date” | Update to Replica-first |
+| `MasterPlanReportSqlSourceResolver` | **Shared mechanism:** if Replica CS is set → Replica; else live MP last-resort; else throw |
+| `SqlR01ReportDataSource` | Use resolver (stop MasterPlan-first KPI path) |
+| `SqlR02ReportDataSource.GetMergedHoursAsync` | Use resolver. **No** `mpMax` MasterPlan-first split |
+| `SqlR03ReportDataSource` | `RequireReplica()` |
+| Legacy GoogleConnector `R02DataMerger` / `DataSourceResolver` | Sibling repo — **not** the App.Wpf publish path; still MasterPlan-first if V2/legacy is launched. Out of this ship. |
+| Docs / comments claiming “prefer MasterPlan up to max date” | Replica-first |
 
-Optional later (Needs Review): feature flag `Reports:PreferLiveMasterPlan=false` default for emergency only — **not** required if operator wants blanket Replica.
+Emergency flag `Reports:PreferLiveMasterPlan` — **not** in this ship.
 
 ### 4.3 Why (PROD evidence 13.08.2026)
 
@@ -121,10 +125,10 @@ July R02 stayed **271** rows while Replica had **371** and live `HoursReports` h
 
 ## 5. Implementation order (for DEV on `development`)
 
-1. Docs already locked here — absorb pointers into DEV-019 / watermarks / R02 diag.  
-2. **Replica-first R02** (small, high impact) + tests for source selection.  
-3. **Orphan purge**: strip hard G3/G5/G6 blocks; keep G1/G2/G7; add JSON archive under MasterPlanBakup; wire into successful full reconcile (incl. DEV-023 path).  
-4. Version bump SyncEngine (+ App.Wpf if only reports change).  
+1. Docs locked — absorb pointers into DEV-019 / watermarks / R02 diag.  
+2. **Shared Replica-first resolver** for R01 + R02 + R03 (not R02-only) + tests for source selection.  
+3. **Orphan purge**: strip hard G3/G5/G6 blocks; G4 warning only; keep G1/G2/G7; JSON archive under MasterPlanBakup\OrphanArchive; default Enabled; opt-out `--skip-orphan-purge`; wire into successful full reconcile (incl. DEV-023 `DailyApiSyncRunner`).  
+4. Version bump SyncEngine **1.0.23** + App.Wpf **1.0.29**.  
 5. PROD verify: after reconcile, orphan count on replica = 0 for entity; JSON file present; R02 July row count tracks Replica (not live 271).
 
 ---
@@ -159,19 +163,19 @@ July R02 stayed **271** rows while Replica had **371** and live `HoursReports` h
 
 ## 9. Needs Review
 
-- Exact JSON file naming (`orphan-purge-{entity}-{yyyyMMdd}.json` vs append-only).  
-- Whether THR orphans purge in the same pass.  
-- Emergency flag to read live MP for reports (default off).  
-- Min-fetch formula for G2 (keep `max(1000, 0.5 × replica)` unless ops pick another).
+- Whether THR orphans purge in the same pass (first ship: PH + PHE only).  
+- Min-fetch formula for G2 (keep `max(1000, 0.5 × replica)` unless ops pick another).  
+- Emergency live-MP report flag (not shipped).  
+- JSON restore command / UI (archive is enough for manual restore).
 
 ---
 
 ## 10. Copy-paste brief for DEV agent
 
 ```text
-Implement DEV-025 on development (docs: docs/DEV_DIAG not needed for impl — use DEV_PLAN_MASTERPLAN_ORPHAN_PURGE + this file).
+Implement DEV-025 on development.
 
-1) Reports: SqlR02ReportDataSource (and any sibling) — Replica-first; do not prefer live HoursReports via mpMax split.
-2) SyncEngine: after successful full hours reconcile, DELETE replica orphans; before DELETE write JSON archive under MasterPlanBakup (same DEV-020 root), retain 30 days; keep fail-closed if API fetch looks truncated; remove hard 10%/2-sighting/age-defer as blockers.
-3) Tests + SyncEngine version bump; no EF migrations; no release edit until ship process.
+1) Reports: MasterPlanReportSqlSourceResolver — all native reports (R01/R02/R03) Replica-first; do not prefer live HoursReports via mpMax split.
+2) SyncEngine: after successful full hours reconcile, DELETE replica orphans; before DELETE write JSON archive under MasterPlanBakup\OrphanArchive, retain 30 days; keep fail-closed if API fetch looks truncated; G3/G5/G6 not hard blockers; G4 warning only; default Enabled; opt-out --skip-orphan-purge.
+3) Tests + SyncEngine 1.0.23 / App.Wpf 1.0.29; no EF migrations; no release edit until ship process.
 ```

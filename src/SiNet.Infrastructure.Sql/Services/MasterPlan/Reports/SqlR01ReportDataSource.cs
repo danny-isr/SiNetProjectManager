@@ -5,8 +5,8 @@ using SiNet.Application.MasterPlan.Reports;
 namespace SiNet.Infrastructure.Sql.Services.MasterPlan.Reports;
 
 /// <summary>
-/// R01 portfolio: prefer MasterPlan <c>Projects</c> + <c>ProjectsExtraData</c> (full KPIs),
-/// else Replica <c>MP_Projects</c> (partial) — parity with GoogleConnector DataSourceResolver.
+/// R01 portfolio via <see cref="MasterPlanReportSqlSourceResolver"/> (DEV-025 Replica-first).
+/// Replica <c>MP_Projects</c> is the product SoT; live MasterPlan KPIs are last-resort only.
 /// </summary>
 public sealed class SqlR01ReportDataSource(IMasterPlanEmployeeConnectionProvider connectionProvider)
     : IR01ReportDataSource
@@ -18,25 +18,14 @@ public sealed class SqlR01ReportDataSource(IMasterPlanEmployeeConnectionProvider
         R01ReportRequest request,
         CancellationToken cancellationToken = default)
     {
-        var settings = _connectionProvider.GetConnectionSettings();
-        if (!string.IsNullOrWhiteSpace(settings.MasterPlanDatabase))
+        var source = MasterPlanReportSqlSourceResolver.Resolve(_connectionProvider.GetConnectionSettings());
+        if (source.Kind == MasterPlanReportSqlSourceKind.Replica)
         {
-            try
-            {
-                return await QueryMasterPlanAsync(settings.MasterPlanDatabase, request, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (SqlException)
-            {
-                // Fall through to Replica when MP schema differs / unreachable.
-            }
+            return await QueryReplicaAsync(source.ConnectionString, request, cancellationToken)
+                .ConfigureAwait(false);
         }
 
-        if (string.IsNullOrWhiteSpace(settings.ReplicaDatabase))
-            throw new InvalidOperationException(
-                "Neither MasterPlanDatabase nor ReplicaDatabase is configured in the vault.");
-
-        return await QueryReplicaAsync(settings.ReplicaDatabase, request, cancellationToken)
+        return await QueryMasterPlanAsync(source.ConnectionString, request, cancellationToken)
             .ConfigureAwait(false);
     }
 

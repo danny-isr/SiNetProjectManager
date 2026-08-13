@@ -43,11 +43,13 @@ public sealed class OrphanPurgeRunner
         _logger = logger;
         _sightings = sightings ?? new OrphanSightingsStore();
         _artifactDirectory = artifactDirectory
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "SiOffice",
-                "MasterPlanSync",
-                "orphan-purge");
+            ?? (!string.IsNullOrWhiteSpace(options.ArchiveDirectory)
+                ? options.ArchiveDirectory
+                : Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "SiOffice",
+                    "MasterPlanSync",
+                    "orphan-purge"));
     }
 
     public async Task<OrphanPurgeRunResult> RunAsync(
@@ -83,41 +85,24 @@ public sealed class OrphanPurgeRunner
         var apiIdSet = apiIds.ToHashSet();
         var orphans = allRows.Where(r => !apiIdSet.Contains(r.Id)).ToList();
 
-        var previous = _sightings.Load(entityName);
         var evaluation = OrphanPurgeGate.Evaluate(
             isFullReconcile: true,
             fromDate: null,
             fetchedCount,
             replicaRowCount,
             orphans,
-            previous,
-            _options,
-            DateTime.UtcNow);
+            _options);
 
-        if (evaluation.PersistSightings)
-        {
-            _sightings.Save(entityName, evaluation.SightingIdsToPersist);
-        }
-
-        var deferredCount = evaluation.DeferredAge.Count + evaluation.DeferredFirstSighting.Count;
-        if (evaluation.DeferredAge.Count > 0)
+        if (!string.IsNullOrWhiteSpace(evaluation.WarningReason))
         {
             _logger.LogWarning(
-                "[ORPHAN-PURGE] {Entity}: OrphanDeferred age={Count} (ReportDate older than {Months} months). Sample: {Sample}",
+                "[ORPHAN-PURGE] {Entity}: {Warning}",
                 entityName,
-                evaluation.DeferredAge.Count,
-                _options.AgeWindowMonths,
-                string.Join(", ", evaluation.DeferredAge.Take(20).Select(r => r.Id)));
+                evaluation.WarningReason);
         }
 
-        if (evaluation.DeferredFirstSighting.Count > 0)
-        {
-            _logger.LogWarning(
-                "[ORPHAN-PURGE] {Entity}: OrphanDeferred first-sighting={Count}. Sample: {Sample}",
-                entityName,
-                evaluation.DeferredFirstSighting.Count,
-                string.Join(", ", evaluation.DeferredFirstSighting.Take(20).Select(r => r.Id)));
-        }
+        // Sightings store retained (DEV-019 G6) as an audit file only — it does not block DELETE.
+        _sightings.Save(entityName, orphans.Select(o => o.Id).OrderBy(id => id).ToArray());
 
         if (!evaluation.Allowed)
         {
@@ -131,7 +116,6 @@ public sealed class OrphanPurgeRunner
             return new OrphanPurgeRunResult
             {
                 OrphanCount = evaluation.OrphanCount,
-                DeferredCount = deferredCount,
                 BlockReason = evaluation.BlockReason
             };
         }
@@ -142,16 +126,15 @@ public sealed class OrphanPurgeRunner
         {
             artifactPath = WriteCsv(entityName, evaluation.ToPurge);
             _logger.LogWarning(
-                "[ORPHAN-PURGE] {Entity}: wrote artifact {Path} rows={Count}",
+                "[ORPHAN-PURGE] {Entity}: wrote CSV artifact {Path} rows={Count}",
                 entityName,
                 artifactPath,
                 evaluation.ToPurge.Count);
         }
         else if (evaluation.ToPurge.Count > 0 && !_options.ShouldDelete && !_options.DryRun)
         {
-            // Report-only: log eligible IDs but do not delete or require CSV unless dry-run/purge.
             _logger.LogWarning(
-                "[ORPHAN-PURGE] {Entity}: {Count} orphan(s) eligible after gates (report-only; use --purge-orphans-dry-run or enable+--purge-orphans). Sample: {Sample}",
+                "[ORPHAN-PURGE] {Entity}: {Count} orphan(s) eligible (report-only; purge skipped). Sample: {Sample}",
                 entityName,
                 evaluation.ToPurge.Count,
                 string.Join(", ", evaluation.ToPurge.Take(20).Select(r => r.Id)));
@@ -165,16 +148,14 @@ public sealed class OrphanPurgeRunner
             }
 
             _logger.LogWarning(
-                "[ORPHAN-PURGE] DRY-RUN entity={Entity} wouldDelete={Count} deferred={Deferred} artifact={Path}",
+                "[ORPHAN-PURGE] DRY-RUN entity={Entity} wouldDelete={Count} artifact={Path}",
                 entityName,
                 evaluation.ToPurge.Count,
-                deferredCount,
                 artifactPath ?? "(none)");
             return new OrphanPurgeRunResult
             {
                 OrphanCount = evaluation.OrphanCount,
                 PurgedCount = 0,
-                DeferredCount = deferredCount,
                 ArtifactPath = artifactPath,
                 DryRun = true
             };
@@ -186,7 +167,6 @@ public sealed class OrphanPurgeRunner
             {
                 OrphanCount = evaluation.OrphanCount,
                 PurgedCount = 0,
-                DeferredCount = deferredCount,
                 ArtifactPath = artifactPath
             };
         }
@@ -196,20 +176,42 @@ public sealed class OrphanPurgeRunner
             _logger.LogInformation("[ORPHAN-PURGE] {Entity}: gates passed; nothing to delete.", entityName);
             return new OrphanPurgeRunResult
             {
-                OrphanCount = evaluation.OrphanCount,
-                DeferredCount = deferredCount
+                OrphanCount = evaluation.OrphanCount
             };
         }
 
-        if (artifactPath is null)
+        var archiveDirectory = string.IsNullOrWhiteSpace(_options.ArchiveDirectory)
+            ? _artifactDirectory
+            : _options.ArchiveDirectory;
+        if (string.IsNullOrWhiteSpace(archiveDirectory))
         {
-            artifactPath = WriteCsv(entityName, evaluation.ToPurge);
+            throw new InvalidOperationException(
+                "Orphan JSON archive directory is not configured; refusing DELETE (DEV-025).");
         }
+
+        var archiveRows = await LoadArchiveRowsAsync(connection, tableName, evaluation.ToPurge)
+            .ConfigureAwait(false);
+        var deletedAtUtc = DateTime.UtcNow;
+        artifactPath = OrphanArchiveWriter.WriteEventFile(
+            archiveDirectory,
+            entityName,
+            deletedAtUtc,
+            archiveRows);
+        var pruned = OrphanArchiveWriter.DeleteExpiredFiles(
+            archiveDirectory,
+            deletedAtUtc,
+            _options.ArchiveRetentionDays);
+        _logger.LogWarning(
+            "[ORPHAN-PURGE] {Entity}: wrote JSON archive {Path} rows={Count} prunedExpired={Pruned}",
+            entityName,
+            artifactPath,
+            archiveRows.Count,
+            pruned);
 
         var deleted = await DeleteInBatchesAsync(connection, tableName, evaluation.ToPurge, cancellationToken)
             .ConfigureAwait(false);
         _logger.LogWarning(
-            "[ORPHAN-PURGE] DELETED entity={Entity} count={Count} artifact={Path}",
+            "[ORPHAN-PURGE] DELETED entity={Entity} count={Count} archive={Path}",
             entityName,
             deleted,
             artifactPath);
@@ -218,9 +220,31 @@ public sealed class OrphanPurgeRunner
         {
             OrphanCount = evaluation.OrphanCount,
             PurgedCount = deleted,
-            DeferredCount = deferredCount,
             ArtifactPath = artifactPath
         };
+    }
+
+    private static async Task<IReadOnlyList<Dictionary<string, object?>>> LoadArchiveRowsAsync(
+        SqlConnection connection,
+        string tableName,
+        IReadOnlyList<OrphanReplicaRow> rows)
+    {
+        if (rows.Count == 0)
+            return [];
+
+        var ids = rows.Select(r => r.Id).ToArray();
+        var raw = await connection.QueryAsync(
+            $"SELECT * FROM [{tableName}] WHERE ID IN @Ids",
+            new { Ids = ids }).ConfigureAwait(false);
+
+        var list = new List<Dictionary<string, object?>>();
+        foreach (var item in raw)
+        {
+            if (item is IDictionary<string, object> dict)
+                list.Add(OrphanArchiveWriter.ToJsonRow(dict));
+        }
+
+        return list;
     }
 
     private async Task<int> DeleteInBatchesAsync(

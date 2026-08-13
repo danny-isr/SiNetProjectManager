@@ -13,19 +13,23 @@ public sealed class OrphanPurgeEvaluation
 {
     public bool Allowed { get; init; }
     public string? BlockReason { get; init; }
+    /// <summary>Soft warning (G4 volume) — DELETE still proceeds under DEV-025.</summary>
+    public string? WarningReason { get; init; }
     public int ReplicaRowCount { get; init; }
     public int FetchedCount { get; init; }
     public int OrphanCount { get; init; }
     public IReadOnlyList<OrphanReplicaRow> ToPurge { get; init; } = [];
     public IReadOnlyList<OrphanReplicaRow> DeferredAge { get; init; } = [];
     public IReadOnlyList<OrphanReplicaRow> DeferredFirstSighting { get; init; } = [];
-    /// <summary>All current orphan IDs to persist as the next sighting baseline (only when G2 passed).</summary>
+    /// <summary>Unused under DEV-025 (G6 dropped). Kept so existing callers compile.</summary>
     public IReadOnlyList<int> SightingIdsToPersist { get; init; } = [];
     public bool PersistSightings { get; init; }
 }
 
 /// <summary>
-/// Pure gate math for DEV-019 (G1–G6). Side effects (CSV/DELETE/JSON) live in <see cref="OrphanPurgeRunner"/>.
+/// Gate math for orphan DELETE after a successful full hours reconcile (DEV-025).
+/// Hard blocks: G1 full-pull only, G2 min-fetch fail-closed. G3/G5/G6 are not blockers.
+/// G4 (absolute cap) is a warning only.
 /// </summary>
 public static class OrphanPurgeGate
 {
@@ -35,12 +39,9 @@ public static class OrphanPurgeGate
         int fetchedCount,
         int replicaRowCount,
         IReadOnlyList<OrphanReplicaRow> orphans,
-        IReadOnlySet<int> previousSightings,
-        OrphanPurgeOptions options,
-        DateTime utcNow)
+        OrphanPurgeOptions options)
     {
         ArgumentNullException.ThrowIfNull(orphans);
-        ArgumentNullException.ThrowIfNull(previousSightings);
         ArgumentNullException.ThrowIfNull(options);
 
         if (!isFullReconcile || fromDate.HasValue)
@@ -61,97 +62,39 @@ public static class OrphanPurgeGate
                 orphans.Count);
         }
 
-        var ageCutoff = utcNow.Date.AddMonths(-options.AgeWindowMonths);
-        var deferredAge = new List<OrphanReplicaRow>();
-        var ageOk = new List<OrphanReplicaRow>();
-
-        foreach (var row in orphans)
-        {
-            if (options.IncludeLegacy || IsInsideAgeWindow(row.ReportDate, ageCutoff))
-            {
-                ageOk.Add(row);
-            }
-            else
-            {
-                deferredAge.Add(row);
-            }
-        }
-
-        var deferredFirst = new List<OrphanReplicaRow>();
-        var purgeCandidates = new List<OrphanReplicaRow>();
-        foreach (var row in ageOk)
-        {
-            if (previousSightings.Contains(row.Id))
-            {
-                purgeCandidates.Add(row);
-            }
-            else
-            {
-                deferredFirst.Add(row);
-            }
-        }
-
-        var sightingIds = orphans.Select(o => o.Id).OrderBy(id => id).ToArray();
-
+        string? warning = null;
         if (replicaRowCount > 0
-            && purgeCandidates.Count > replicaRowCount * options.MaxPurgeFraction)
+            && orphans.Count > replicaRowCount * options.MaxPurgeFraction)
         {
-            return new OrphanPurgeEvaluation
-            {
-                Allowed = false,
-                BlockReason =
-                    $"G3_MAX_FRACTION purge={purgeCandidates.Count} replica={replicaRowCount} maxFraction={options.MaxPurgeFraction:0.##}",
-                ReplicaRowCount = replicaRowCount,
-                FetchedCount = fetchedCount,
-                OrphanCount = orphans.Count,
-                ToPurge = [],
-                DeferredAge = deferredAge,
-                DeferredFirstSighting = deferredFirst.Concat(purgeCandidates).ToList(),
-                SightingIdsToPersist = sightingIds,
-                PersistSightings = true
-            };
+            warning =
+                $"G3_MAX_FRACTION purge={orphans.Count} replica={replicaRowCount} maxFraction={options.MaxPurgeFraction:0.##} (warning only; DEV-025)";
         }
 
-        if (purgeCandidates.Count > options.MaxAbsolutePurge)
+        if (orphans.Count > options.MaxAbsolutePurge)
         {
-            return new OrphanPurgeEvaluation
-            {
-                Allowed = false,
-                BlockReason =
-                    $"G4_MAX_ABSOLUTE purge={purgeCandidates.Count} max={options.MaxAbsolutePurge}",
-                ReplicaRowCount = replicaRowCount,
-                FetchedCount = fetchedCount,
-                OrphanCount = orphans.Count,
-                ToPurge = [],
-                DeferredAge = deferredAge,
-                DeferredFirstSighting = deferredFirst.Concat(purgeCandidates).ToList(),
-                SightingIdsToPersist = sightingIds,
-                PersistSightings = true
-            };
+            var g4 =
+                $"G4_MAX_ABSOLUTE purge={orphans.Count} max={options.MaxAbsolutePurge} (warning only; DEV-025)";
+            warning = string.IsNullOrWhiteSpace(warning) ? g4 : warning + "; " + g4;
         }
 
         return new OrphanPurgeEvaluation
         {
             Allowed = true,
             BlockReason = null,
+            WarningReason = warning,
             ReplicaRowCount = replicaRowCount,
             FetchedCount = fetchedCount,
             OrphanCount = orphans.Count,
-            ToPurge = purgeCandidates,
-            DeferredAge = deferredAge,
-            DeferredFirstSighting = deferredFirst,
-            SightingIdsToPersist = sightingIds,
-            PersistSightings = true
+            ToPurge = orphans,
+            PersistSightings = false
         };
     }
 
-    /// <summary>null ReportDate is treated as outside the window (deferred) unless IncludeLegacy.</summary>
+    /// <summary>Kept for DEV-019 tests/history. Age deferral is not a DEV-025 hard block.</summary>
     public static bool IsInsideAgeWindow(DateTime? reportDate, DateTime ageCutoffInclusive)
     {
         if (!reportDate.HasValue)
-        {
             return false;
-        }
 
         return reportDate.Value.Date >= ageCutoffInclusive;
     }

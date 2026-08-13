@@ -2,6 +2,7 @@
 
 > **Title:** MasterPlan SyncEngine — incremental sync correctness for hour reporting
 > **Date:** 02.08.2026
+> **Updated:** 13.08.2026 (DEV-025 orphan DELETE after full reconcile)
 > **Status:** Active
 > **Scope:** `MasterPlan.SyncEngine` daily API sync (`--daily`): how the per-entity watermark is
 > stored and used, why the hour-reporting entities lost rows, and the corrective design
@@ -79,7 +80,8 @@ averaged 15–23 reports per day.
 ### 2.3 Consequence for the application
 
 `SqlR02ReportDataSource` and `SqlR03ReportDataSource` read `MP_ProjectHoursExtended` in preference
-to `MP_ProjectHours`, so the reports users see are built on the table that loses the most rows.
+to `MP_ProjectHours` **inside Replica** (DEV-025: product reports do not prefer live `HoursReports`),
+so the reports users see are built on the table that loses the most rows.
 Measured on 2026-08-02: 76 report IDs present in `MP_ProjectHours` and absent from
 `MP_ProjectHoursExtended`, 32 in the opposite direction. Rows missing from *both* tables (the
 07/07–22/07 window) are not detectable by comparing the two tables against each other.
@@ -209,7 +211,7 @@ SELECT EntityName, LastWatermark, LastSyncTime FROM Sync_State ORDER BY LastSync
 
 - Any change to the watermark **field** of the nine non-hour entities (§3.6 audits them; the
   freshness stamp in §3.5 applies to all twelve but changes no watermark).
-- Deleting replica rows outside the DEV-019 gated reconcile purge (lookback daily never deletes).
+- Deleting replica rows outside the DEV-025 full-reconcile purge (lookback daily never deletes). Opt-out: `--skip-orphan-purge`.
 - The monthly backup/restore ETL (`--monthly`) and its watermark initialisation.
 - Productizing bak-vs-replica compare as a **pre-ETL log inside `--monthly`** — **DEV-018** ([`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md)). Uses a `Sync_State` row `MonthlyRestore` as a restore-date gate only; does **not** change daily lookback / MERGE / hours-unit.
 - Schema changes to `MP_*` tables, `Sync_State`, or any EF migration.
@@ -222,7 +224,7 @@ SELECT EntityName, LastWatermark, LastSyncTime FROM Sync_State ORDER BY LastSync
 | --- | --- | --- |
 | Repairing history via a `--monthly` backup/restore | Postponed | The weekly reconciliation closes the same gap without restoring a database |
 | One-off manual watermark reset in `Sync_State` | Dropped | Superseded by the first reconciliation pass, which is automatic and repeatable |
-| Deleting replica rows absent from the API | Implementing **DEV-019** | Gated purge (10% cap, ReportDate age, 2 sightings, full-pull only); `Enabled=false` until PROD dry-run — see [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) |
+| Deleting replica rows absent from the API | Implementing **DEV-025** | After successful full reconcile: JSON archive then DELETE. G1/G2 fail-closed; G3/G5/G6 not hard blocks. Opt-out `--skip-orphan-purge`. See [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) |
 | Making the lookback window per-entity configurable | Postponed | One shared value for the hour entities is sufficient; revisit if reporting patterns diverge |
 | Adding `LastRecordsFetched` / `LastNonEmptySyncTime` columns to `Sync_State` | Dropped | Would need a schema change; the `[STALE]` warning in §3.5 covers the same alerting need |
 | Making `Tasks` genuinely incremental | Postponed | The server ignores `lastUpdated` on that endpoint; a full pull of 784 rows is cheap enough to leave alone |

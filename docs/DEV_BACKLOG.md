@@ -53,8 +53,8 @@ Status vocabulary:
 | DEV-021 | HoursReports.Hours = **milliseconds** (ETL); PHE.LastUpdated not stamped from bak; daily MERGE repair null Duration/TotalHours | Implementing — unit tests green; DB verify pending | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1c · [`DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md`](./DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md) | SyncEngine on `development` |
 | DEV-022 | After monthly restore: ensure `SI-ENG\שרטטים` has db_datareader+db_datawriter on `Db_Mp_SiEng` and `Replica_DB` | Implementing | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1d | SyncEngine on `development` |
 | DEV-023 | After successful `--monthly`, run existing API daily sync with **forced full reconcile** (internet) | Implementing | P1 | [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) §1e | SyncEngine on `development` |
-| DEV-024 | R02 July gap — live MP preferred over Replica (proven on PROD) | Diagnosis done — fix via DEV-025 Rule B | P1 | [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) | App.Wpf |
-| DEV-025 | **Directive:** Replica-first queries; orphan DELETE + 30-day JSON under MasterPlanBakup | Planning / Directive | P1 | [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) | SyncEngine + App.Wpf |
+| DEV-024 | R02 July gap — live MP preferred over Replica (proven on PROD) | Diagnosis done — fix via DEV-025 Rule B (shared resolver) | P1 | [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) | App.Wpf **1.0.29** |
+| DEV-025 | Replica-first queries (all reports); orphan DELETE + 30-day JSON under MasterPlanBakup | Implementing | P1 | [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) | SyncEngine **1.0.23** + App.Wpf **1.0.29** |
 ## 2b. On `release` tip — ops verify (Needs Review)
 
 Code for these IDs is present on `origin/release` @ `127dc0e` (App.Wpf **1.0.23** and prior ship commits). **Do not** treat as Done until operator verify is recorded.

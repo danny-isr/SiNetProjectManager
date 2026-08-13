@@ -3,8 +3,8 @@ using Microsoft.Extensions.Configuration;
 namespace MasterPlan.SyncEngine;
 
 /// <summary>
-/// Safety-gated orphan purge after a full hours reconcile (DEV-019).
-/// See docs/DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md.
+/// Orphan purge after a successful full hours reconcile (DEV-025).
+/// Real DELETE is part of reconcile by default; opt out with <c>--skip-orphan-purge</c>.
 /// </summary>
 public sealed record OrphanPurgeOptions
 {
@@ -14,17 +14,19 @@ public sealed record OrphanPurgeOptions
     public const int DefaultMaxAbsolutePurge = 500;
     public const int DefaultAgeWindowMonths = 24;
     public const int DefaultDeleteBatchSize = 200;
+    public const int DefaultArchiveRetentionDays = OrphanArchiveWriter.DefaultRetentionDays;
+    public const string ArchiveSubfolderName = "OrphanArchive";
 
-    /// <summary>Master switch. Real DELETE also requires CLI <c>--purge-orphans</c>.</summary>
-    public bool Enabled { get; init; }
+    /// <summary>Master switch. Default true under DEV-025.</summary>
+    public bool Enabled { get; init; } = true;
 
-    /// <summary>This run: compute gates + CSV; never DELETE.</summary>
+    /// <summary>This run: compute gates + artifacts; never DELETE.</summary>
     public bool DryRun { get; init; }
 
-    /// <summary>This run: allow DELETE when <see cref="Enabled"/> and all gates pass.</summary>
-    public bool PurgeRequested { get; init; }
+    /// <summary>This run: allow DELETE when <see cref="Enabled"/> and not skipped/dry-run.</summary>
+    public bool PurgeRequested { get; init; } = true;
 
-    /// <summary>Bypass the ReportDate age window (G5) only.</summary>
+    /// <summary>Unused under DEV-025 (G5 dropped). Kept so old CLI still parses.</summary>
     public bool IncludeLegacy { get; init; }
 
     public int MinAbsoluteFetch { get; init; } = DefaultMinAbsoluteFetch;
@@ -33,8 +35,12 @@ public sealed record OrphanPurgeOptions
     public int MaxAbsolutePurge { get; init; } = DefaultMaxAbsolutePurge;
     public int AgeWindowMonths { get; init; } = DefaultAgeWindowMonths;
     public int DeleteBatchSize { get; init; } = DefaultDeleteBatchSize;
+    public int ArchiveRetentionDays { get; init; } = DefaultArchiveRetentionDays;
 
-    /// <summary>Real DELETE path (not dry-run).</summary>
+    /// <summary>JSON archive folder (DEV-020 staging root + <see cref="ArchiveSubfolderName"/>).</summary>
+    public string ArchiveDirectory { get; init; } = "";
+
+    /// <summary>Real DELETE path (not dry-run, not skipped).</summary>
     public bool ShouldDelete
         => Enabled && PurgeRequested && !DryRun;
 
@@ -44,16 +50,23 @@ public sealed record OrphanPurgeOptions
 
     public static OrphanPurgeOptions FromConfiguration(
         IConfiguration configuration,
-        bool purgeRequested = false,
+        bool purgeRequested = true,
         bool dryRun = false,
         bool includeLegacy = false)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
         var section = configuration.GetSection("MasterPlanApi:OrphanPurge");
+        var archiveOverride = section["ArchiveDirectory"];
+        var archiveDirectory = string.IsNullOrWhiteSpace(archiveOverride)
+            ? Path.Combine(
+                MonthlyBackupStagingOptions.FromConfiguration(configuration).ClientStagingPath,
+                ArchiveSubfolderName)
+            : archiveOverride.Trim();
+
         return new OrphanPurgeOptions
         {
-            Enabled = ReadBool(section["Enabled"], false),
+            Enabled = ReadBool(section["Enabled"], true),
             DryRun = dryRun,
             PurgeRequested = purgeRequested,
             IncludeLegacy = includeLegacy,
@@ -63,6 +76,8 @@ public sealed record OrphanPurgeOptions
             MaxAbsolutePurge = ReadPositiveInt(section["MaxAbsolutePurge"], DefaultMaxAbsolutePurge),
             AgeWindowMonths = ReadPositiveInt(section["AgeWindowMonths"], DefaultAgeWindowMonths),
             DeleteBatchSize = ReadPositiveInt(section["DeleteBatchSize"], DefaultDeleteBatchSize),
+            ArchiveRetentionDays = ReadPositiveInt(section["ArchiveRetentionDays"], DefaultArchiveRetentionDays),
+            ArchiveDirectory = archiveDirectory
         };
     }
 

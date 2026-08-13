@@ -117,6 +117,25 @@ public sealed class MasterPlanReportsBoundaryTests
         Assert.Contains("MP_ProjectHoursExtended", sql, StringComparison.Ordinal);
         Assert.Contains("ph.SubContractName", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("GROUP BY", sql, StringComparison.Ordinal);
+        Assert.Contains("MasterPlanReportSqlSourceResolver", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetMasterPlanMaxDate", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("mpMax", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void All_native_report_data_sources_use_shared_replica_first_resolver()
+    {
+        var r01 = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/MasterPlan/Reports/SqlR01ReportDataSource.cs");
+        var r02 = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/MasterPlan/Reports/SqlR02ReportDataSource.cs");
+        var r03 = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/MasterPlan/Reports/SqlR03ReportDataSource.cs");
+        var resolver = ReadRepoFile("src/SiNet.Application/MasterPlan/Reports/MasterPlanReportSqlSourceResolver.cs");
+
+        Assert.Contains("MasterPlanReportSqlSourceResolver.Resolve", r01, StringComparison.Ordinal);
+        Assert.Contains("MasterPlanReportSqlSourceResolver.Resolve", r02, StringComparison.Ordinal);
+        Assert.Contains("MasterPlanReportSqlSourceResolver.RequireReplica", r03, StringComparison.Ordinal);
+        Assert.Contains("Replica-first", resolver, StringComparison.Ordinal);
+        Assert.DoesNotContain("prefer MasterPlan", r01, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("prefer MasterPlan", r02, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

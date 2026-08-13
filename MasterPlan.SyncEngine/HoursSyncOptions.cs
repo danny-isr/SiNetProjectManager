@@ -24,14 +24,14 @@ public sealed record HoursSyncOptions
     /// <summary>Suppress reconciliation for this execution.</summary>
     public bool SkipReconcile { get; init; }
 
-    /// <summary>DEV-019 orphan purge knobs for this run.</summary>
+    /// <summary>DEV-025 orphan purge knobs for this run (default: DELETE after successful full reconcile).</summary>
     public OrphanPurgeOptions OrphanPurge { get; init; } = new();
 
     public static HoursSyncOptions FromConfiguration(
         IConfiguration configuration,
         bool forceReconcile = false,
         bool skipReconcile = false,
-        bool purgeOrphans = false,
+        bool skipOrphanPurge = false,
         bool purgeOrphansDryRun = false,
         bool purgeOrphansIncludeLegacy = false)
     {
@@ -46,7 +46,7 @@ public sealed record HoursSyncOptions
             SkipReconcile = skipReconcile,
             OrphanPurge = OrphanPurgeOptions.FromConfiguration(
                 configuration,
-                purgeRequested: purgeOrphans,
+                purgeRequested: !skipOrphanPurge,
                 dryRun: purgeOrphansDryRun,
                 includeLegacy: purgeOrphansIncludeLegacy)
         };

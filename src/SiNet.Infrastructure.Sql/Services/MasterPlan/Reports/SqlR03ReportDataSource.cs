@@ -5,6 +5,10 @@ using SiNet.Application.MasterPlan.Reports;
 
 namespace SiNet.Infrastructure.Sql.Services.MasterPlan.Reports;
 
+/// <summary>
+/// R03 attendance vs reported hours. Replica-only via
+/// <see cref="MasterPlanReportSqlSourceResolver"/> (DEV-025) — no live MP schema query.
+/// </summary>
 public sealed class SqlR03ReportDataSource(IMasterPlanEmployeeConnectionProvider connectionProvider)
     : IR03ReportDataSource
 {
@@ -15,7 +19,8 @@ public sealed class SqlR03ReportDataSource(IMasterPlanEmployeeConnectionProvider
         R03ReportRequest request,
         CancellationToken cancellationToken = default)
     {
-        var cs = RequireReplica();
+        var cs = MasterPlanReportSqlSourceResolver.RequireReplica(_connectionProvider.GetConnectionSettings())
+            .ConnectionString;
         var endExclusive = request.EndDate.Date.AddDays(1);
         var sql =
             """
@@ -41,7 +46,8 @@ public sealed class SqlR03ReportDataSource(IMasterPlanEmployeeConnectionProvider
         R03ReportRequest request,
         CancellationToken cancellationToken = default)
     {
-        var cs = RequireReplica();
+        var cs = MasterPlanReportSqlSourceResolver.RequireReplica(_connectionProvider.GetConnectionSettings())
+            .ConnectionString;
         var endExclusive = request.EndDate.Date.AddDays(1);
         var sql =
             """
@@ -68,7 +74,8 @@ public sealed class SqlR03ReportDataSource(IMasterPlanEmployeeConnectionProvider
         CancellationToken cancellationToken = default)
     {
         _ = activeOnly;
-        var cs = RequireReplica();
+        var cs = MasterPlanReportSqlSourceResolver.RequireReplica(_connectionProvider.GetConnectionSettings())
+            .ConnectionString;
         const string sql =
             """
             SELECT DISTINCT EmployeeID, EmployeeName FROM (
@@ -88,14 +95,6 @@ public sealed class SqlR03ReportDataSource(IMasterPlanEmployeeConnectionProvider
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             list.Add(new R03EmployeeInfo(reader.GetInt32(0), reader.GetString(1)));
         return list;
-    }
-
-    private string RequireReplica()
-    {
-        var cs = _connectionProvider.GetConnectionSettings().ReplicaDatabase;
-        if (string.IsNullOrWhiteSpace(cs))
-            throw new InvalidOperationException("ReplicaDatabase connection string is not configured in the vault.");
-        return cs;
     }
 
     private static async Task<IReadOnlyList<T>> QueryAsync<T>(

@@ -27,6 +27,7 @@ public sealed class SqlMasterPlanEmployeeLookupService : IMasterPlanEmployeeLook
         var settings = _connectionProvider.GetConnectionSettings();
         var merged = new Dictionary<int, MasterPlanEmployeeDto>();
 
+        // Admin lookup (not a product report): Replica names win on duplicate IDs (DEV-025 alignment).
         if (!string.IsNullOrWhiteSpace(settings.ReplicaDatabase))
         {
             await MergeEmployeesAsync(
