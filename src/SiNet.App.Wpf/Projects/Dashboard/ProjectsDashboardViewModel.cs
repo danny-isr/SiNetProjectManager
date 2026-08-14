@@ -5,6 +5,7 @@ using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Projects;
@@ -25,6 +26,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
     private readonly IPlaceCatalogService? _placeCatalog;
     private readonly IProjectEditDialogFactory? _editDialogFactory;
     private readonly IAuthorizationQueryService? _authorization;
+    private readonly IAppLogger? _logger;
 
     private CancellationTokenSource? _loadCts;
     private bool _isBusy;
@@ -57,7 +59,8 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         IProjectWorkSurfaceHost? projectWorkHost = null,
         IPlaceCatalogService? placeCatalog = null,
         IProjectEditDialogFactory? editDialogFactory = null,
-        IAuthorizationQueryService? authorization = null)
+        IAuthorizationQueryService? authorization = null,
+        IAppLogger? logger = null)
     {
         _dashboardQuery = dashboardQuery ?? throw new ArgumentNullException(nameof(dashboardQuery));
         _filterOptions = filterOptions ?? throw new ArgumentNullException(nameof(filterOptions));
@@ -66,6 +69,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         _placeCatalog = placeCatalog;
         _editDialogFactory = editDialogFactory;
         _authorization = authorization;
+        _logger = logger;
 
         Rows = new ObservableCollection<ProjectsDashboardRowVm>();
         StatusFilterOptions = new ObservableCollection<ProjectFilterOptionDto>();
@@ -316,7 +320,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"שגיאה בטעינה: {ex.Message}";
-            System.Diagnostics.Trace.TraceWarning($"[ProjectsDashboard] Refresh failed: {ex}");
+            _logger?.Warn($"[ProjectsDashboard] outcome=Failed op=Refresh detail={ex.Message}");
         }
         finally
         {
@@ -354,7 +358,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.TraceWarning($"[ProjectsDashboard] OpenSelected failed: {ex}");
+            _logger?.Warn($"[ProjectsDashboard] outcome=Failed op=OpenSelected detail={ex.Message}");
             MessageBox.Show(
                 $"שגיאה בפתיחת הפרויקט: {ex.Message}",
                 "ריכוז פרויקטים",
@@ -402,7 +406,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.TraceWarning($"[ProjectsDashboard] EditSelected failed: {ex}");
+            _logger?.Warn($"[ProjectsDashboard] outcome=Failed op=EditSelected detail={ex.Message}");
             MessageBox.Show(
                 $"שגיאה בפתיחת עדכון פרויקט: {ex.Message}",
                 "ריכוז פרויקטים",
@@ -452,7 +456,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.TraceWarning($"[ProjectsDashboard] Filter options failed: {ex}");
+            _logger?.Warn($"[ProjectsDashboard] outcome=Failed op=FilterOptions detail={ex.Message}");
         }
     }
 

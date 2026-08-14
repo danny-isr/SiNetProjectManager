@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Configuration;
 
 namespace SiNet.Infrastructure.Autodesk;
@@ -11,11 +12,13 @@ namespace SiNet.Infrastructure.Autodesk;
 internal sealed class RemoteAccFileUploadService(
     HttpClient httpClient,
     ISecretVaultStore secretVaultStore,
-    IAccServiceModeProvider serviceModeProvider) : IAccFileUploadService
+    IAccServiceModeProvider serviceModeProvider,
+    IAppLogger logger) : IAccFileUploadService
 {
     private readonly HttpClient _httpClient = httpClient;
     private readonly ISecretVaultStore _secretVaultStore = secretVaultStore;
     private readonly IAccServiceModeProvider _serviceModeProvider = serviceModeProvider;
+    private readonly IAppLogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<AccFileUploadResult> UploadAsync(
         AccFileUploadRequest request,
@@ -35,12 +38,14 @@ internal sealed class RemoteAccFileUploadService(
         var baseUrl = _serviceModeProvider.BaseUrl;
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
+            _logger.Error("[AccRemote] missing BaseUrl op=AccUpload");
             throw new InvalidOperationException("ACC service base URL is not configured for remote file upload.");
         }
 
         var apiKey = _secretVaultStore.GetSecret(SecretCatalog.AccServiceApiKey);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
+            _logger.Error("[AccRemote] missing ApiKey op=AccUpload");
             throw new InvalidOperationException("ACC service API key is not configured in the native secret vault.");
         }
 
@@ -98,13 +103,20 @@ internal sealed class RemoteAccFileUploadService(
         message.Headers.Add(AccServiceContracts.ApiKeyHeader, apiKey);
 
         using var response = await _httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.Error(
+                $"[AccUpload] outcome=Failed project={request.ProjectId} displayName='{request.DisplayName}' folder={request.TargetFolderId} http={(int)response.StatusCode} detail={response.ReasonPhrase}");
+            response.EnsureSuccessStatusCode();
+        }
 
         var body = await response.Content
             .ReadFromJsonAsync<RemoteAccFileUploadResponse>(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         if (body is null)
         {
+            _logger.Error(
+                $"[AccUpload] outcome=Failed project={request.ProjectId} displayName='{request.DisplayName}' detail=empty upload response");
             throw new InvalidOperationException("ACC service returned an empty upload response.");
         }
 

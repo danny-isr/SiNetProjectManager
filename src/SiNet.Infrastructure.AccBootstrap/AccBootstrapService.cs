@@ -260,6 +260,8 @@ public class AccBootstrapService : IAccBootstrapService
             var errorSnippet = _docsLastError.Length > 60 ? _docsLastError[..57] + "..." : _docsLastError;
             AccBootstrapLog.Info($"[AccBootstrap] ╠───────────────────────────────────────────────────────────────────────────────────╣");
             AccBootstrapLog.Info($"[AccBootstrap] ║ Error:             {errorSnippet,-60} ║");
+            AccBootstrapLog.Error(
+                $"[EnsureInbox] outcome=Failed projectName='{_inboxProjectName}' detail={_docsLastError}");
         }
 
         AccBootstrapLog.Info($"[AccBootstrap] ╠───────────────────────────────────────────────────────────────────────────────────╣");

@@ -69,7 +69,8 @@ public static class NewSystemWpfServiceCollectionExtensions
                 sp.GetService<IProjectWorkSurfaceHost>(),
                 sp.GetService<IPlaceCatalogService>(),
                 sp.GetService<IProjectEditDialogFactory>(),
-                sp.GetService<IAuthorizationQueryService>()));
+                sp.GetService<IAuthorizationQueryService>(),
+                sp.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>()));
         services.AddTransient<ProjectsDashboardWindow>();
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();

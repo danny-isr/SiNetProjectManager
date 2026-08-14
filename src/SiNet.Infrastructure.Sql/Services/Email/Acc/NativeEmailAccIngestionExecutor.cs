@@ -90,13 +90,13 @@ public sealed class NativeEmailAccIngestionExecutor : IEmailAccIngestionExecutor
         {
             var authMessage = EmailAccIngestGates.MapAuthFailureMessage(ex.Message);
             var mid = EmailMessageIdentity.GetMessageUniqueId(command.InternetMessageId, command.GmailMessageId);
-            return Failed(mid, null, authMessage ?? ex.Message, stopwatch.ElapsedMilliseconds);
+            return LogFailed(mid, null, authMessage ?? ex.Message, stopwatch.ElapsedMilliseconds);
         }
 
         if (details is null)
         {
             var mid = EmailMessageIdentity.GetMessageUniqueId(command.InternetMessageId, command.GmailMessageId);
-            return Failed(
+            return LogFailed(
                 mid,
                 null,
                 "לא ניתן לטעון את המייל מ-Gmail (לא מחובר או ההודעה לא נמצאה).",
@@ -106,7 +106,7 @@ public sealed class NativeEmailAccIngestionExecutor : IEmailAccIngestionExecutor
         var internetMessageId = FirstNonEmpty(details.InternetMessageId, command.InternetMessageId);
         if (string.IsNullOrWhiteSpace(internetMessageId))
         {
-            return Failed(
+            return LogFailed(
                 null,
                 null,
                 "Email rejected: missing RFC 2822 Message-ID header.",
@@ -193,7 +193,7 @@ public sealed class NativeEmailAccIngestionExecutor : IEmailAccIngestionExecutor
                 .ConfigureAwait(false);
             if (defaultProjectId <= 0)
             {
-                return Failed(
+                return LogFailed(
                     messageUniqueId,
                     null,
                     "לא נמצא פרויקט ברירת מחדל למשרד (DefaultProjectTitle).",
@@ -238,7 +238,7 @@ public sealed class NativeEmailAccIngestionExecutor : IEmailAccIngestionExecutor
                     .ConfigureAwait(false);
                 if (existing is null)
                 {
-                    return Failed(messageUniqueId, null, "Race on insert — row missing after conflict.", stopwatch.ElapsedMilliseconds);
+                    return LogFailed(messageUniqueId, null, "Race on insert — row missing after conflict.", stopwatch.ElapsedMilliseconds);
                 }
 
                 var shortCircuit = await TryShortCircuitAlreadyProcessedAsync(
@@ -477,7 +477,6 @@ public sealed class NativeEmailAccIngestionExecutor : IEmailAccIngestionExecutor
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[NativeAccIngest] Failed: {ex.Message}");
             return await FailAndReleaseAsync(
                     db,
                     existing,
@@ -906,7 +905,7 @@ public sealed class NativeEmailAccIngestionExecutor : IEmailAccIngestionExecutor
         }
     }
 
-    private static async Task<EmailAccUploadResult> FailAndReleaseAsync(
+    private async Task<EmailAccUploadResult> FailAndReleaseAsync(
         SiNetSQLDbContext db,
         EmailInboxMessage message,
         string messageUniqueId,
@@ -924,12 +923,25 @@ public sealed class NativeEmailAccIngestionExecutor : IEmailAccIngestionExecutor
         {
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch
+        catch (Exception saveEx)
         {
-            // Still return Failed to the caller.
+            _logger.Warn(
+                $"[NativeAccIngest] outcome=Partial kind=FailAndReleaseSaveFailed msgUniqueId={messageUniqueId} inboxId={message.Id} detail={saveEx.Message}");
         }
 
-        return Failed(messageUniqueId, message.Id, error, durationMs, totalAttachments);
+        return LogFailed(messageUniqueId, message.Id, error, durationMs, totalAttachments);
+    }
+
+    private EmailAccUploadResult LogFailed(
+        string? messageUniqueId,
+        int? inboxMessageId,
+        string error,
+        long durationMs,
+        int totalAttachments = 0)
+    {
+        _logger.Error(
+            $"[NativeAccIngest] outcome=Failed msgUniqueId={messageUniqueId ?? "null"} inboxId={inboxMessageId} error={error} durationMs={durationMs}");
+        return Failed(messageUniqueId, inboxMessageId, error, durationMs, totalAttachments);
     }
 
     private static EmailAccUploadResult Failed(

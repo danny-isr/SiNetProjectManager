@@ -357,10 +357,9 @@ public partial class App : System.Windows.Application
                 }
                 catch (Exception ex)
                 {
-                    StandaloneHostLoggingBootstrap.Debug(
+                    StandaloneHostLoggingBootstrap.Warning(
                         ex,
-                        "[STARTUP] Connector auth restore failed for {Type}",
-                        authService.GetType().Name);
+                        $"[AuthRestore] {authService.GetType().Name} failed: {ex.Message}");
                 }
             }
         }, _shutdownCts.Token);

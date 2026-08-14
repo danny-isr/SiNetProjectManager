@@ -44,7 +44,10 @@ public sealed class NativeEmailExternalDownloadExecutor(
 
         if (!File.Exists(command.LocalFilePath))
         {
-            return Failed(command.FileName, "קובץ ההורדה לא נמצא בדיסק.");
+            return LogFailed(
+                command.FileName,
+                "קובץ ההורדה לא נמצא בדיסק.",
+                asError: false);
         }
 
         if (command.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
@@ -113,7 +116,7 @@ public sealed class NativeEmailExternalDownloadExecutor(
                     EmailExternalDownloadStage.Failed,
                     "קובץ ZIP ריק — לא הועלה דבר ל-ACC",
                     FileName: command.FileName));
-                return Failed(command.FileName, "קובץ ZIP ריק — לא הועלה דבר ל-ACC");
+                return LogFailed(command.FileName, "קובץ ZIP ריק — לא הועלה דבר ל-ACC", asError: false);
             }
 
             var zipSubfolder = Path.GetFileNameWithoutExtension(command.FileName);
@@ -180,7 +183,7 @@ public sealed class NativeEmailExternalDownloadExecutor(
                 EmailExternalDownloadStage.Failed,
                 lastError ?? "העלאת תוכן ה-ZIP ל-ACC נכשלה",
                 FileName: command.FileName));
-            return Failed(command.FileName, lastError ?? "העלאת תוכן ה-ZIP ל-ACC נכשלה");
+            return LogFailed(command.FileName, lastError ?? "העלאת תוכן ה-ZIP ל-ACC נכשלה", asError: true);
         }
         catch (InvalidDataException)
         {
@@ -235,12 +238,12 @@ public sealed class NativeEmailExternalDownloadExecutor(
         }
         catch (Exception ex)
         {
-            return Failed(safeFileName, $"קריאת הקובץ נכשלה: {ex.Message}");
+            return LogFailed(safeFileName, $"קריאת הקובץ נכשלה: {ex.Message}", asError: true);
         }
 
         if (data.Length == 0)
         {
-            return Failed(safeFileName, "קובץ ריק — לא הועלה ל-ACC.");
+            return LogFailed(safeFileName, "קובץ ריק — לא הועלה ל-ACC.", asError: false);
         }
 
         var sha256 = EmailMessageIdentity.ComputeSha256Hex(data);
@@ -250,14 +253,14 @@ public sealed class NativeEmailExternalDownloadExecutor(
             .ConfigureAwait(false);
         if (message is null)
         {
-            return Failed(safeFileName, "לא ניתן ליצור/למצוא רשומת מייל ב-DB.");
+            return LogFailed(safeFileName, "לא ניתן ליצור/למצוא רשומת מייל ב-DB.", asError: true);
         }
 
         var bootstrap = await _inboxBootstrap.EnsureAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(bootstrap.AccProjectId)
             || string.IsNullOrWhiteSpace(bootstrap.AccInboxFolderId))
         {
-            return Failed(safeFileName, "ACC Inbox bootstrap נכשל. האם AccService רץ?");
+            return LogFailed(safeFileName, "ACC Inbox bootstrap נכשל. האם AccService רץ?", asError: true);
         }
 
         var inboxProjectId = bootstrap.AccProjectId;
@@ -371,8 +374,7 @@ public sealed class NativeEmailExternalDownloadExecutor(
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[NativeExternalDownload] Upload failed '{safeFileName}': {ex.Message}");
-            return Failed(safeFileName, ex.Message);
+            return LogFailed(safeFileName, ex.Message, asError: true);
         }
     }
 
@@ -457,6 +459,16 @@ public sealed class NativeEmailExternalDownloadExecutor(
             .Select(project => project.Id)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private EmailExternalDownloadResult LogFailed(string? fileName, string error, bool asError)
+    {
+        var line = $"[NativeExternalDownload] outcome=Failed file='{fileName}' detail={error}";
+        if (asError)
+            _logger.Error(line);
+        else
+            _logger.Warn(line);
+        return Failed(fileName, error);
     }
 
     private static EmailExternalDownloadResult Failed(string? fileName, string error) =>

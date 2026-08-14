@@ -2,8 +2,8 @@
 
 > **Title:** Material failures must reach the central UNC log at Warning+  
 > **Date:** 13.08.2026  
-> **Updated:** 13.08.2026  
-> **Status:** Documentation-only  
+> **Updated:** 14.08.2026  
+> **Status:** Implementing (P0+P1 code landed; validate in production Llog)  
 > **Scope:** What must appear on `\\si-win-2k19\AutoCAD Data\log` during rollout/tuning when a **material** operation fails. Does **not** change sink levels, Serilog bootstrap, or product code in this round. Host: `SiNet.App.Wpf` + AccService paths those clients call.
 
 Related: [`LOGGING.md`](./LOGGING.md) (pipeline / §9 central sink), [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) (ops tails), [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) (agent sweep), [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md), [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md), [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) (DEV-027 — Gmail timeout noise).
@@ -197,4 +197,5 @@ Build gate when code lands: `dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
 
 | Date | Change |
 | --- | --- |
+| 14.08.2026 | **Code P0a–P1:** Material failures → `IAppLogger`/Serilog Warning+/Error (MoveToProject, Filing, Ingest, ExternalDownload, AccService EnsureInbox, Remote Acc*, WorkflowAction, AuthRestore, dashboard/launcher/email list). |
 | 13.08.2026 | Documentation-only: principles + gap catalogue. No code. |

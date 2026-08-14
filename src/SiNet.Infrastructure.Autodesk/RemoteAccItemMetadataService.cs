@@ -1,8 +1,8 @@
 using System.Net.Http.Json;
 using SiOffice.AccService.Contracts;
-using System.Diagnostics;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Abstractions.Autodesk.Metadata;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Configuration;
 
 namespace SiNet.Infrastructure.Autodesk;
@@ -20,11 +20,13 @@ namespace SiNet.Infrastructure.Autodesk;
 internal sealed class RemoteAccItemMetadataService(
     HttpClient httpClient,
     ISecretVaultStore secretVaultStore,
-    IAccServiceModeProvider serviceModeProvider) : IAccItemMetadataService
+    IAccServiceModeProvider serviceModeProvider,
+    IAppLogger logger) : IAccItemMetadataService
 {
     private readonly HttpClient _httpClient = httpClient;
     private readonly ISecretVaultStore _secretVaultStore = secretVaultStore;
     private readonly IAccServiceModeProvider _serviceModeProvider = serviceModeProvider;
+    private readonly IAppLogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async ValueTask<AccItemMetadataReadResult> ReadAttributesAsync(
         string accProjectId,
@@ -46,6 +48,8 @@ internal sealed class RemoteAccItemMetadataService(
 
             if (!response.IsSuccessStatusCode)
             {
+                _logger.Warn(
+                    $"[AccMetadata] op=Read outcome=Failed item={itemId} file='{fileNameForLogging}' http={(int)response.StatusCode}");
                 return AccItemMetadataReadResult.Fail(
                     (int)response.StatusCode,
                     $"ACC service returned {(int)response.StatusCode} for custom-attributes read.");
@@ -56,7 +60,10 @@ internal sealed class RemoteAccItemMetadataService(
                 .ConfigureAwait(false);
 
             if (payload is null)
+            {
+                _logger.Warn($"[AccMetadata] op=Read outcome=Failed item={itemId} file='{fileNameForLogging}' detail=empty response");
                 return AccItemMetadataReadResult.Fail(null, "ACC service returned an empty custom-attributes read response.");
+            }
 
             if (payload.Success)
             {
@@ -64,6 +71,8 @@ internal sealed class RemoteAccItemMetadataService(
                     payload.Attributes ?? new Dictionary<string, string?>(StringComparer.Ordinal));
             }
 
+            _logger.Warn(
+                $"[AccMetadata] op=Read outcome=Failed item={itemId} file='{fileNameForLogging}' http={payload.HttpStatus} detail={payload.ErrorMessage}");
             return AccItemMetadataReadResult.Fail(
                 payload.HttpStatus,
                 payload.ErrorMessage ?? "Unknown metadata read error.");
@@ -74,7 +83,8 @@ internal sealed class RemoteAccItemMetadataService(
         }
         catch (Exception ex)
         {
-            Trace.TraceWarning($"[AccItemMetadata][Remote] ReadAttributes FAILED itemId='{itemId}': {ex.Message}");
+            _logger.Warn(
+                $"[AccMetadata] op=Read outcome=Failed item={itemId} file='{fileNameForLogging}' detail={ex.Message}");
             return AccItemMetadataReadResult.Fail(null, $"Remote metadata read failed: {ex.Message}");
         }
     }
@@ -111,6 +121,8 @@ internal sealed class RemoteAccItemMetadataService(
 
             if (!response.IsSuccessStatusCode)
             {
+                _logger.Warn(
+                    $"[AccMetadata] op=Write outcome=Failed item={itemId} file='{fileNameForLogging}' http={(int)response.StatusCode}");
                 return AccItemMetadataResult.Fail(
                     (int)response.StatusCode,
                     $"ACC service returned {(int)response.StatusCode} for custom-attributes write.");
@@ -121,11 +133,19 @@ internal sealed class RemoteAccItemMetadataService(
                 .ConfigureAwait(false);
 
             if (payload is null)
+            {
+                _logger.Warn($"[AccMetadata] op=Write outcome=Failed item={itemId} file='{fileNameForLogging}' detail=empty response");
                 return AccItemMetadataResult.Fail(null, "ACC service returned an empty custom-attributes write response.");
+            }
 
-            return payload.Success
-                ? AccItemMetadataResult.Ok()
-                : AccItemMetadataResult.Fail(payload.HttpStatus, payload.ErrorMessage ?? "Unknown metadata write error.");
+            if (!payload.Success)
+            {
+                _logger.Warn(
+                    $"[AccMetadata] op=Write outcome=Failed item={itemId} file='{fileNameForLogging}' http={payload.HttpStatus} detail={payload.ErrorMessage}");
+                return AccItemMetadataResult.Fail(payload.HttpStatus, payload.ErrorMessage ?? "Unknown metadata write error.");
+            }
+
+            return AccItemMetadataResult.Ok();
         }
         catch (OperationCanceledException)
         {
@@ -133,7 +153,8 @@ internal sealed class RemoteAccItemMetadataService(
         }
         catch (Exception ex)
         {
-            Trace.TraceWarning($"[AccItemMetadata][Remote] WriteAttributes FAILED itemId='{itemId}': {ex.Message}");
+            _logger.Warn(
+                $"[AccMetadata] op=Write outcome=Failed item={itemId} file='{fileNameForLogging}' detail={ex.Message}");
             return AccItemMetadataResult.Fail(null, $"Remote metadata write failed: {ex.Message}");
         }
     }
@@ -143,12 +164,14 @@ internal sealed class RemoteAccItemMetadataService(
         var baseUrl = _serviceModeProvider.BaseUrl;
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
+            _logger.Error("[AccRemote] missing BaseUrl op=AccMetadata");
             throw new InvalidOperationException("ACC service base URL is not configured for remote metadata operations.");
         }
 
         var apiKey = _secretVaultStore.GetSecret(SecretCatalog.AccServiceApiKey);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
+            _logger.Error("[AccRemote] missing ApiKey op=AccMetadata");
             throw new InvalidOperationException("ACC service API key is not configured in the native secret vault.");
         }
 

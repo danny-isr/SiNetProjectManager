@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Workflow;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -12,13 +13,15 @@ namespace SiNet.Infrastructure.Sql.Services.Workflow;
 /// </summary>
 public sealed class SqlProjectTypeContinuationStarter(
     IDbContextFactory<SiNetSQLDbContext> dbFactory,
-    IWorkflowCommandService workflowCommands)
+    IWorkflowCommandService workflowCommands,
+    IAppLogger? logger = null)
     : IProjectTypeContinuationStarter
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
     private readonly IWorkflowCommandService _workflowCommands =
         workflowCommands ?? throw new ArgumentNullException(nameof(workflowCommands));
+    private readonly IAppLogger? _logger = logger;
 
     public Task<ProjectTypeContinuationResult> ValidateMappingsAsync(
         int projectId,
@@ -164,11 +167,8 @@ public sealed class SqlProjectTypeContinuationStarter(
             }
             catch (Exception ex)
             {
-                Trace.TraceError(
-                    "[ProjectTypeContinuation] Start failed definition={0} jobType={1} project={2}: {3}",
-                    definitionId,
-                    jobTypeId,
-                    projectId,
+                _logger?.Error(
+                    $"[ProjectTypeContinuation] outcome=Failed definition={definitionId} jobType={jobTypeId} project={projectId} detail={ex.Message}",
                     ex);
                 return ProjectTypeContinuationResult.Fail(
                     $"הפעלת תהליך המשך «{trackLabel}» נכשלה: {ex.Message}");

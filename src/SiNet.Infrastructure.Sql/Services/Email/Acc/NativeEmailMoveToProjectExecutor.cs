@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Abstractions.Autodesk.Metadata;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Tasks;
 using SiNet.Infrastructure.Sql.Services.Files;
@@ -23,6 +24,10 @@ namespace SiNet.Infrastructure.Sql.Services.Email.Acc;
 /// (<c>EmailDetailViewModel</c> → <see cref="ITaskCompletionService"/>); executor reporting
 /// is inactive for that path (FileMaterial six decisions 2026-08).
 /// </para>
+/// <para>
+/// Material failures are logged via <see cref="IAppLogger"/> at Warning/Error so they reach
+/// the central Llog share (see <c>docs/LOGGING_MATERIAL_FAILURES.md</c> §4.1 P0a).
+/// </para>
 /// </summary>
 public sealed class NativeEmailMoveToProjectExecutor(
     IDbContextFactory<SiNetSQLDbContext> dbFactory,
@@ -33,6 +38,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
     IAccItemMetadataService metadataService,
     IAccItemService accItemService,
     ITaskCompletionService taskCompletionService,
+    IAppLogger logger,
     IEmailAccStatusService? accStatusService = null,
     IEmailAccRecoveryExecutor? recoveryExecutor = null) : IEmailMoveToProjectExecutor
 {
@@ -44,6 +50,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
     private readonly IAccItemMetadataService _metadataService = metadataService;
     private readonly IAccItemService _accItemService = accItemService;
     private readonly ITaskCompletionService _taskCompletionService = taskCompletionService;
+    private readonly IAppLogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IEmailAccStatusService? _accStatusService = accStatusService;
     private readonly IEmailAccRecoveryExecutor? _recoveryExecutor = recoveryExecutor;
 
@@ -137,7 +144,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
         if (duplicateGroups.Count > 0)
         {
             var details = FilingTargetDuplicateValidator.FormatDetails(duplicateGroups);
-            Trace.TraceWarning($"[MoveToProject] Blocked: duplicate target tags in same email. {details}");
+            _logger.Warn($"[MoveToProject] outcome=Blocked kind=DuplicateTargetTags inbox={emailMessageId} detail={details}");
             return Deferred(FilingTargetDuplicateValidator.UserMessageHebrew);
         }
 
@@ -176,8 +183,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 {
                     if (string.IsNullOrEmpty(message.InboxAccFolderId))
                     {
-                        Trace.TraceWarning(
-                            $"[MoveToProject] Missing InboxAccFolderId for email Id={message.Id} and attachment Id={att.Id} has no AccItemId; cannot verify in ACC Inbox.");
+                        _logger.Warn(
+                            $"[MoveToProject] outcome=Failed kind=MissingInAcc inbox={message.Id} att={att.Id} file='{att.OriginalFileName ?? att.SavedFileName}' detail=missing InboxAccFolderId and no AccItemId");
                         // TEMP WF-DEBUG
                         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"att={att.Id} '{att.OriginalFileName}' FAILED: missing InboxAccFolderId and no AccItemId");
                         RecordFailure(attachmentFailures, ref failedCount, att, "MissingInAcc", "חסר InboxAccFolderId ואין AccItemId");
@@ -215,8 +222,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
                     var inboxItem = FindInboxItem(lookupItems, att);
                     if (inboxItem is null)
                     {
-                        Trace.TraceWarning(
-                            $"[MoveToProject] MissingInAcc attachment Id={att.Id}, File='{att.SavedFileName ?? att.OriginalFileName}'.");
+                        _logger.Warn(
+                            $"[MoveToProject] outcome=Failed kind=MissingInAcc inbox={message.Id} att={att.Id} file='{att.SavedFileName ?? att.OriginalFileName}'");
                         // TEMP WF-DEBUG
                         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"att={att.Id} '{att.SavedFileName ?? att.OriginalFileName}' FAILED: not found in ACC inbox folder (lookupItems={lookupItems.Count} useAttachmentsFolder={useAttachmentsFolder})");
                         RecordFailure(attachmentFailures, ref failedCount, att, "MissingInAcc");
@@ -230,8 +237,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
                     $"att={att.Id} metadata ok={metadataRead.Success} attrs={metadataRead.Attributes.Count}");
                 if (!metadataRead.Success)
                 {
-                    Trace.TraceWarning(
-                        $"[MoveToProject] Metadata read failed for attachment Id={att.Id}: {metadataRead.ErrorMessage}. Continuing with empty attributes (DB tag cache fallback applies).");
+                    _logger.Warn(
+                        $"[MoveToProject] outcome=Partial kind=MetadataReadFailed inbox={message.Id} att={att.Id} detail={metadataRead.ErrorMessage}");
                     metadataRead = AccItemMetadataReadResult.Ok(
                         new Dictionary<string, string?>(StringComparer.Ordinal));
                 }
@@ -264,7 +271,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 // Locked without MoveMovedToProject (or after conflict path above).
                 if (IsTruthy(metadataRead.Attributes, SidecarMetadata.InboxAccAttributeNames.LockLockedForEditing))
                 {
-                    Trace.TraceWarning($"[MoveToProject] Attachment Id={att.Id} is locked by ACC metadata; skipping filing.");
+                    _logger.Warn($"[MoveToProject] outcome=Failed kind=Locked inbox={message.Id} att={att.Id} file='{att.OriginalFileName}' detail=locked by ACC metadata");
                     SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"att={att.Id} '{att.OriginalFileName}' FAILED: locked by ACC metadata");
                     RecordFailure(attachmentFailures, ref failedCount, att, "Locked");
                     continue;
@@ -305,6 +312,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
 
                 if (string.IsNullOrWhiteSpace(att.AccItemId))
                 {
+                    _logger.Warn(
+                        $"[MoveToProject] outcome=Failed kind=MissingAccItemId inbox={message.Id} project={projectId} att={att.Id} file='{att.OriginalFileName ?? att.SavedFileName}'");
                     RecordFailure(attachmentFailures, ref failedCount, att, "MissingAccItemId");
                     continue;
                 }
@@ -316,7 +325,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
                     message.InboxAccProjectId!, att.AccItemId!, cancellationToken).ConfigureAwait(false);
                 if (dl is null)
                 {
-                    Trace.TraceWarning($"[MoveToProject] Failed to download attachment Id={att.Id} from inbox.");
+                    _logger.Error(
+                        $"[MoveToProject] outcome=Failed kind=DownloadFailed inbox={message.Id} project={projectId} att={att.Id} file='{att.OriginalFileName ?? att.SavedFileName}' detail=DownloadToTemp returned null");
                     // TEMP WF-DEBUG
                     SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"att={att.Id} '{att.OriginalFileName}' FAILED: DownloadToTemp returned null (accItemId={att.AccItemId})");
                     RecordFailure(attachmentFailures, ref failedCount, att, "DownloadFailed");
@@ -365,8 +375,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
                     // Target: physical file may exist, but Move/Lock incomplete → process failure.
                     RecordFailure(attachmentFailures, ref failedCount, att, "FiledButMoveMetadataFailed",
                         moveMetadataResult.ErrorMessage);
-                    Trace.TraceWarning(
-                        $"[MoveToProject] Attachment Id={att.Id} filed but Move/Lock metadata write failed: {moveMetadataResult.ErrorMessage}");
+                    _logger.Warn(
+                        $"[MoveToProject] outcome=Partial kind=FiledButMoveMetadataFailed inbox={message.Id} project={projectId} att={att.Id} file='{att.OriginalFileName ?? att.SavedFileName}' detail={moveMetadataResult.ErrorMessage}");
                     continue;
                 }
 
@@ -382,7 +392,9 @@ public sealed class NativeEmailMoveToProjectExecutor(
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"[MoveToProject] Failed to file attachment Id={att.Id}. {ex}");
+                _logger.Error(
+                    $"[MoveToProject] outcome=Failed kind=FilingFailed inbox={message.Id} project={projectId} att={att.Id} file='{att.OriginalFileName ?? att.SavedFileName}' detail={ex.GetType().Name}: {ex.Message}",
+                    ex);
                 // TEMP WF-DEBUG
                 SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move", $"att={att.Id} '{att.OriginalFileName}' FAILED: {ex.GetType().Name}: {ex.Message}");
                 RecordFailure(attachmentFailures, ref failedCount, att, "FilingFailed", $"{ex.GetType().Name}: {ex.Message}");
@@ -429,6 +441,13 @@ public sealed class NativeEmailMoveToProjectExecutor(
         // TEMP WF-DEBUG
         SiNet.Application.Diagnostics.WorkflowDebugTrace.Step("Email.Move",
             $"userMessage={messageText.Replace("\r\n", " | ").Replace('\n', '|').Replace('\r', '|')}");
+        if (!allTransferred)
+        {
+            var first = attachmentFailures.FirstOrDefault();
+            _logger.Error(
+                $"[MoveToProject] outcome=Failed inbox={message.Id} project={projectId} moved={movedCount}/{taggedNeedingFiling.Count} kind={first?.Kind ?? "Unknown"} att={first?.InboxAttachmentId} file='{first?.FileName}' detail={first?.Detail ?? messageText.Replace('\n', ' ').Replace('\r', ' ')}");
+        }
+
         return allTransferred
             ? new EmailMoveToProjectCoordinatorResult(
                 EmailMoveToProjectOutcome.Succeeded,
@@ -514,7 +533,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
         }
         catch (Exception ex)
         {
-            Trace.TraceWarning($"[MoveToProject] Reconcile/recovery before move failed (non-fatal): {ex.Message}");
+            _logger.Warn($"[MoveToProject] outcome=Partial kind=ReconcileFailed inbox={message.Id} detail={ex.Message}");
         }
     }
 
@@ -579,7 +598,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
         var folderItems = await GetFolderItemsAsync(message.InboxAccProjectId!, att.AccVersionId!, ct).ConfigureAwait(false);
         if (folderItems.Count == 0)
         {
-            Trace.TraceWarning($"[MoveToProject] ZIP folder URN={att.AccVersionId} is empty or not found in ACC.");
+            _logger.Warn($"[MoveToProject] outcome=Failed kind=ZipEmptyOrMissing inbox={message.Id} att={att.Id} detail=URN={att.AccVersionId}");
             return (false, true, false, false);
         }
 
@@ -597,7 +616,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
                 var itemDl = await _accDownloadService.DownloadToTempAsync(message.InboxAccProjectId!, item.ItemId, ct).ConfigureAwait(false);
                 if (itemDl is null)
                 {
-                    Trace.TraceWarning($"[MoveToProject] Failed to download item '{item.DisplayName}' (Id={item.ItemId}) from ZIP folder.");
+                    _logger.Error($"[MoveToProject] outcome=Failed kind=ZipDownloadFailed inbox={message.Id} project={projectId} att={att.Id} file='{item.DisplayName}' detail=item={item.ItemId}");
                     folderFailedCount++;
                     continue;
                 }
@@ -638,7 +657,9 @@ public sealed class NativeEmailMoveToProjectExecutor(
             catch (Exception ex)
             {
                 folderFailedCount++;
-                Trace.TraceError($"[MoveToProject] Failed to file item '{item.DisplayName}' from ZIP folder. {ex}");
+                _logger.Error(
+                    $"[MoveToProject] outcome=Failed kind=ZipFilingFailed inbox={message.Id} project={projectId} att={att.Id} file='{item.DisplayName}' detail={ex.GetType().Name}: {ex.Message}",
+                    ex);
             }
             finally
             {
@@ -661,8 +682,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
         if (!folderMoveMetadataResult.Success)
         {
             // INACTIVE: previously warningCount++ and still treated ZIP as fully moved.
-            Trace.TraceWarning(
-                $"[MoveToProject] ZIP attachment Id={att.Id} filed but Move/Lock metadata write failed: {folderMoveMetadataResult.ErrorMessage}");
+            _logger.Warn(
+                $"[MoveToProject] outcome=Partial kind=FiledButMoveMetadataFailed inbox={message.Id} att={att.Id} detail={folderMoveMetadataResult.ErrorMessage}");
             return (folderMovedCount > 0, false, folderSameSourceCount > 0 && folderMovedCount == 0, true);
         }
 
@@ -681,7 +702,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
     {
         if (userId == 0)
         {
-            Trace.TraceWarning("[MoveToProject] UserId is 0; skipping task completion.");
+            _logger.Warn($"[MoveToProject] outcome=Skipped kind=TaskCompletionNoUser task={taskId}");
             return;
         }
 
@@ -775,8 +796,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
 
         if (!completionResult.Success)
         {
-            Trace.TraceWarning(
-                $"[MoveToProject] Task completion returned failure for task {taskId}: {completionResult.ErrorMessage}");
+            _logger.Warn(
+                $"[MoveToProject] outcome=Partial kind=TaskCompletionFailed task={taskId} detail={completionResult.ErrorMessage}");
             return;
         }
 
@@ -1033,9 +1054,8 @@ public sealed class NativeEmailMoveToProjectExecutor(
         if (filingResult.TargetDestination == FileStorageDestination.Acc &&
             (string.IsNullOrWhiteSpace(targetAccItemId) || string.IsNullOrWhiteSpace(targetAccFolderId)))
         {
-            Trace.TraceWarning(
-                $"[MoveToProject] Filing result missing ACC target metadata " +
-                $"(ItemId={targetAccItemId ?? "(null)"}, FolderId={targetAccFolderId ?? "(null)"}).");
+            _logger.Warn(
+                $"[MoveToProject] outcome=Partial kind=MissingAccTargetMetadata inbox={message.Id} att={attachment.Id} item={targetAccItemId ?? "(null)"} folder={targetAccFolderId ?? "(null)"}");
         }
 
         if (!string.IsNullOrWhiteSpace(targetAccItemId))
@@ -1143,7 +1163,7 @@ public sealed class NativeEmailMoveToProjectExecutor(
         }
         catch (Exception ex)
         {
-            Trace.TraceWarning($"[MoveToProject][ZIP] Failed to write move metadata JSON inside ZIP folder '{zipFolderName}': {ex.Message}");
+            _logger.Warn($"[MoveToProject] outcome=Partial kind=ZipMoveMetadataFailed inbox={message.Id} file='{zipFolderName}' detail={ex.Message}");
             return AccItemMetadataResult.Fail(null, $"Failed to write ACC folder move metadata: {ex.Message}");
         }
     }

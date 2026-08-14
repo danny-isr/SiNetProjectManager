@@ -6,6 +6,7 @@ using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using MyOffice.AutodeskConnector;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Autodesk;
 using Xunit;
@@ -150,7 +151,8 @@ public sealed class AccFileTransferTests : IDisposable
                 };
             })),
             vault,
-            new StubAccServiceModeProvider("https://acc.example.com/"));
+            new StubAccServiceModeProvider("https://acc.example.com/"),
+            NullAppLogger.Instance);
 
         var result = await sut.TryResolvePathAsync("b.project-1", "ROOT-FOLDER", ["Discipline", "Plans"]);
 
@@ -184,7 +186,8 @@ public sealed class AccFileTransferTests : IDisposable
                 });
             })),
             vault,
-            new StubAccServiceModeProvider("https://acc.example.com/"));
+            new StubAccServiceModeProvider("https://acc.example.com/"),
+            NullAppLogger.Instance);
         var sut = new ModeSwitchingAccFolderPathService(
             new StubAccServiceModeProvider("https://acc.example.com/"),
             local,
@@ -264,7 +267,8 @@ public sealed class AccFileTransferTests : IDisposable
                 };
             })),
             vault,
-            new StubAccServiceModeProvider("https://acc.example.com/"));
+            new StubAccServiceModeProvider("https://acc.example.com/"),
+            NullAppLogger.Instance);
 
         var result = await sut.UploadAsync(new AccFileUploadRequest("b.project-1", sourcePath, "Drawing.dwg")
         {
@@ -463,6 +467,23 @@ public sealed class AccFileTransferTests : IDisposable
     {
         public AccServiceMode Mode => string.IsNullOrWhiteSpace(BaseUrl) ? AccServiceMode.Local : AccServiceMode.Remote;
         public string? BaseUrl { get; } = string.IsNullOrWhiteSpace(baseUrl) ? null : baseUrl.Trim().TrimEnd('/');
+    }
+
+    private sealed class NullAppLogger : IAppLogger
+    {
+        public static NullAppLogger Instance { get; } = new();
+
+        public void Info(string message)
+        {
+        }
+
+        public void Warn(string message)
+        {
+        }
+
+        public void Error(string message, Exception? exception = null)
+        {
+        }
     }
 
     private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)

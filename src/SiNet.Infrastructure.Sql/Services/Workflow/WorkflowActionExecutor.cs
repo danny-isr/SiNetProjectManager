@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Actions;
 using SiNet.Infrastructure.Sql.Services.Actions;
 using SiNet.Infrastructure.Sql.Services.DevTools;
@@ -19,10 +19,12 @@ namespace SiNet.Infrastructure.Sql.Services.Workflow;
 /// </summary>
 internal sealed class WorkflowActionExecutor(
     IDbContextFactory<SiNetSQLDbContext> dbFactory,
-    IProcessActionService processActions)
+    IProcessActionService processActions,
+    IAppLogger logger)
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory = dbFactory;
     private readonly IProcessActionService _processActions = processActions;
+    private readonly IAppLogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     /// Executes all actions defined on the given transition rule, in <see cref="WorkflowTransitionAction.SortOrder"/>.
@@ -82,7 +84,9 @@ internal sealed class WorkflowActionExecutor(
         }
         catch (Exception ex)
         {
-            Trace.TraceError($"[WorkflowActionExecutor] failed to resolve ProjectId (Instance={instanceId}): {ex}");
+            _logger.Error(
+                $"[WorkflowAction] outcome=Failed kind=ResolveProjectId instance={instanceId} detail={ex.Message}",
+                ex);
         }
 
         foreach (var action in actions)
@@ -96,7 +100,9 @@ internal sealed class WorkflowActionExecutor(
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"[WorkflowActionExecutor] action execution failed (ActionId={action.Id}, Type={action.ActionType}, Instance={instanceId}): {ex}");
+                _logger.Error(
+                    $"[WorkflowAction] outcome=Failed instance={instanceId} action={action.Id} type={action.ActionType} detail={ex.Message}",
+                    ex);
                 result = new ActionExecutionResult(action.ActionType, Success: false, Message: ex.Message);
             }
 

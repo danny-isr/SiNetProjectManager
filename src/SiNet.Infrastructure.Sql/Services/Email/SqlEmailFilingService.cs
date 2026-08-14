@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Email;
 using SiNet.Application.Settings;
 using SiNetSQL.Data;
@@ -10,7 +11,8 @@ namespace SiNet.Infrastructure.Sql.Services.Email;
 
 public sealed class SqlEmailFilingService(
     IDbContextFactory<SiNetSQLDbContext> dbFactory,
-    IEmailGmailModifyService gmailModify) : IEmailFilingService
+    IEmailGmailModifyService gmailModify,
+    IAppLogger logger) : IEmailFilingService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
@@ -18,17 +20,24 @@ public sealed class SqlEmailFilingService(
     private readonly IEmailGmailModifyService _gmailModify =
         gmailModify ?? throw new ArgumentNullException(nameof(gmailModify));
 
+    private readonly IAppLogger _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
+
     public async Task<EmailFilingResult> FileToProjectAsync(
         FileEmailToProjectCommand command,
         CancellationToken cancellationToken = default)
     {
         if (command.TargetProjectId <= 0)
         {
+            _logger.Warn(
+                $"[EmailFiling] outcome=Failed op=FileToProject kind=InvalidCommand gmailMsg={command.GmailMessageId} project={command.TargetProjectId} detail=Invalid target project.");
             return new EmailFilingResult(false, "Invalid target project.");
         }
 
         if (string.IsNullOrWhiteSpace(command.GmailMessageId))
         {
+            _logger.Warn(
+                $"[EmailFiling] outcome=Failed op=FileToProject kind=InvalidCommand gmailMsg= project={command.TargetProjectId} detail=Missing Gmail message id.");
             return new EmailFilingResult(false, "Missing Gmail message id.");
         }
 
@@ -49,6 +58,8 @@ public sealed class SqlEmailFilingService(
 
         if (project is null)
         {
+            _logger.Warn(
+                $"[EmailFiling] outcome=Failed op=FileToProject kind=InvalidCommand gmailMsg={command.GmailMessageId} project={command.TargetProjectId} detail=Project not found.");
             return new EmailFilingResult(false, $"Project {command.TargetProjectId} not found.");
         }
 
@@ -123,7 +134,8 @@ public sealed class SqlEmailFilingService(
                 }
                 catch (Exception compensationEx)
                 {
-                    Debug.WriteLine($"[EmailFiling] Compensation RemoveProjectLabel failed: {compensationEx.Message}");
+                    _logger.Warn(
+                        $"[EmailFiling] outcome=Partial op=FileToProject kind=CompensationFailed gmailMsg={command.GmailMessageId} project={command.TargetProjectId} detail=RemoveProjectLabel: {compensationEx.Message}");
                 }
             }
             else if (removedProjectLabelIds.Count > 0)
@@ -141,11 +153,15 @@ public sealed class SqlEmailFilingService(
                     }
                     catch (Exception compensationEx)
                     {
-                        Debug.WriteLine($"[EmailFiling] Compensation re-attach of prior label '{labelId}' failed: {compensationEx.Message}");
+                        _logger.Warn(
+                            $"[EmailFiling] outcome=Partial op=FileToProject kind=CompensationFailed gmailMsg={command.GmailMessageId} project={command.TargetProjectId} detail=ReAttach label={labelId}: {compensationEx.Message}");
                     }
                 }
             }
 
+            _logger.Error(
+                $"[EmailFiling] outcome=Failed op=FileToProject gmailMsg={command.GmailMessageId} project={command.TargetProjectId} detail={ex.Message}",
+                ex);
             return new EmailFilingResult(false, ex.Message);
         }
     }
@@ -156,6 +172,8 @@ public sealed class SqlEmailFilingService(
     {
         if (string.IsNullOrWhiteSpace(command.GmailMessageId))
         {
+            _logger.Warn(
+                "[EmailFiling] outcome=Failed op=UnfileFromProject kind=InvalidCommand gmailMsg= detail=Missing Gmail message id.");
             return new EmailFilingResult(false, "Missing Gmail message id.");
         }
 
@@ -184,6 +202,9 @@ public sealed class SqlEmailFilingService(
         }
         catch (Exception ex)
         {
+            _logger.Error(
+                $"[EmailFiling] outcome=Failed op=UnfileFromProject gmailMsg={command.GmailMessageId} inboxId={command.InboxMessageId} detail={ex.Message}",
+                ex);
             return new EmailFilingResult(false, ex.Message);
         }
     }

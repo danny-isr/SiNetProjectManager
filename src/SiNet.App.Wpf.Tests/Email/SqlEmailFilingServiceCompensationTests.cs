@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Email;
 using SiNet.Infrastructure.Sql.Services.Email;
 using SiNetSQL.Data;
@@ -44,7 +45,7 @@ public sealed class SqlEmailFilingServiceCompensationTests
         }
 
         var gmail = new RecordingGmailModifyService();
-        var sut = new SqlEmailFilingService(new StubDbContextFactory(options), gmail);
+        var sut = new SqlEmailFilingService(new StubDbContextFactory(options), gmail, NullLogger.Instance);
 
         // InboxMessageId is set, so the sync reaches ExecuteUpdateAsync, which the InMemory provider
         // does not support and throws — this is the "DB failure after Gmail label applied" case.
@@ -81,7 +82,7 @@ public sealed class SqlEmailFilingServiceCompensationTests
         }
 
         var gmail = new RecordingGmailModifyService();
-        var sut = new SqlEmailFilingService(new StubDbContextFactory(options), gmail);
+        var sut = new SqlEmailFilingService(new StubDbContextFactory(options), gmail, NullLogger.Instance);
 
         // No matching inbox row (no InboxMessageId, unknown message id) -> the sync resolves a null
         // inbox row and returns without touching ExecuteUpdateAsync, so filing succeeds cleanly.
@@ -176,5 +177,22 @@ public sealed class SqlEmailFilingServiceCompensationTests
             Task.FromResult<IReadOnlyList<string>>([]);
 
         public List<string> MarkedAsReadMessageIds { get; } = new();
+    }
+
+    private sealed class NullLogger : IAppLogger
+    {
+        public static NullLogger Instance { get; } = new();
+
+        public void Info(string message)
+        {
+        }
+
+        public void Warn(string message)
+        {
+        }
+
+        public void Error(string message, Exception? exception = null)
+        {
+        }
     }
 }

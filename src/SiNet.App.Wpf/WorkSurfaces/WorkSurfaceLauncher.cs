@@ -12,6 +12,7 @@ using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Email;
 using SiNet.Application.Email.QuoteSend;
 using SiNet.Application.Identity;
@@ -40,13 +41,22 @@ public interface IWorkSurfaceLauncher
 public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfaceLauncher
 {
     private readonly IServiceProvider _services = services ?? throw new ArgumentNullException(nameof(services));
+    private readonly IAppLogger? _logger = services.GetService<IAppLogger>();
+
+    private void WarnMissing(string message)
+    {
+        if (_logger is not null)
+            _logger.Warn(message);
+        else
+            Trace.TraceWarning(message);
+    }
 
     public async ValueTask<bool> TryOpenFromTaskAsync(int taskId, CancellationToken cancellationToken = default)
     {
         var navigation = _services.GetService<ITaskNavigationService>();
         if (navigation is null)
         {
-            Trace.TraceWarning("[WorkSurfaceLauncher] ITaskNavigationService is not registered.");
+            WarnMissing("[WorkSurfaceLauncher] outcome=Failed kind=NotRegistered service=ITaskNavigationService");
             return false;
         }
 
@@ -54,7 +64,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
         var context = await navigation.ResolveAsync(taskId, cancellationToken).ConfigureAwait(false);
         if (context is null)
         {
-            Trace.TraceWarning("[WorkSurfaceLauncher] Task {0} could not be resolved to a work surface.", taskId);
+            WarnMissing($"[WorkSurfaceLauncher] outcome=Failed kind=UnresolvedTask task={taskId}");
             return false;
         }
 
@@ -86,7 +96,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
             if (_services.GetService<ITaskCompletionService>() is not { } completion)
             {
-                Trace.TraceWarning("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
+                WarnMissing("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
                 return false;
             }
 
@@ -107,7 +117,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
             if (_services.GetService<IOpenQuoteProjectDecisionService>() is not { } openQuoteDecisionService)
             {
-                Trace.TraceWarning("[WorkSurfaceLauncher] IOpenQuoteProjectDecisionService is not registered.");
+                WarnMissing("[WorkSurfaceLauncher] IOpenQuoteProjectDecisionService is not registered.");
                 return false;
             }
 
@@ -115,7 +125,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                 || _services.GetService<IPlaceCatalogService>() is not { } places
                 || _services.GetService<ICompanyCatalogService>() is not { } companies)
             {
-                Trace.TraceWarning("[WorkSurfaceLauncher] Project create services are not registered.");
+                WarnMissing("[WorkSurfaceLauncher] Project create services are not registered.");
                 return false;
             }
 
@@ -141,7 +151,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
             if (_services.GetService<ITaskCompletionService>() is not { } sendQuoteCompletion)
             {
-                Trace.TraceWarning("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
+                WarnMissing("[WorkSurfaceLauncher] ITaskCompletionService is not registered.");
                 return false;
             }
 
@@ -175,15 +185,14 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             {
                 if (context.PrimaryWorkTargetEntityId is not > 0 && context.EmailHints is null)
                 {
-                    Trace.TraceWarning(
-                        "[WorkSurfaceLauncher] Email task {0} has no primary work target; opening blocked.",
-                        context.TaskId);
+                    WarnMissing(
+                        $"[WorkSurfaceLauncher] Email task {context.TaskId} has no primary work target; opening blocked.");
                     return false;
                 }
 
                 if (_services.GetService<EmailWorkItemTaskFloatingHost>() is not { } emailHost)
                 {
-                    Trace.TraceWarning("[WorkSurfaceLauncher] EmailWorkItemTaskFloatingHost is not registered.");
+                    WarnMissing("[WorkSurfaceLauncher] EmailWorkItemTaskFloatingHost is not registered.");
                     return false;
                 }
 
@@ -212,15 +221,14 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
             if (context.PrimaryWorkTargetEntityId is not > 0)
             {
-                Trace.TraceWarning(
-                    "[WorkSurfaceLauncher] Inspection task {0} has no report target; opening blocked.",
-                    context.TaskId);
+                WarnMissing(
+                    $"[WorkSurfaceLauncher] Inspection task {context.TaskId} has no report target; opening blocked.");
                 return false;
             }
 
             if (_services.GetService<InspectionTaskFloatingHost>() is not { } inspectionHost)
             {
-                Trace.TraceWarning("[WorkSurfaceLauncher] InspectionTaskFloatingHost is not registered.");
+                WarnMissing("[WorkSurfaceLauncher] InspectionTaskFloatingHost is not registered.");
                 return false;
             }
 
@@ -236,9 +244,8 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             // project; the file workspace itself is a later gated phase (task shell + completion here).
             if (context.ProjectId <= 0)
             {
-                Trace.TraceWarning(
-                    "[WorkSurfaceLauncher] ProjectWork task {0} has no project; opening blocked.",
-                    context.TaskId);
+                WarnMissing(
+                    $"[WorkSurfaceLauncher] ProjectWork task {context.TaskId} has no project; opening blocked.");
                 return false;
             }
 
@@ -252,7 +259,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
             if (_services.GetService<ProjectWorkTaskFloatingHost>() is not { } floatingHost)
             {
-                Trace.TraceWarning("[WorkSurfaceLauncher] ProjectWorkTaskFloatingHost is not registered.");
+                WarnMissing("[WorkSurfaceLauncher] ProjectWorkTaskFloatingHost is not registered.");
                 return false;
             }
 
@@ -263,10 +270,8 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step("Launcher.Open",
             $"task={context.TaskId} componentKey={context.ComponentKey} UNSUPPORTED — no surface registered");
-        Trace.TraceWarning(
-            "[WorkSurfaceLauncher] Unsupported component key '{0}' for task {1}. No surface registered.",
-            context.ComponentKey,
-            context.TaskId);
+        WarnMissing(
+            $"[WorkSurfaceLauncher] Unsupported component key '{context.ComponentKey}' for task {context.TaskId}. No surface registered.");
         return false;
     }
 
@@ -319,7 +324,7 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
         if (_services.GetService<EmailWorkItemTaskFloatingHost>() is not { } emailHost)
         {
-            Trace.TraceWarning("[WorkSurfaceLauncher] No Email host for {0}.", routeLabel);
+            WarnMissing($"[WorkSurfaceLauncher] No Email host for {routeLabel}.");
             return false;
         }
 

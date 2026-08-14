@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Autodesk;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Configuration;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Sql.AutodeskLocal;
@@ -487,7 +488,8 @@ public sealed class AccControlPlaneTests
             new RemoteAccInboxBootstrapService(
                 new HttpClient(new StubHttpMessageHandler((_, _) => throw new InvalidOperationException("remote should not be used"))),
                 new InMemorySecretVaultStore(),
-                new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com"))));
+                new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com")),
+                NullAppLogger.Instance));
 
         var result = await sut.EnsureAsync();
 
@@ -523,7 +525,8 @@ public sealed class AccControlPlaneTests
                     });
                 })),
                 vault,
-                new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com"))));
+                new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com")),
+                NullAppLogger.Instance));
 
         var result = await sut.EnsureAsync();
 
@@ -564,7 +567,8 @@ public sealed class AccControlPlaneTests
                 });
             })),
             vault,
-            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")));
+            new ConfigurationAccServiceModeProvider(new StubSecretSetupHostConfiguration("https://acc.example.com/")),
+            NullAppLogger.Instance);
 
         var result = await sut.EnsureAsync();
 
@@ -1044,6 +1048,23 @@ public sealed class AccControlPlaneTests
 
         public Task<SiNetSQLDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new SiNetSQLDbContext(_options));
+    }
+
+    private sealed class NullAppLogger : IAppLogger
+    {
+        public static NullAppLogger Instance { get; } = new();
+
+        public void Info(string message)
+        {
+        }
+
+        public void Warn(string message)
+        {
+        }
+
+        public void Error(string message, Exception? exception = null)
+        {
+        }
     }
 
     private static string AppWpfRoot =>

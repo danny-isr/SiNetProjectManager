@@ -731,6 +731,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         catch (Exception ex)
         {
             System.Diagnostics.Trace.TraceWarning($"[EmailList] Label name sync failed: {ex}");
+            // Material ops: also surface on Llog when Serilog is wired (local Trace stays for debug hosts).
+            Serilog.Log.Warning(ex, "[EmailList] outcome=Failed op=LabelNameSync detail={Message}", ex.Message);
             SetLoadWarning($"סנכרון שמות לייבלים נכשל: {ex.Message}");
         }
     }
@@ -771,6 +773,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         catch (Exception ex)
         {
             System.Diagnostics.Trace.TraceWarning($"[EmailList] Label audit failed: {ex}");
+            Serilog.Log.Warning(ex, "[EmailList] outcome=Failed op=LabelAudit detail={Message}", ex.Message);
             SetLoadWarning($"בדיקת תיוג נכשלה: {ex.Message}");
         }
         finally

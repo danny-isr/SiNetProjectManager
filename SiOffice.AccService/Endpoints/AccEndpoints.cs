@@ -850,6 +850,11 @@ internal static class AccEndpoints
             }
             catch (InvalidOperationException ex)
             {
+                Log.Error(
+                    ex,
+                    "[EnsureInbox] outcome=Failed projectName={ProjectName} detail={Detail}",
+                    projectName,
+                    ex.Message);
                 return Results.BadRequest(new ErrorDto("Inbox bootstrap failed.", ex.Message));
             }
         });
