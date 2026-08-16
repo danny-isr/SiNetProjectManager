@@ -10,7 +10,7 @@ Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) (pilot ops rou
 [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md),
 [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md),
 [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) (**DEV-027 Planning** — 401 vs TLS guidance; Fast/Deep probes; employee secrets import),
-[`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) (**DEV-028 Planning** — prove Llog write at startup; `logging-central` row).
+[`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) (**DEV-028** — prove Llog write; Slice E: `GuidanceHe` הערה if Client central min is not Warning).
 
 ---
 

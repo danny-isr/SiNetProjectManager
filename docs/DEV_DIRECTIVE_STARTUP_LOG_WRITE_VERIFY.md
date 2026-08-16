@@ -2,9 +2,9 @@
 
 > **Title:** Startup must prove it can write the Client log (local + Llog); failure is a System Status note  
 > **Date:** 16.08.2026  
-> **Updated:** 16.08.2026 (implementation on development)  
+> **Updated:** 16.08.2026 (Slice E: also prove central min level is Warning; הערה if not)  
 > **Status:** Implementing  
-> **Scope:** Product/engineering directive for the **`development`** branch. `SiNet.App.Wpf` must treat “can I write a log that I opened?” as a **startup check**, not as a diagnostic flag. If central (Llog) write cannot be proven, show a Hebrew note in «מצב מערכת». No new logger, no second health bus, no EF/schema.  
+> **Scope:** Product/engineering directive for the **`development`** branch. `SiNet.App.Wpf` must treat “can I write a log that I opened?” as a **startup check**, not as a diagnostic flag. If central (Llog) write cannot be proven, show a Hebrew note in «מצב מערכת». **Also** prove the applied Client central min level is **Warning**; if it is not, show that as a **הערה** (existing `GuidanceHe`) — not as “marker missing in yesterday’s file”. No new logger, no second health bus, no EF/schema.  
 > **Branch:** Implement on `development`; ship to users via the normal `release` + `publish-all.ps1` desktop channel.  
 > **Priority:** P0 (ops cannot see any workstation in Llog after 1.0.32)
 
@@ -26,6 +26,8 @@ Operator lock: **claiming the sink is connected is not enough.** Startup must **
 
 1.0.32 did add Warning lines **locally**. It did **not** give production an Llog proof of life. That is this ticket, not a re-publish of the same code.
 
+**Second lock (16.08 evening, Slice E):** even with read-back, the check lied when `Logging.Client.CentralLevel` was **Error**. Warning heartbeats were filtered; `ResolveTodayLogPath` then opened the newest *any* `Client-*.log` (Danny: **20260810**) and reported `marker missing in …\Client-20260810.log`. Ops restored `SiData.dbo.SystemSettings` `Logging.Client.CentralLevel` = **Warning** (row `LastUpdated` 16.08.2026 13:26 UTC). After restart, Danny’s `Client-20260816.log` on Llog contains the pid marker. **Code must still detect a non-Warning central min** so this cannot hide again. AccService / SyncEngine levels stay Warning — do not touch them.
+
 ---
 
 ## 2. Existing mechanisms (reuse — do not invent parallel stacks)
@@ -33,7 +35,8 @@ Operator lock: **claiming the sink is connected is not enough.** Startup must **
 | Mechanism | Where | Reuse |
 | --- | --- | --- |
 | Two-phase Serilog | `StandaloneHostLoggingBootstrap.ConfigureDefault` then `ConfigureCentral` | Keep. Phase 1 = local before vault; phase 2 = central after SQL |
-| Heartbeat messages | `App.OnStartup` + `LogSinkDiagnostics` + `Client session ready` ([`LOGGING.md`](./LOGGING.md) §9.4.1) | **Keep the three Warning texts.** Add **verify** after they are written |
+| Heartbeat messages | `App.OnStartup` + `LogSinkDiagnostics` + `Client session ready` ([`LOGGING.md`](./LOGGING.md) §9.4.1) | **Keep the three Warning texts.** Add **verify** after they are written. Heartbeat stays Warning — do **not** lower it to Error |
+| Applied central min | `CentralLoggingConfig.CentralMinLevel` after `ConfigureCentral` (`Logging.Client.CentralLevel`) | **Slice E:** expose last applied level from `CentralLoggingBuilder`. Expected **Warning**. If not, `GuidanceHe` הערה |
 | Central folder probe | `CentralLoggingBuilder.TryProbeCentralDirectory` — create dir + 1-byte tmp + delete | Necessary, **not sufficient**. Do not treat `CentralSinkEnabled` as the startup check |
 | `CentralSinkEnabled` / `CentralSinkBootstrapError` | `CentralLogging.cs` | Keep as bootstrap diagnostics. UI must use the **read-back** result, not this flag alone |
 | Central File sink | `WriteTo.Async` → `File` (`shared: true`, daily roll, path `{App}-.log`) | First hypothesis for “probe ok, file missing”: Async buffer / UNC / MSIX. Investigate; do not add a second File sink |
@@ -58,12 +61,14 @@ After phase 2 (`ConfigureCentral`) and the Warning heartbeat lines, still on the
    `[STARTUP] Client process alive pid={pid}`  
    (same family as §9.4.1; do not add V2 session-GUID flood).
 2. **Flush** the Serilog pipeline so `WriteTo.Async` cannot leave the line in memory (`Log.CloseAndFlush` is too heavy if it tears down the logger — flush the sinks / recreate if that is what the existing bootstrap already does on rebuild; do not leave the marker only in the Async queue).
-3. **Read back** the dated files:
+3. **Read back** the dated files **for today only**:
    - Local: `%LOCALAPPDATA%\SiNet\Logs\Client-yyyyMMdd.log` (or the configured `LogDirectory`)
    - Central: `{Logging.CentralLogPath}\Client\{Machine}\{User}\Client-yyyyMMdd.log`
+   - If today’s file does not exist, that **today** path is the failure. **Do not** fall back to the newest `Client-*.log` in the folder (`StartupLogWriteVerifier.ResolveTodayLogPath` currently does — that is Slice E).
 4. Success = the unique marker is **in the file bytes** the process just read from that path.
+5. **Slice E:** also read the **applied** Client `CentralMinLevel`. Expected **Warning**. If it is Error/Fatal/Information/Debug/Verbose, attach the הערה in §3.3 — even when write-back later succeeds.
 
-Folder tmp probe remaining green while step 4 fails = **failure** (this is the 16.08 Danny case).
+Folder tmp probe remaining green while step 4 fails = **failure** (this is the 16.08 Danny case). Central min Error while heartbeat is Warning = the same user-visible miss, with a **different** root cause — must not look like “marker missing in last week’s file”.
 
 ### 3.2 Splash («חלון מיידי»)
 
@@ -87,10 +92,23 @@ New `ISubsystemStatusContributor` registered in `AddSiNetSystemHealthContributor
 | Idle | Marker found in today’s central `Client-yyyyMMdd.log` |
 | Degraded | Local wrote; central file missing / marker absent / probe-only success / SelfLog error |
 | Stopped / Critical | Local file also missing after phase 1 (cannot diagnose this station from disk) |
-| `SummaryHe` | Short: path attempted + “נכתב” / “לא נמצא הקובץ” / exception type (no stack dump in the row) |
-| `GuidanceHe` | Catalog: check share `\\si-win-2k19\AutoCAD Data\log` reachability; do not look in V2 folders; if MSIX — confirm `runFullTrust` write to UNC; call ops |
+| `SummaryHe` | Short: path attempted + “נכתב” / “לא נמצא הקובץ של היום” / exception type (no stack dump in the row). **Never** name a previous day’s `Client-yyyyMMdd.log` as the missing-marker file |
+| `GuidanceHe` | Catalog UNC text when write failed and level **is** Warning. **Slice E:** if applied central min **is not Warning**, set `GuidanceHe` on the row (existing secondary line under «פירוט» — `SystemStatusView` binds `Guidance` / `HasGuidance`). This **is** the הערה. Do not add a column, a second contributor, or a MessageBox |
 
-Footer already goes non-green when any contributor is Degraded — reuse that. Do **not** add a second indicator.
+**הערה copy (meaning-locked, `{level}` = applied Serilog level name in Hebrew or English enum as already used in Admin):**
+
+`הערה: רמת הלוג המרכזי היא {level} — נדרש Warning. שורות Warning (כולל דופק הפעלה) לא יגיעו ל-Llog.`
+
+| Applied central min | Today’s central marker | Row state | What the user sees |
+| --- | --- | --- | --- |
+| Warning | Present | Idle | Summary “נכתב”; no הערה |
+| Warning | Missing | Degraded | Summary = today’s file missing / marker absent; catalog UNC guidance |
+| Error / Fatal (or anything other than Warning) | Missing (filtered) | Degraded | Summary = today’s file missing or filtered; **הערה** with the actual level |
+| Not Warning | Present (should not happen for Error) | Idle | Summary “נכתב”; **still** the הערה — policy mismatch |
+
+`SystemStatusGuidanceCatalog.Resolve` already prefers a non-empty `existingGuidanceHe`. Set the הערה on the contributor so the catalog does not replace it. For Idle + level mismatch, the catalog currently skips `logging-central` (Idle is not Degraded) — the contributor **must** set `GuidanceHe` itself.
+
+Footer already goes non-green when any contributor is Degraded — reuse that. Do **not** add a second indicator. An Idle row with only the הערה does **not** turn the footer red (policy note, not write failure). That is intended.
 
 Deep vs Fast (DEV-027): this row is **Fast** (file read of today’s log). Do not hit Autodesk/Gmail.
 
@@ -118,8 +136,19 @@ No extra MessageBox for this slice (DEV-002 owns the token popup). The note live
 | **B** | Call verify from `App.RunStartupAsync` after `ConfigureCentral` + heartbeat; `StartupSplashWindow.SetStatus` copy §3.2 | Splash shows the check on every start |
 | **C** | `LoggingCentralStatusContributor` + `SystemStatusGuidanceCatalog` key `logging-central` + register in `SystemHealthContributorsExtensions` | «מצב מערכת» row; footer reflects Degraded |
 | **D** | Hypothesis pass: central `WriteTo.Async` vs sync `File` on UNC; MSIX virtualization vs real share | Document which fix made the **temp** test and a **real UNC** (DEV machine) both pass. Do not ship on temp-only green |
+| **E** | Central min must be **Warning**; הערה if not; **no** fallback to an old dated file | See §3.1 step 5 and §3.3. Tests in `StartupLogWriteVerifierTests` |
 
-No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared `CentralLogging` flush API is required (prefer that over duplicating File sinks).
+Slice E work (reuse — do not invent a parallel check):
+
+1. Store last `CentralLoggingConfig.CentralMinLevel` on `CentralLoggingBuilder` when `AddSiNetCentralLogging` runs (same pattern as `CentralSinkEnabled`). Verifier reads that. Do **not** add a second SQL round-trip only for this row.
+2. `ResolveTodayLogPath`: if `Client-yyyyMMdd.log` for **today** is absent, return that dated path (missing). Delete the `EnumerateFiles` “newest any Client-*.log” fallback.
+3. `StartupLogWriteVerificationResult`: add applied central level + `bool CentralLevelIsWarning` (or equivalent). Contributor sets `GuidanceHe` from §3.3 when false.
+4. Tests (temp dirs, not prod UNC):
+   - `CentralMinLevel = Error` → central verify fails (marker not in today’s file) **and** the result/contributor exposes the הערה (level is Error, required Warning).
+   - Folder contains only `Client-20260810.log`; today is 16.08 → detail/path is **today’s** missing `Client-yyyyMMdd.log`, not the 10.08 file.
+   - `CentralMinLevel = Warning` + marker in today’s file → Idle, no הערה.
+
+No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared `CentralLogging` flush API is required (prefer that over duplicating File sinks). **Do not** change `Logging.AccService.CentralLevel` / `Logging.SyncEngine.CentralLevel`. **Do not** lower the heartbeat to Error.
 
 ---
 
@@ -132,7 +161,9 @@ No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared 
 | **Blast radius** | `AddSiNetCentralLogging` is shared with AccService / SyncEngine. **Do not** change their levels. If flushing/Async is changed, keep it **Client / standalone** or prove other hosts still write |
 | **UI thread** | Verify and contributor I/O must be `async` / `Task.Run` with timeout — same rule as `FileServerStatusContributor` |
 | **False green** | In-process `File.ReadAllText` on a virtualized MSIX path can succeed while ops UNC is empty. Slice D + PROD Llog is the real gate |
-| **DB/schema** | None |
+| **False “marker missing in old file”** | `ResolveTodayLogPath` newest-file fallback. Slice E removes it |
+| **False “share broken” when level is Error** | Filtered Warning looks like write failure. Slice E הערה names the level |
+| **DB/schema** | None. Ops already set PROD `Logging.Client.CentralLevel` = Warning (16.08). DEV DB should match policy; do not leave DEV on Error “to keep Llog quiet” |
 | **Breaking** | Users keep working if Llog is down. Operators finally see a red row |
 
 ---
@@ -140,6 +171,9 @@ No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared 
 ## 6. Out of Scope
 
 - Lowering `Logging.Client.CentralLevel` to Information
+- Lowering the startup heartbeat from Warning to Error (to “match” a quiet central level)
+- Changing AccService / SyncEngine central levels
+- A new System Status column or a second `logging-*` contributor for the level note
 - V2 `SiNetProjectManagerV2 opened/closing` per-GUID lines
 - In-app log viewer
 - DEV-002 token MessageBox
@@ -160,6 +194,8 @@ No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared 
 | Abort startup if central write fails | **Dropped** | Operator asked for a **note** in «מצב מערכת», not a lockout |
 | Second logger / Trace / Event Log heartbeat | **Dropped** | One Serilog pipeline |
 | Whole-app MessageBox “cannot write log” | **Postponed** | Splash + status row first; revisit only if operators miss the row |
+| Treat newest `Client-*.log` in the folder as “today” | **Dropped** | 16.08: reported marker missing in `Client-20260810.log` while today’s file did not exist |
+| Lower heartbeat to Error so central Error still “proves” write | **Dropped** | Heartbeat stays Warning; central min stays Warning; הערה if DB/config disagrees |
 
 ---
 
@@ -169,6 +205,7 @@ No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared 
 2. Whether central should drop `WriteTo.Async` (local may keep Async). Shared `AddSiNetCentralLogging` impact on AccService/SyncEngine.
 3. Exact splash Hebrew (copy in §3.2 is meaning-locked).
 4. After ship: PROD Llog sweep must show `client-session-alive` for **each** installed station, not only Danny.
+5. After Slice E: force `Logging.Client.CentralLevel` = Error on **DEV** DB only, start App.Wpf, confirm «מצב מערכת» shows the הערה and does **not** name yesterday’s file; restore Warning.
 
 ---
 
@@ -179,6 +216,7 @@ No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared 
 3. On the ops machine, `\\si-win-2k19\AutoCAD Data\log\Client\<that machine>\<that user>\Client-yyyyMMdd.log` contains `[STARTUP] Client process alive`.
 4. If step 3 is forced to fail (share offline / ACL), «מצב מערכת» row `logging-central` is Degraded with Hebrew guidance — app still opens.
 5. Llog skill class `client-session-alive` — not a defect.
+6. If Client central min is not Warning, the `logging-central` row shows the §3.3 הערה. If today’s file is missing, Summary names **today’s** path only.
 
 ---
 
@@ -186,5 +224,19 @@ No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared 
 
 | Date | Change |
 | --- | --- |
+| 16.08.2026 | **Slice E (docs, for DEV):** also check applied central min is Warning; הערה via `GuidanceHe` if not; stop falling back to an old `Client-*.log`. PROD `Logging.Client.CentralLevel` restored to Warning; Danny `Client-20260816.log` then received the pid marker. |
 | 16.08.2026 | **Implementing on development:** sync central File (drop Async); `StartupLogWriteVerifier` + splash + `logging-central` contributor; temp-dir tests. Slice D: sync File chosen so marker is visible without process exit. |
 | 16.08.2026 | Planning: read-back startup check + System Status row. Evidence: 1.0.32 local heartbeat, empty Llog. |
+
+---
+
+## 11. Copy-paste for the DEV agent (Slice E)
+
+Implement on **`development`**. Read this whole file. Reuse `StartupLogWriteVerifier` / `LoggingCentralStatusContributor` / `GuidanceHe`. No new health bus. No EF migration. Do not change AccService/SyncEngine levels. Do not lower the heartbeat to Error.
+
+1. Expose last applied `CentralMinLevel` from `CentralLoggingBuilder`.
+2. `ResolveTodayLogPath` — today’s dated name only; no newest-file fallback.
+3. If applied Client central min ≠ Warning, set `GuidanceHe` to the §3.3 הערה (even on Idle).
+4. If today’s central file is missing, Summary/Detail must name **today’s** path.
+5. Tests in `StartupLogWriteVerifierTests` for Error-level + old-file fallback.
+6. `dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj` and `dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj`. Report build/test/DB (must be none).

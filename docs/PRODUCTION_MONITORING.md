@@ -2,7 +2,7 @@
 
 > **Title:** Production Monitoring  
 > **Date:** 02.08.2026  
-> **Updated:** 16.08.2026 (Client heartbeat lock; AccService token restored)  
+> **Updated:** 16.08.2026 (Client central level restored to Warning; DEV-028 Slice E)  
 > **Status:** Active  
 > **Scope:** How the PROD workstation watches real-time logs and subsystem / workflow health during the pilot. Complements architecture docs; does not replace them.
 
@@ -52,6 +52,8 @@ Enrichers on desktop lines include `App`, `Host=SiNet.App.Wpf`, `Machine`, `User
 **Important:** 1.0.32 writes Warning `[STARTUP] Client process alive` **locally**, but PROD Llog on 16.08 stayed empty even when `CentralEnabled=true`. Folder probe ≠ share file. Until [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) (DEV-028) ships, a quiet Client folder is **not** proof of idle. After that ship: heartbeat must be readable on the UNC from this ops PC.
 
 **Pilot decision (02.08.2026):** keep **`Logging.Client.CentralLevel` = Warning** (default). Do **not** lower it to Information. Heartbeat is Warning in code, not an ops level change.
+
+**PROD 16.08.2026:** SiData `Logging.Client.CentralLevel` had been **Error** (historical quiet-Client). Warning heartbeats never reached Llog; System Status then reported `marker missing` in an **old** dated file. Row restored to **Warning** (`LastUpdated` 16.08.2026 13:26 UTC). After restart, Danny `Client-20260816.log` on the share has the pid marker. AccService/SyncEngine central stay Warning. Follow-up so this cannot hide again: [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) Slice E (הערה if applied min ≠ Warning). Stations that started **before** the restore must **restart** `SiNet.App.Wpf` to reload the level.
 
 Per-user `LoggingEnabled=false` must **not** silence the central sink (design in [`LOGGING.md`](./LOGGING.md) §9).
 

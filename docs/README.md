@@ -44,7 +44,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md`](./DEV_PLAN_EMAIL_LIST_UX_FOLLOWUPS.md) | **DEV-017:** group order/membership, project-switch stuck, refresh, selector widths |
 | [`DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md`](./DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md) | **DEV-026:** mailbox user-label ↔ project table; duplicate `(Number)` note |
 | [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) | **DEV-027 Planning:** employee `.secrets` import; AccService 401 vs TLS; Fast/Deep System Status |
-| [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) | **DEV-028 Planning:** startup must prove Llog write; System Status note if not |
+| [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) | **DEV-028:** prove Llog write; Slice E — הערה if Client central min is not Warning |
 | [`DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md`](./DEV_CHECKLIST_MASTERPLAN_HOURS_DEV021.md) | **DEV-021:** test-replica verify checklist (monthly + sample IDs + R02) |
 | [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) | **DEV-024:** R02 vs MP gap after monthly+reconcile (source-split diagnosis) |
 | [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) | **DEV-025:** Replica-first reports; orphan DELETE + 30-day JSON under MasterPlanBakup |
