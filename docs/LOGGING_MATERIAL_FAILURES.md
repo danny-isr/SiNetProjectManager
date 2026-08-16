@@ -2,17 +2,17 @@
 
 > **Title:** Material failures must reach the central UNC log at Warning+  
 > **Date:** 13.08.2026  
-> **Updated:** 14.08.2026  
-> **Status:** Implementing (P0+P1 code landed; validate in production Llog)  
-> **Scope:** What must appear on `\\si-win-2k19\AutoCAD Data\log` during rollout/tuning when a **material** operation fails. Does **not** change sink levels, Serilog bootstrap, or product code in this round. Host: `SiNet.App.Wpf` + AccService paths those clients call.
+> **Updated:** 16.08.2026  
+> **Status:** Implementing (P0+P1 code landed; Client heartbeat locked 16.08; validate in production Llog after publish)  
+> **Scope:** What must appear on `\\si-win-2k19\AutoCAD Data\log` during rollout/tuning when a **material** operation fails, plus the Client session heartbeat. Host: `SiNet.App.Wpf` + AccService paths those clients call.
 
-Related: [`LOGGING.md`](./LOGGING.md) (pipeline / §9 central sink), [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) (ops tails), [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) (agent sweep), [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md), [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md), [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) (DEV-027 — Gmail timeout noise).
+Related: [`LOGGING.md`](./LOGGING.md) (pipeline / §9 central sink), [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) (ops tails), [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) (agent sweep), [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) (severe token notice), [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md), [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md), [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) (DEV-027 — Gmail timeout noise).
 
 ---
 
 ## 1. Why
 
-During rollout, operators diagnose from **Llog** (central Serilog share), not from each workstation’s local file. Client central default is **Warning** (`Logging.Client.CentralLevel`). A healthy session may produce **no** `Client-yyyyMMdd.log` file. That is acceptable **only if** a material failure is actually logged as Warning/Error/Fatal.
+During rollout, operators diagnose from **Llog** (central Serilog share), not from each workstation’s local file. Client central default is **Warning** (`Logging.Client.CentralLevel`). After the 16.08 heartbeat ships, a healthy start **must** produce `[STARTUP] Client process alive` + sink diagnostics on Llog ([`LOGGING.md`](./LOGGING.md) §9.4.1). Missing heartbeat after a claimed start is an install/process miss, not “healthy silence”. Material failures still must be Warning/Error/Fatal.
 
 Observed gap (code review 13.08.2026): several ACC / FileMaterial / Gmail-filing failures are visible in the UI (`MessageBox` / Status) or in `System.Diagnostics.Trace`, and **never** reach Llog. Example the operator named: failing to upload to ACC is a material failure; today MoveToProject records that as `Trace.TraceWarning` / `Trace.TraceError`.
 
@@ -56,6 +56,7 @@ Aligned with [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md):
 2. **ACC Move/Lock metadata** — write failed after physical presence (Warning if file exists; Error if that blocks FileMaterial).
 3. **Mailbox SoT** — Gmail project label File / Unfile failed (`IEmailFilingService`).
 4. **Blocking platform** — vault/SQL/schema already Fatal/Warning; connector auth restore that leaves Google/ACC unusable (Warning, not Debug).
+5. **AccService Autodesk refresh token missing/stale** — **Error** on AccService and on the Client operation. **Severe UI** for the user (cannot continue ACC work without being told). See [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) lock 16.08.2026. Not TLS and not workstation API key.
 
 ### 3.3 What must not inflate Llog
 
@@ -92,6 +93,8 @@ If AccService already logged `ACC file upload failed…` and the client only ret
 ### 3.6 UI is not a log
 
 `MessageBox`, Status, `LoadWarning`, and `EmailMoveToProjectOutcomeDisplay` stay for the user. They do **not** replace `IAppLogger.Warn`/`Error`. A failure that only updates Status is a documentation gap in the table below.
+
+**Token Critical (16.08.2026):** if AccService has no valid Autodesk refresh token, Status/«מעלה ל-ACC…» is **not** enough. The user must get a severe notice and must not continue that ACC action. Log Error as well.
 
 ---
 
@@ -187,7 +190,7 @@ Build gate when code lands: `dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
 
 ## 8. Needs Review
 
-1. Optional **P2**: one Client line `Client session started` at **Warning** (SyncEngine pattern) so a working user is visible when there are zero failures. **Not** required for P0. Do not emit opened/closing per V2 session id.
+1. **Locked 16.08.2026:** Client session heartbeat at **Warning** (`[STARTUP] Client process alive` + sinks + ready) — [`LOGGING.md`](./LOGGING.md) §9.4.1. Not V2 opened/closing GUIDs.
 2. Whether AccService EnsureInbox Error should include the truncated `_docsLastError` only, or also `projectName` (prefer both, cap length).
 3. `WorkSurfaceLauncher` “service not registered” in production vs DEBUG — log only when the user actually invoked that route.
 
@@ -197,5 +200,6 @@ Build gate when code lands: `dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
 
 | Date | Change |
 | --- | --- |
+| 16.08.2026 | Operator lock: Client **Warning** heartbeat every start (alive + sinks connected). Quiet Information-only sessions are no longer acceptable. |
 | 14.08.2026 | **Code P0a–P1:** Material failures → `IAppLogger`/Serilog Warning+/Error (MoveToProject, Filing, Ingest, ExternalDownload, AccService EnsureInbox, Remote Acc*, WorkflowAction, AuthRestore, dashboard/launcher/email list). |
 | 13.08.2026 | Documentation-only: principles + gap catalogue. No code. |

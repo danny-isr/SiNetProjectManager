@@ -138,7 +138,9 @@ public static class StandaloneHostLoggingBootstrap
 
     private static void LogSinkDiagnostics()
     {
-        Log.Information(
+        // Re-emit after the central sink is attached. Phase-1 "alive" (App.OnStartup) is local-only.
+        Log.Warning("[STARTUP] Client process alive");
+        Log.Warning(
             "[STARTUP] Logging sinks. Local={Local} Central={Central} CentralEnabled={Enabled}",
             CentralLoggingBuilder.LocalSinkTargetFile ?? "(none)",
             CentralLoggingBuilder.CentralSinkTargetFile ?? "(disabled — Logging.CentralLogPath empty)",

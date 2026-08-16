@@ -2,7 +2,7 @@
 
 > **Title:** docs/ README -- New System & ops documentation index
 > **Date:** 02.08.2026
-> **Updated:** 13.08.2026
+> **Updated:** 16.08.2026
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
 As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
@@ -32,9 +32,8 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) | Publish gates, versioning, rollback; who may run `publish-all.ps1` |
 | [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) | Live log tails, System Status, Workflow Ops, pilot routines |
 | [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) | **Agent:** incremental UNC Llog sweep (state in `artifacts/llog-review/`) |
-| [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) | **Documentation-only:** material ACC/filing failures must reach Llog at Warning+ (Trace is not ops) |
 | [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) | How to restore AccService Autodesk 3-legged refresh token on PROD |
-| [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | **Planning (DEV):** admin startup alerts for sync / AccService / ops gaps |
+| [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) | **Planning (DEV-002 P0):** severe AccService Autodesk-token notice for ACC users + admin sync list |
 | [`DEV_BACKLOG.md`](./DEV_BACKLOG.md) | Open DEV defects / implementation requests (index) |
 | [`DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md`](./DEV_BUG_EMAIL_LINK_EXTERNAL_WINDOW.md) | **DEV-001:** Jumbo/body links must open external download window → ACC |
 | [`DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md`](./DEV_PLAN_PROJECTWORK_TREE_BAK_RECOVER.md) | **DEV-003:** ProjectWork bak/recover hide-stale + delete stale + tree UX |
@@ -57,8 +56,8 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) | Pilot envelope / readiness notes |
 | [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md) | DB backup / restore drill (P0) |
 | [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) | MasterPlan API key rotation (P0) |
-| [`LOGGING.md`](./LOGGING.md) | New System logging architecture (IAppLogger + Serilog) |
-| [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) | Material failures → Llog Warning+; gap catalogue (docs-only 13.08.2026) |
+| [`LOGGING.md`](./LOGGING.md) | New System logging architecture (IAppLogger + Serilog); §9.4.1 Client heartbeat |
+| [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) | Material failures + Client heartbeat must reach Llog at Warning+ |
 | [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md) | «מצב מערכת» design and contributors |
 | [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md) | «בריאות תהליכים» runtime ops |
 | [`DEV_TOOLS.md`](./DEV_TOOLS.md) | DEBUG-only Reset & Seed — not for production DB |

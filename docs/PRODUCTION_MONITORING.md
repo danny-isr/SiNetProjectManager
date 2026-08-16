@@ -2,11 +2,11 @@
 
 > **Title:** Production Monitoring  
 > **Date:** 02.08.2026  
-> **Updated:** 13.08.2026 (material-failure Llog principles)  
+> **Updated:** 16.08.2026 (Client heartbeat lock; AccService token restored)  
 > **Status:** Active  
 > **Scope:** How the PROD workstation watches real-time logs and subsystem / workflow health during the pilot. Complements architecture docs; does not replace them.
 
-Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`LOGGING.md`](./LOGGING.md), [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) (material failures must be Warning+ on Llog), [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md), [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md), [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) (Cursor incremental Llog sweep), [`SiNetProjectManagerV2/Docs/LOGGING.md`](../SiNetProjectManagerV2/Docs/LOGGING.md).
+Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md), [`LOGGING.md`](./LOGGING.md), [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md), [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md), [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) (Cursor incremental Llog sweep), [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) (severe token notice), [`SiNetProjectManagerV2/Docs/LOGGING.md`](../SiNetProjectManagerV2/Docs/LOGGING.md).
 
 ---
 
@@ -49,13 +49,11 @@ Enrichers on desktop lines include `App`, `Host=SiNet.App.Wpf`, `Machine`, `User
 | Local file | User toggle: Debug when `LoggingEnabled=true`, else effectively silenced via level switch | Per-user settings |
 | Central UNC | **Warning** (`Logging.Client.CentralLevel`) | Admin SystemSettings |
 
-**Important:** startup diagnostics in the standalone host are often logged as **Information**. With the default central level of Warning, an Information-only session may produce **no new central file lines**. Crash/UI reports that are logged as Warning **do** reach the share.
+**Important:** until the 16.08 heartbeat ships, startup is often **Information**, so a session with no Warning/Error produces **no** central Client file. After ship: every start writes Warning `[STARTUP] Client process alive` + sink paths ([`LOGGING.md`](./LOGGING.md) §9.4.1). If that line is missing, the app did not reach the logger.
 
-**Pilot decision (02.08.2026):** keep **`Logging.Client.CentralLevel` = Warning** (default). Do **not** lower it to Information during the early pilot — noise vs value is not worth it yet. Rely on Warning/Error/`[UI]`/`Fatal` on the central share; enable per-user local logging when investigating a specific machine.
+**Pilot decision (02.08.2026):** keep **`Logging.Client.CentralLevel` = Warning** (default). Do **not** lower it to Information. Heartbeat is Warning in code, not an ops level change.
 
 Per-user `LoggingEnabled=false` must **not** silence the central sink (design in [`LOGGING.md`](./LOGGING.md) §9).
-
-**Material failures vs quiet sessions:** an Information-only session with no central file is OK. Failing to upload to ACC, failing MoveToProject/FileMaterial, failing Ensure Inbox, or failing Gmail File/Unfile is **not** OK if it only appears in the UI or in `System.Diagnostics.Trace`. Trace is **not** an ops channel. Catalogue and target: [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md). Do **not** lower central to Information to compensate.
 
 ### 2.2 Agent incremental review (Cursor)
 
@@ -197,15 +195,14 @@ Use it when a user reports repeated Civil 3D crashes or a machine that reboots o
 
 | Gap | Impact | Recommended follow-up |
 | --- | --- | --- |
-| Central default level Warning; lifecycle often Information | Quiet central share during “healthy” sessions | **Accepted for early pilot** (keep Warning). Later optional: one Client session-start Warning — [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) §8. Do **not** lower central to Information |
-| Material ACC/filing failures logged only via Trace / UI | MoveToProject, some ingest Failed paths, Gmail File/Unfile missing from Llog | Documentation-only catalogue: [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md). Code slices after that doc is approved |
+| Central default level Warning; Client startup was Information | Quiet Client share; emptied stations look idle | **Locked 16.08:** Warning heartbeat every start — [`LOGGING.md`](./LOGGING.md) §9.4.1. Keep central at Warning |
 | OS title shows version (As-Is) | Operators can confirm build from window title; UNC/MSIX still useful | Version comes from `NewShellWindowTitle` / assembly informational version -- optional About polish only |
 | No `Environment` enricher | DEV noise on same share hard to filter | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) §6.1 |
 | No in-app log viewer | Operators need PowerShell / Explorer on UNC | Acceptable for pilot; optional later |
 | Standalone stalled-workflow background loop | Relies on human Ops Dashboard | Decide whether to host watchdog in App.Wpf or a service |
 | OPS-P0 backup / secret rotation still Manual Pending | Blind recovery | Complete [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md) and [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) before wide rollout |
-| No admin startup alert popup in App.Wpf | Operator discovers AccService token / sync failures only via logs | DEV: [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md); meanwhile restore token via [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) |
-| AccService Autodesk `refreshTokenFileExists=false` | Jumbo→ACC / NativeAccIngest 100s timeouts while HTTPS still “up” | Follow [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) |
+| No severe user notice when AccService Autodesk token is missing | User retries ACC; ops finds it only in Llog | [`OPS_STARTUP_ALERTS.md`](./OPS_STARTUP_ALERTS.md) lock 16.08 — Critical for **every** ACC user; restore via [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) |
+| AccService Autodesk `refreshTokenFileExists=false` (16.08 12:19 after restart) | EnsureInbox `Authorization was cancelled`; material cannot transfer | Token file still not in `sieng` LocalAppData — finish Export+Install and confirm `refreshTokenFileExists=true` |
 
 ---
 

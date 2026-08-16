@@ -1,7 +1,7 @@
 # SiNet Project Manager — Documentation Index
 
 > **Created:** 26.05.2026
-> **Updated:** 13.08.2026
+> **Updated:** 16.08.2026
 > **Status:** Active documentation index -- Environments / Release / Production Monitoring linked; DeploymentPrinciples marked Superseded for desktop SoT (07.08.2026).
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 > **Repo docs As-Is ledger:** [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](../../docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md).
@@ -34,12 +34,13 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | --- | --- |
 | [`docs/ENVIRONMENTS.md`](../../docs/ENVIRONMENTS.md) | PROD vs DEV machine roles; config placement; Google/ACC isolation target |
 | [`docs/RELEASE_PROCESS.md`](../../docs/RELEASE_PROCESS.md) | Who publishes, gates before `publish-all.ps1`, versioning, rollback |
-| [`docs/PRODUCTION_MONITORING.md`](../../docs/PRODUCTION_MONITORING.md) | Live UNC logs, System Status, Workflow Ops during pilot |
+| [`docs/PRODUCTION_MONITORING.md`](../../docs/PRODUCTION_MONITORING.md) | Live UNC logs, System Status, Workflow Ops during pilot; Client heartbeat after 16.08 |
+| [`docs/LOGGING.md`](../../docs/LOGGING.md) | New System logging; Client `[STARTUP]` heartbeat §9.4.1 |
+| [`docs/LOGGING_MATERIAL_FAILURES.md`](../../docs/LOGGING_MATERIAL_FAILURES.md) | Material failures + heartbeat must reach Llog at Warning+ |
 | [`docs/MASTERPLAN_SYNC_WATERMARKS.md`](../../docs/MASTERPLAN_SYNC_WATERMARKS.md) | SyncEngine watermarks, hours lookback window, weekly reconciliation |
 | [`docs/README.md`](../../docs/README.md) | Full index of repository `docs/*.md` |
 | [`docs/DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](../../docs/DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) | **DEV-027 Planning:** employee `.secrets` import; AccService 401 vs TLS in System Status |
 | [`docs/OPS_LLOG_REVIEW.md`](../../docs/OPS_LLOG_REVIEW.md) | **Agent:** incremental central Llog sweep |
-| [`docs/LOGGING_MATERIAL_FAILURES.md`](../../docs/LOGGING_MATERIAL_FAILURES.md) | **Documentation-only:** material ACC/filing failures must reach Llog at Warning+ |
 
 Cross-domain deployment principles: [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](Domains/Deployment/DeploymentPrinciples-2026-05-26.md) -- **Superseded for desktop production SoT** (use `docs/RELEASE_PROCESS.md` + root `DEPLOYMENT.md` / `SiNet.App.Wpf`). Kept for cross-cutting install/auth principles.
 

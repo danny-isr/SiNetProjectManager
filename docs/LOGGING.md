@@ -45,18 +45,25 @@ Settings UI is deferred; ports are in `SiNet.Application.Settings` — see [`SET
 `SiNet.Infrastructure.Logging` (B1 AccService decoupling). Hosts (V2, AccService,
 MasterPlan.SyncEngine) call that module at bootstrap via ProjectReference.
 
-### 2.1 Central sink per host — actual state (updated 13.08.2026)
+### 2.1 Central sink per host — actual state (2026-07-29)
 
 | Process | Calls `AddSiNetCentralLogging` | Local sink | Central (network) sink |
 | --- | --- | --- | --- |
 | `SiNetProjectManagerV2` (Legacy) | Yes — `App.xaml.cs` | Level via `AppLogger.FileLevelSwitch` | Yes, own `CentralMinLevel` |
 | `SiOffice.AccService` | Yes — `Program.cs` | Yes | Yes |
 | `MasterPlan.SyncEngine` | Yes — `Program.cs` | Yes | Yes |
-| **`SiNet.App.Wpf` (production desktop)** | **Yes** — phase 2 `StandaloneHostLoggingBootstrap.ConfigureCentral` after vault SQL | Local file + level switch (`ApplyUserLogging`) | Yes — `SiNetApp.Client` → `Client\<machine>\<user>\` |
+| **`SiNet.App.Wpf` (standalone pilot)** | **No** | Only sink that exists | **None** |
 
-`SiNet.App.Wpf` boots in two phases ([§9](#9-standalone-host-central-logging--target-state)): local-only until the vault yields a connection string, then local + central. `LoggingEnabled=false` moves **only** the local switch (typically to Fatal); it must **not** silence the central sink. Default `Logging.Client.CentralLevel` remains **Warning**.
+`StandaloneHostLoggingBootstrap` builds a **single local file sink** and no central sink. It also has
+**no level switch**: `ApplyUserLogging` rebuilds `Log.Logger` with `MinimumLevel.Is(Fatal)` when the
+user toggle is off, which silences the whole pipeline rather than only the local sink.
 
-Startup lines such as `Opening NewShell...` / `Standalone New System ready.` are **Information**, so a healthy session may create **no** central file. That is intended. Material **failures** must still be Warning/Error — catalogue: [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md). (The 2026-07-29 note that standalone had **no** central sink is **superseded**.)
+Observed consequence (verified 2026-07-29): with the default `LoggingEnabled = false`
+(`UserAppSettingsDefaults`), the standalone log stops at `User authorized` — `Opening NewShell...`
+and `Standalone New System ready.` are never written even though startup succeeds. The log is
+indistinguishable from a crash after login, and a pilot user produces **no diagnostics at all**.
+
+Target state: [§9](#9-standalone-host-central-logging--target-state).
 
 ---
 
@@ -137,7 +144,6 @@ No schema / migration changes in Stage 4.
 ## 8. Related docs
 
 - [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) — pilot live-tail commands, central vs local levels, what to grep for
-- [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) — **Documentation-only:** which operation failures must reach Llog at Warning+ (ACC upload, MoveToProject, Gmail filing); Trace is not an ops channel
 - [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) — PROD/DEV log share and target `Environment` enricher
 - [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md) — no legacy logger in App.Wpf
 - [`APP_SHELL.md`](./APP_SHELL.md) §11 — settings mechanisms (logging toggle today in legacy `SettingsWindow`)
@@ -204,17 +210,29 @@ Standalone reuses **`SiNetApp.Client`**, not a new enum value:
 | No central file | `<CentralLogPath>\Client\<machine>\<user>\Client-yyyyMMdd.log` |
 | Plain message lines | Shared output template with `App` / `Machine` / `User` / `ProcessId` / `ThreadId` |
 
-Old `SiNet-Standalone-*.log` files are left in place; they are not migrated or deleted. The central
-file only materialises on the first Warning/Error, because `Logging.Client.CentralLevel` is
-`Warning` by default — an Information-only session legitimately produces no central file.
-Material failures (ACC upload, MoveToProject, mailbox File/Unfile, Ensure Inbox) must still
-be logged at Warning/Error so they appear on that share — see [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md).
+Old `SiNet-Standalone-*.log` files are left in place; they are not migrated or deleted.
+
+### 9.4.1 Client session heartbeat (locked 16.08.2026)
+
+Central default stays **Warning**. An Information-only session must **not** be the normal case.
+
+**Lock:** every time `SiNet.App.Wpf` starts and the logger is up, it writes **Warning** (SyncEngine pattern):
+
+1. `[STARTUP] Client process alive` — phase 1, as soon as the local logger exists (proof the process ran, even before vault). Re-emitted in phase 2 so **Llog** also gets it (phase 1 is local-only).
+2. `[STARTUP] Logging sinks. Local=… Central=… CentralEnabled=…` — after phase 2, so Llog shows the UNC path and whether central is connected.
+3. `[STARTUP] Client session ready` — NewShell is open.
+
+Do **not** emit V2-style opened/closing per session GUID. Cap: those three messages (alive may appear twice locally: phase 1 + phase 2).
+
+If **neither** local `%LOCALAPPDATA%\SiNet\Logs\Client-yyyyMMdd.log` **nor** central `Client\<machine>\<user>\` has those lines after a claimed start, the host never reached `ConfigureDefault` (install/MSIX/wrong exe) — not “healthy silence”.
+
+Local path is **`%LOCALAPPDATA%\SiNet\Logs\`**, not the V2 folder `SiNetProjectManagerV2`. `LoggingEnabled=false` still silences **local** Information/Warning; the heartbeat is Warning so it still reaches **central**. Phase-1 alive is written while local is still verbose, so a start that dies before Settings apply still leaves a local file.
 
 ### 9.5 Effect on the pilot
 
 Once implemented, the default `LoggingEnabled = false` stops being a diagnosability problem: the
-local file stays quiet, while the central share keeps receiving Warning/Error from every pilot user.
-The default itself does **not** need to change.
+local file stays quiet, while the central share keeps receiving Warning/Error **including the session
+heartbeat** from every pilot user. The default itself does **not** need to change.
 
 ### 9.6 Out of scope
 

@@ -41,6 +41,7 @@ public partial class App : System.Windows.Application
         AppGlobalExceptionHandling.Configure(this);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         StandaloneHostLoggingBootstrap.ConfigureDefault();
+        StandaloneHostLoggingBootstrap.Warning("[STARTUP] Client process alive");
 
         // Without this bridge every AppErrorReporter.Report — including the global dispatcher
         // handler — only reached Debug.WriteLine and was invisible in the log file.
@@ -77,7 +78,7 @@ public partial class App : System.Windows.Application
 
         try
         {
-            StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System host starting (SiNet.App.Wpf).");
+            StandaloneHostLoggingBootstrap.Warning("[STARTUP] Standalone New System host starting (SiNet.App.Wpf).");
 
             splash.SetStatus("בודק כספת סודות ומסד נתונים...");
             // Vault setup may open a modal dialog — hide splash so it cannot cover the UI.
@@ -156,7 +157,7 @@ public partial class App : System.Windows.Application
 
             ScheduleEmailBodyPdfRendererInit();
 
-            StandaloneHostLoggingBootstrap.Info("[STARTUP] Standalone New System ready.");
+            StandaloneHostLoggingBootstrap.Warning("[STARTUP] Client session ready");
         }
         finally
         {

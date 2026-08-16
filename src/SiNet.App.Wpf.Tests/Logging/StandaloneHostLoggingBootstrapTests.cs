@@ -106,6 +106,43 @@ public sealed class StandaloneHostLoggingBootstrapTests : IDisposable
     }
 
     [Fact]
+    public void WhenSessionHeartbeatIsWarningThenCentralKeepsItAfterLocalToggleOff()
+    {
+        var localDir = Path.Combine(_root, "hb-local");
+        var centralRoot = Path.Combine(_root, "hb-central");
+        Directory.CreateDirectory(localDir);
+        Directory.CreateDirectory(centralRoot);
+
+        var localSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);
+        var config = new CentralLoggingConfig
+        {
+            App = SiNetApp.Client,
+            CentralLogPath = centralRoot,
+            LocalLogDirectory = localDir,
+            CentralMinLevel = LogEventLevel.Warning,
+            LocalFileLevelSwitch = localSwitch,
+        };
+
+        using (var logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .AddSiNetCentralLogging(config)
+            .CreateLogger())
+        {
+            logger.Warning("[STARTUP] Client process alive");
+            localSwitch.MinimumLevel = LogEventLevel.Fatal;
+            logger.Warning("[STARTUP] Logging sinks. Local=x Central=y CentralEnabled=True");
+        }
+
+        var localText = ReadAllLogs(localDir);
+        var centralText = ReadAllLogs(centralRoot);
+
+        Assert.Contains("[STARTUP] Client process alive", localText, StringComparison.Ordinal);
+        Assert.DoesNotContain("[STARTUP] Logging sinks", localText, StringComparison.Ordinal);
+        Assert.Contains("[STARTUP] Client process alive", centralText, StringComparison.Ordinal);
+        Assert.Contains("[STARTUP] Logging sinks", centralText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WhenToggleIsOffThenLocalFileStopsReceivingInformation()
     {
         var directory = Path.Combine(_root, "toggle");
