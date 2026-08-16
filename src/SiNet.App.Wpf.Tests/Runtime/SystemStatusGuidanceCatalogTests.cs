@@ -129,4 +129,17 @@ public sealed class SystemStatusGuidanceCatalogTests
         Assert.True(row.HasGuidance);
         Assert.Contains("thumbprint", row.Guidance, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Resolve_logging_central_degraded_returns_llog_guidance()
+    {
+        var guidance = SystemStatusGuidanceCatalog.Resolve(
+            "logging-central",
+            SubsystemRuntimeState.Degraded,
+            "לא נמצא הקובץ");
+
+        Assert.NotNull(guidance);
+        Assert.Contains("Llog", guidance, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("si-win-2k19", guidance, StringComparison.OrdinalIgnoreCase);
+    }
 }

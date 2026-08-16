@@ -102,6 +102,29 @@ public partial class App : System.Windows.Application
             // provider is built — the logging adapter captures the host logger in its constructor.
             StandaloneHostLoggingBootstrap.ConfigureCentral(sqlConnectionString);
 
+            splash.SetStatus("בודק כתיבת לוג…");
+            try
+            {
+                var logWrite = await StartupLogWriteVerifier
+                    .VerifyAsync(TimeSpan.FromSeconds(5), _shutdownCts.Token)
+                    .ConfigureAwait(true);
+                splash.SetStatus(logWrite.SplashStatusHe);
+                if (!logWrite.IsFullyOk)
+                {
+                    StandaloneHostLoggingBootstrap.Warning(
+                        $"[STARTUP] Log write verify incomplete. LocalOk={logWrite.LocalOk} CentralConfigured={logWrite.CentralConfigured} CentralOk={logWrite.CentralOk} detail={logWrite.Detail}");
+                }
+            }
+            catch (OperationCanceledException) when (_shutdownCts.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                splash.SetStatus("לא ניתן לכתוב לוג מקומי — ראה מצב מערכת");
+                StandaloneHostLoggingBootstrap.Warning(ex, "[STARTUP] Log write verify threw.");
+            }
+
             splash.SetStatus("טוען שירותים...");
             var services = new ServiceCollection();
             services.AddSiNetStandaloneHost(

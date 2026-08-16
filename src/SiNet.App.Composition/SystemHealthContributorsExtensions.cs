@@ -3,6 +3,7 @@ using SiNet.Application.Google;
 using SiNet.Application.Runtime;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
+using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Sql;
 using SiNet.Infrastructure.Sql.Services.Health;
 
@@ -28,6 +29,7 @@ public static class SystemHealthContributorsExtensions
         services.AddSingleton<ISubsystemStatusContributor, WorkflowEngineStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, SeedBaselineStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, FileServerStatusContributor>();
+        services.AddSingleton<ISubsystemStatusContributor, LoggingCentralStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, OllamaStatusContributor>();
 
         services.AddSingleton<ISubsystemStatusContributor, GoogleConfigStatusContributor>();

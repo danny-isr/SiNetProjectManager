@@ -57,7 +57,7 @@ Status vocabulary:
 | DEV-025 | Replica-first queries (all reports); orphan DELETE + 30-day JSON under MasterPlanBakup | Implementing | P1 | [`DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md`](./DEV_DIRECTIVE_REPLICA_SOT_AND_ORPHAN_ARCHIVE.md) | SyncEngine **1.0.23** + App.Wpf **1.0.29** |
 | DEV-026 | Gmail mailbox label audit — sortable table of user labels ↔ project; duplicate `(Number)` note | Implementing | P2 | [`DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md`](./DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md) | App.Wpf **1.0.30** |
 | DEV-027 | Workstation `.secrets` import for non-admin; System Status classifies AccService 401 vs TLS; Fast/Deep health | Planning — import modes + Deep cadence locked | P1 | [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) | Two import modes; Deep = 30 min or Refresh |
-| DEV-028 | Startup proves Client log write (local + Llog); «מצב מערכת» note if central missing | Planning | P0 | [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) | After 1.0.32: local WARN, Llog empty |
+| DEV-028 | Startup proves Client log write (local + Llog); «מצב מערכת» note if central missing | Implementing | P0 | [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) | After 1.0.32: local WARN, Llog empty |
 ## 2b. On `release` tip — ops verify (Needs Review)
 
 Code for these IDs is present on `origin/release` @ `127dc0e` (App.Wpf **1.0.23** and prior ship commits). **Do not** treat as Done until operator verify is recorded.

@@ -29,6 +29,9 @@ public static class StandaloneHostLoggingBootstrap
     private static string? _sqlConnectionString;
     private static string? _localLogDirectory;
 
+    /// <summary>Test-only: force a central root without SQL (DEV-028 verify tests).</summary>
+    internal static string? TestCentralLogPathOverride { get; set; }
+
     /// <summary>
     /// Phase 1 — local-only logger, verbose. Runs before the vault gate, so no DB read and no
     /// probe of the central UNC share.
@@ -88,6 +91,21 @@ public static class StandaloneHostLoggingBootstrap
 
     public static void CloseAndFlush() => Log.CloseAndFlush();
 
+    /// <summary>
+    /// DEV-028: flush Async buffers by CloseAndFlush + rebuild the current pipeline.
+    /// Keeps the same local directory and SQL central settings.
+    /// </summary>
+    public static void FlushPipeline()
+    {
+        if (string.IsNullOrWhiteSpace(_localLogDirectory))
+        {
+            CloseAndFlush();
+            return;
+        }
+
+        Rebuild(_localLogDirectory);
+    }
+
     private static void SetLocalLevel(bool enabled) =>
         LocalFileLevelSwitch.MinimumLevel = enabled ? LogEventLevel.Debug : LogEventLevel.Fatal;
 
@@ -120,9 +138,10 @@ public static class StandaloneHostLoggingBootstrap
             return new CentralLoggingConfig
             {
                 App = SiNetApp.Client,
-                CentralLogPath = null,
+                CentralLogPath = TestCentralLogPathOverride,
                 LocalLogDirectory = directory,
                 LocalFileLevelSwitch = LocalFileLevelSwitch,
+                CentralMinLevel = LogEventLevel.Warning,
             };
         }
 

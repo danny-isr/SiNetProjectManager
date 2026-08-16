@@ -20,11 +20,11 @@ namespace SiNet.Infrastructure.Sql.Services.Workflow;
 internal sealed class WorkflowActionExecutor(
     IDbContextFactory<SiNetSQLDbContext> dbFactory,
     IProcessActionService processActions,
-    IAppLogger logger)
+    IAppLogger? logger = null)
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory = dbFactory;
     private readonly IProcessActionService _processActions = processActions;
-    private readonly IAppLogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IAppLogger? _logger = logger;
 
     /// <summary>
     /// Executes all actions defined on the given transition rule, in <see cref="WorkflowTransitionAction.SortOrder"/>.
@@ -84,7 +84,7 @@ internal sealed class WorkflowActionExecutor(
         }
         catch (Exception ex)
         {
-            _logger.Error(
+            _logger?.Error(
                 $"[WorkflowAction] outcome=Failed kind=ResolveProjectId instance={instanceId} detail={ex.Message}",
                 ex);
         }
@@ -100,7 +100,7 @@ internal sealed class WorkflowActionExecutor(
             }
             catch (Exception ex)
             {
-                _logger.Error(
+                _logger?.Error(
                     $"[WorkflowAction] outcome=Failed instance={instanceId} action={action.Id} type={action.ActionType} detail={ex.Message}",
                     ex);
                 result = new ActionExecutionResult(action.ActionType, Success: false, Message: ex.Message);

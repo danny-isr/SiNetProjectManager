@@ -2,8 +2,8 @@
 
 > **Title:** Startup must prove it can write the Client log (local + Llog); failure is a System Status note  
 > **Date:** 16.08.2026  
-> **Updated:** 16.08.2026  
-> **Status:** Planning  
+> **Updated:** 16.08.2026 (implementation on development)  
+> **Status:** Implementing  
 > **Scope:** Product/engineering directive for the **`development`** branch. `SiNet.App.Wpf` must treat “can I write a log that I opened?” as a **startup check**, not as a diagnostic flag. If central (Llog) write cannot be proven, show a Hebrew note in «מצב מערכת». No new logger, no second health bus, no EF/schema.  
 > **Branch:** Implement on `development`; ship to users via the normal `release` + `publish-all.ps1` desktop channel.  
 > **Priority:** P0 (ops cannot see any workstation in Llog after 1.0.32)
@@ -186,4 +186,5 @@ No `Add-Migration`. No AccService / SyncEngine bootstrap change unless a shared 
 
 | Date | Change |
 | --- | --- |
+| 16.08.2026 | **Implementing on development:** sync central File (drop Async); `StartupLogWriteVerifier` + splash + `logging-central` contributor; temp-dir tests. Slice D: sync File chosen so marker is visible without process exit. |
 | 16.08.2026 | Planning: read-back startup check + System Status row. Evidence: 1.0.32 local heartbeat, empty Llog. |

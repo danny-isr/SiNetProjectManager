@@ -216,14 +216,16 @@ public static class CentralLoggingBuilder
 
                 cfg = cfg.WriteTo.Logger(sub => sub
                     .MinimumLevel.Is(config.CentralMinLevel)
-                    .WriteTo.Async(a => a.File(
+                    // DEV-028: central File is synchronous so Warning heartbeats reach the UNC
+                    // before process-end. Local keeps Async. Shared by AccService/SyncEngine too.
+                    .WriteTo.File(
                         path: centralFile,
                         rollingInterval: RollingInterval.Day,
                         rollOnFileSizeLimit: true,
                         fileSizeLimitBytes: CentralLoggingDefaults.FileSizeLimitBytes,
                         retainedFileCountLimit: Math.Max(1, config.CentralRetentionDays),
                         outputTemplate: CentralLoggingDefaults.OutputTemplate,
-                        shared: true)));
+                        shared: true));
             }
             else
             {

@@ -86,6 +86,15 @@ public static class SystemStatusGuidanceCatalog
                 return SeedBaselineGuidance;
         }
 
+        if (string.Equals(keyNorm, "logging-central", StringComparison.OrdinalIgnoreCase))
+        {
+            if (state is SubsystemRuntimeState.Degraded or SubsystemRuntimeState.Stopped
+                or SubsystemRuntimeState.NotConfigured)
+            {
+                return LoggingCentralGuidance;
+            }
+        }
+
         if (string.Equals(keyNorm, "gmail", StringComparison.OrdinalIgnoreCase)
             || string.Equals(keyNorm, "google", StringComparison.OrdinalIgnoreCase))
         {
@@ -188,4 +197,10 @@ public static class SystemStatusGuidanceCatalog
         + "ב־DEBUG: כלי פיתוח → «טעינת Seed בסיסי». "
         + "לסוגי פרויקט בלי מיפוי: מנהלה → «מדיניות סוג↔תהליך». "
         + "אחרי התיקון רענן «מצב מערכת». הקצאות חברי קבוצה הן נפרדות (שורת workflow-assignees).";
+
+    internal const string LoggingCentralGuidance =
+        "הלוג המרכזי (Llog) לא נכתב או לא נמצא על השיתוף. "
+        + "ודא גישה ל־\\\\si-win-2k19\\AutoCAD Data\\log מהתחנה, "
+        + "ואל תחפש בתיקיות V2. אם זה MSIX — ודא runFullTrust וכתיבה ל־UNC. "
+        + "אם מקומי נכתב והמרכזי לא — פנה ל־ops (בדיקת ACL / שיתוף).";
 }
