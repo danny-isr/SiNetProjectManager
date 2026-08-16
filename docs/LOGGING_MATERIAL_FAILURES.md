@@ -12,7 +12,7 @@ Related: [`LOGGING.md`](./LOGGING.md) (pipeline / §9 central sink), [`PRODUCTIO
 
 ## 1. Why
 
-During rollout, operators diagnose from **Llog** (central Serilog share), not from each workstation’s local file. Client central default is **Warning** (`Logging.Client.CentralLevel`). After the 16.08 heartbeat ships, a healthy start **must** produce `[STARTUP] Client process alive` + sink diagnostics on Llog ([`LOGGING.md`](./LOGGING.md) §9.4.1). Missing heartbeat after a claimed start is an install/process miss, not “healthy silence”. Material failures still must be Warning/Error/Fatal.
+During rollout, operators diagnose from **Llog** (central Serilog share), not from each workstation’s local file. Client central default is **Warning** (`Logging.Client.CentralLevel`). After the 16.08 heartbeat ships, a healthy start **must** produce `[STARTUP] Client process alive` + sink diagnostics on Llog ([`LOGGING.md`](./LOGGING.md) §9.4.1). **1.0.32 did not meet this on the share** (local WARN only) — [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) (DEV-028). Missing heartbeat after that ship is a **write-verify** miss, not “healthy silence”. Material failures still must be Warning/Error/Fatal.
 
 Observed gap (code review 13.08.2026): several ACC / FileMaterial / Gmail-filing failures are visible in the UI (`MessageBox` / Status) or in `System.Diagnostics.Trace`, and **never** reach Llog. Example the operator named: failing to upload to ACC is a material failure; today MoveToProject records that as `Trace.TraceWarning` / `Trace.TraceError`.
 
@@ -200,6 +200,7 @@ Build gate when code lands: `dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
 
 | Date | Change |
 | --- | --- |
+| 16.08.2026 | **DEV-028 Planning:** 1.0.32 local heartbeat, empty Llog — read-back + System Status ([`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md)). |
 | 16.08.2026 | Operator lock: Client **Warning** heartbeat every start (alive + sinks connected). Quiet Information-only sessions are no longer acceptable. |
 | 14.08.2026 | **Code P0a–P1:** Material failures → `IAppLogger`/Serilog Warning+/Error (MoveToProject, Filing, Ingest, ExternalDownload, AccService EnsureInbox, Remote Acc*, WorkflowAction, AuthRestore, dashboard/launcher/email list). |
 | 13.08.2026 | Documentation-only: principles + gap catalogue. No code. |

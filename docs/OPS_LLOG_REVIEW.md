@@ -6,13 +6,13 @@
 > **Status:** Active  
 > **Scope:** How Cursor agents review `\\si-win-2k19\AutoCAD Data\log` without missing old unread files and without re-scanning bytes already processed. **Not** a feature in `SiNet.App.Wpf`.
 
-Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md), [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) (what must be Warning+ on the share), [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md), [`.cursor/skills/llog-review/SKILL.md`](../.cursor/skills/llog-review/SKILL.md).
+Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md), [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) (what must be Warning+ on the share), [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) (DEV-028), [`DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](./DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md), [`.cursor/skills/llog-review/SKILL.md`](../.cursor/skills/llog-review/SKILL.md).
 
 ---
 
 ## 1. Existing mechanism
 
-Live tails and folder layout: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) §2–3. Central Client files exist only at **Warning+**. After the 16.08 heartbeat ships, a healthy start **must** leave `[STARTUP] Client process alive` (class `client-session-alive`) — not a defect. Until that build is published, emptied stations can still look idle.
+Live tails and folder layout: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) §2–3. Central Client files exist only at **Warning+**. After DEV-028 ([`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md)) a healthy start **must** leave `[STARTUP] Client process alive` on the UNC (class `client-session-alive`) — not a defect. **1.0.32 did not** (local only).
 
 There is **no** in-app log viewer. This process is for the **agent on the ops workstation**, not for end users.
 

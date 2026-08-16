@@ -49,7 +49,7 @@ Enrichers on desktop lines include `App`, `Host=SiNet.App.Wpf`, `Machine`, `User
 | Local file | User toggle: Debug when `LoggingEnabled=true`, else effectively silenced via level switch | Per-user settings |
 | Central UNC | **Warning** (`Logging.Client.CentralLevel`) | Admin SystemSettings |
 
-**Important:** until the 16.08 heartbeat ships, startup is often **Information**, so a session with no Warning/Error produces **no** central Client file. After ship: every start writes Warning `[STARTUP] Client process alive` + sink paths ([`LOGGING.md`](./LOGGING.md) §9.4.1). If that line is missing, the app did not reach the logger.
+**Important:** 1.0.32 writes Warning `[STARTUP] Client process alive` **locally**, but PROD Llog on 16.08 stayed empty even when `CentralEnabled=true`. Folder probe ≠ share file. Until [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) (DEV-028) ships, a quiet Client folder is **not** proof of idle. After that ship: heartbeat must be readable on the UNC from this ops PC.
 
 **Pilot decision (02.08.2026):** keep **`Logging.Client.CentralLevel` = Warning** (default). Do **not** lower it to Information. Heartbeat is Warning in code, not an ops level change.
 

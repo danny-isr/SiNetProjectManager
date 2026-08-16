@@ -226,6 +226,8 @@ Do **not** emit V2-style opened/closing per session GUID. Cap: those three messa
 
 If **neither** local `%LOCALAPPDATA%\SiNet\Logs\Client-yyyyMMdd.log` **nor** central `Client\<machine>\<user>\` has those lines after a claimed start, the host never reached `ConfigureDefault` (install/MSIX/wrong exe) — not “healthy silence”.
 
+**1.0.32 gap (16.08.2026):** Warning heartbeat **did** reach Danny’s local file with `CentralEnabled=true`; the UNC `Client-20260816.log` was **not** created. Folder tmp probe ≠ Llog. Follow-up: [`DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](./DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) (**DEV-028**) — read-back + splash + «מצב מערכת».
+
 Local path is **`%LOCALAPPDATA%\SiNet\Logs\`**, not the V2 folder `SiNetProjectManagerV2`. `LoggingEnabled=false` still silences **local** Information/Warning; the heartbeat is Warning so it still reaches **central**. Phase-1 alive is written while local is still verbose, so a start that dies before Settings apply still leaves a local file.
 
 ### 9.5 Effect on the pilot
