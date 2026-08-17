@@ -34,6 +34,20 @@ public partial class UserSetting
     /// </summary>
     public int? GmailMaxParallelRequests { get; set; }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // GMAIL MAILBOX VIEW PREFERENCES (New System Email list)
+    // See docs/GMAIL_MAILBOX_VIEW_AND_HISTORY.md
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>Persisted mailbox Scope code (<c>Inbox</c> / <c>AllMail</c>). Null/empty → Inbox.</summary>
+    public string? GmailMailScope { get; set; }
+
+    /// <summary>Persisted mailbox Category code (<c>All</c> / <c>Primary</c> / …). Null/empty → All.</summary>
+    public string? GmailMailCategory { get; set; }
+
+    /// <summary>When true, list query includes <c>is:unread</c>.</summary>
+    public bool GmailUnreadOnly { get; set; }
+
     // Navigation property
     public virtual Siuser Siuser { get; set; } = null!;
 }

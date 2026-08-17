@@ -146,7 +146,8 @@ public sealed class EmailListMigrationBoundaryTests
         var composerSource = ReadRepoFile("src/SiNet.Application/Abstractions/Email/EmailMailboxQueryComposer.cs");
 
         Assert.Contains("EmailMailboxScope.Inbox", listVmSource, StringComparison.Ordinal);
-        Assert.Contains("category:primary", composerSource, StringComparison.Ordinal);
+        Assert.Contains("InboxQuery", composerSource, StringComparison.Ordinal);
+        Assert.Contains("label:INBOX", composerSource, StringComparison.Ordinal);
         Assert.Contains("GetMailboxUnreadCountAsync", listVmSource, StringComparison.Ordinal);
     }
 

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
 using SiNet.Infrastructure.Sql.Services.Email;
 
@@ -13,6 +14,7 @@ public static class EmailWriteServiceCollectionExtensions
 
         services.AddSingleton<IEmailFilingService, SqlEmailFilingService>();
         services.AddSingleton<IEmailStatusService, SqlEmailStatusService>();
+        services.AddSingleton<IUserMailViewPreferencesService, SqlUserMailViewPreferencesService>();
 
         return services;
     }

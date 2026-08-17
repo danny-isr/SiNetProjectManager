@@ -22,13 +22,13 @@ public sealed class GmailEmailGatewayUnreadTests
     }
 
     [Fact]
-    public void BuildMailboxQuery_inbox_scope_uses_primary_category()
+    public void BuildMailboxQuery_inbox_scope_uses_label_inbox_without_category_by_default()
     {
         var query = new EmailMailboxQuery { MailboxScope = EmailMailboxScope.Inbox };
         var result = GmailEmailGateway.BuildMailboxQueryString(query);
 
         Assert.Contains("label:INBOX", result, StringComparison.Ordinal);
-        Assert.Contains("category:primary", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("category:", result, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -44,13 +44,16 @@ public sealed class GmailEmailGatewayUnreadTests
     }
 
     [Fact]
-    public void BuildMailboxQuery_unread_scope_appends_is_unread()
+    public void BuildMailboxQuery_unread_scope_maps_to_inbox_unread_without_forcing_primary()
     {
+#pragma warning disable CS0618
         var query = new EmailMailboxQuery { MailboxScope = EmailMailboxScope.Unread };
+#pragma warning restore CS0618
         var result = GmailEmailGateway.BuildMailboxQueryString(query);
 
         Assert.Contains("is:unread", result, StringComparison.Ordinal);
-        Assert.Contains("category:primary", result, StringComparison.Ordinal);
+        Assert.Contains("label:INBOX", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("category:", result, StringComparison.Ordinal);
     }
 
     [Fact]

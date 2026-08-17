@@ -402,7 +402,8 @@ public sealed class EmailListViewModelPagingTests
         await sut.RefreshPageAsync();
 
         Assert.Equal(EmailMailboxScope.Inbox, gateway.LastQuery?.MailboxScope);
-        Assert.Contains("category:primary", EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery!), StringComparison.Ordinal);
+        Assert.DoesNotContain("category:", EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery!), StringComparison.Ordinal);
+        Assert.Contains("label:INBOX", EmailMailboxQueryComposer.BuildSearchQuery(gateway.LastQuery!), StringComparison.Ordinal);
     }
 
     [Fact]

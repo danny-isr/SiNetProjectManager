@@ -30,9 +30,9 @@ public sealed class GmailOptions
 
     /// <summary>
     /// Optional override for <see cref="EmailMailboxScope.Inbox"/> list query.
-    /// Default matches Gmail Primary tab: <c>label:INBOX category:primary</c>.
+    /// Default is full Inbox: <c>label:INBOX</c>. Category is applied via <see cref="EmailMailboxQuery.Category"/>.
     /// </summary>
-    public string DefaultMailboxQuery { get; set; } = "label:INBOX category:primary";
+    public string DefaultMailboxQuery { get; set; } = "label:INBOX";
 
     /// <summary>
     /// When <c>true</c>, the provider may open a browser for interactive OAuth consent if no

@@ -1,7 +1,7 @@
 # Email List Migration
 
-> **Status:** V3 standalone component (2026-07-06)  
-> Related: [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md), [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md), [`EMAIL_FILING_SERVICE_DESIGN.md`](./EMAIL_FILING_SERVICE_DESIGN.md)
+> **Status:** V3 standalone component (2026-07-06); mailbox view + History target → [`GMAIL_MAILBOX_VIEW_AND_HISTORY.md`](./GMAIL_MAILBOX_VIEW_AND_HISTORY.md) (2026-08-17)  
+> Related: [`UI_WINDOW_MIGRATION_MAP.md`](./UI_WINDOW_MIGRATION_MAP.md), [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md), [`EMAIL_FILING_SERVICE_DESIGN.md`](./EMAIL_FILING_SERVICE_DESIGN.md), [`GMAIL_MAILBOX_VIEW_AND_HISTORY.md`](./GMAIL_MAILBOX_VIEW_AND_HISTORY.md)
 
 ## Goal
 
@@ -31,19 +31,21 @@ Self-contained **Email List component** for the Email Workbench: Outlook-style c
 
 Legacy default **list** was broader than Gmail Primary tab; only unread badge/unread-only mode used `category:primary`.
 
-### New default (2026-07-07)
+### New default (target 2026-08-17 — see [`GMAIL_MAILBOX_VIEW_AND_HISTORY.md`](./GMAIL_MAILBOX_VIEW_AND_HISTORY.md))
 
 | Concern | New behavior |
 | --- | --- |
-| Default scope | **Primary Inbox** — `label:INBOX category:primary` via `EmailMailboxScope.Inbox` |
+| Default scope | **Inbox** — `label:INBOX` via `EmailMailboxScope.Inbox` (Category default = All; no `category:` clause) |
+| Category | Independent filter (`All` / `Primary` / …); Primary is opt-in, not the Inbox default |
 | All Mail | Opt-in scope — `-in:spam -in:trash -in:drafts -in:sent` |
-| Unread scope | `label:INBOX category:primary is:unread` |
-| Label scope | Explicit label selection only (Promotions etc. only when user picks label) |
+| Unread | `UnreadOnly` toggle → `is:unread` only. Scope `Unread` removed from UI (deprecated compatibility maps to Inbox + UnreadOnly) |
+| Label scope | Explicit label selection only |
 | Unread total | Separate `IEmailGateway.GetMailboxUnreadCountAsync` — not derived from current 50-item page |
 | Unread in page | `UnreadInCurrentPage` — count on loaded page only |
 | Per-message unread | `GmailEmailGateway.ResolveIsUnread` — `UNREAD` in `labelIds`; missing labels → read |
+| History polling | Lightweight `messageAdded` detection every 3 min → shared full reload (not incremental inject) |
 
-**`category:primary` caveat:** some org Gmail configs may categorize inconsistently. Host can override `GmailOptions.DefaultMailboxQuery` if Primary tab returns empty results.
+**Historical note (2026-07-07):** New System briefly defaulted Inbox to `label:INBOX category:primary`. That is superseded by the Inbox + Category.All default above.
 
 Query composition lives in `EmailMailboxQueryComposer` (Application) and is used by `GmailEmailGateway` + `EmailListViewModel` diagnostics.
 

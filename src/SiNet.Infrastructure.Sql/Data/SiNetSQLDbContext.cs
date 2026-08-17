@@ -1879,6 +1879,13 @@ public partial class SiNetSQLDbContext : DbContext
             entity.Property(e => e.AutoOpenTasksPanelAfterFiling)
                 .HasDefaultValue(true);
 
+            entity.Property(e => e.GmailMailScope)
+                .HasMaxLength(32);
+            entity.Property(e => e.GmailMailCategory)
+                .HasMaxLength(32);
+            entity.Property(e => e.GmailUnreadOnly)
+                .HasDefaultValue(false);
+
             // Unique index on SIUserID (one setting per user)
             entity.HasIndex(e => e.SiuserId, "IX_UserSetting_SIUserID").IsUnique();
 

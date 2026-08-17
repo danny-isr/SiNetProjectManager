@@ -18,6 +18,9 @@ public sealed record EmailMailboxQuery
 
     public EmailMailboxScope MailboxScope { get; init; } = EmailMailboxScope.Inbox;
 
+    /// <summary>Gmail category tab filter. Default <see cref="EmailMailboxCategory.All"/> (no category clause).</summary>
+    public EmailMailboxCategory Category { get; init; } = EmailMailboxCategory.All;
+
     public EmailProjectLinkFilter ProjectLinkFilter { get; init; } = EmailProjectLinkFilter.All;
 
     public int? OptionalProjectId { get; init; }

@@ -172,6 +172,14 @@
                               SelectedValuePath="Scope"
                               DisplayMemberPath="DisplayName"
                               Margin="0,0,4,0" ToolTip="תיבה" />
+                    <ComboBox Width="90" MinHeight="24"
+                              Style="{DynamicResource SiComboBoxStyle}"
+                              FontSize="{DynamicResource SiTextSmallFontSize}"
+                              ItemsSource="{Binding MailboxCategoryOptions}"
+                              SelectedValue="{Binding SelectedMailboxCategory}"
+                              SelectedValuePath="Category"
+                              DisplayMemberPath="DisplayName"
+                              Margin="0,0,4,0" ToolTip="קטגוריה" />
                     <TextBox Width="120" MinHeight="24" VerticalContentAlignment="Center"
                              Style="{DynamicResource SiTextBoxStyle}"
                              FontSize="{DynamicResource SiTextSmallFontSize}"

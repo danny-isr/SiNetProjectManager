@@ -54,6 +54,7 @@ Cross-domain deployment principles: [`Domains\Deployment\DeploymentPrinciples-20
 | Email / Gmail | [`Domains\Email\EmailSystemPrinciples-2026-05-26.md`](Domains/Email/EmailSystemPrinciples-2026-05-26.md) |
 | Email — Management View and Actions Tree | [`Domains\Email\EmailManagementViewAndActionsTree-2026-06-21.md`](Domains/Email/EmailManagementViewAndActionsTree-2026-06-21.md) |
 | Email / ACC — Source of Truth (New System agent summary) | [`docs/EMAIL_ACC_SOURCE_OF_TRUTH.md`](../../docs/EMAIL_ACC_SOURCE_OF_TRUTH.md) |
+| Email — Mailbox view prefs + History detection (New System) | [`docs/GMAIL_MAILBOX_VIEW_AND_HISTORY.md`](../../docs/GMAIL_MAILBOX_VIEW_AND_HISTORY.md) |
 | ACC / Autodesk | [`Domains\ACC\AccSystemPrinciples-2026-05-26.md`](Domains/ACC/AccSystemPrinciples-2026-05-26.md) |
 | Database Identity | [`Domains\DatabaseIdentity\DatabaseIdentityPrinciples-2026-05-26.md`](Domains/DatabaseIdentity/DatabaseIdentityPrinciples-2026-05-26.md) |
 | Authorization | [`Domains\Authorization\AuthorizationPrinciples-2026-06-18.md`](Domains/Authorization/AuthorizationPrinciples-2026-06-18.md) |

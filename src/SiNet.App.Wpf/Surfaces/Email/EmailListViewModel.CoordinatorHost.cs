@@ -40,6 +40,8 @@ public sealed partial class EmailListViewModel
     void IEmailListRowMutator.RemoveRowFromDisplay(EmailListRow row) => _display.RemoveRowFromDisplay(row);
     void IEmailListRowMutator.RebindSelectedEmail(EmailListRow updated) => _display.RebindSelectedEmail(updated);
 
+    internal MailboxReloadOrchestrator ReloadGate => _reloadGate;
+
     internal IEmailGateway EmailGateway => _emailGateway;
     internal IEmailThreadLinkQueryService? ThreadLinkQuery => _threadLinkQuery;
     internal IEmailThreadMappingSyncService? ThreadMappingSync => _threadMappingSync;
@@ -74,6 +76,7 @@ public sealed partial class EmailListViewModel
     internal void SetAttachmentsOnly(bool value) => AttachmentsOnly = value;
     internal void SetUnreadOnly(bool value) => UnreadOnly = value;
     internal void SetSelectedMailboxScope(EmailMailboxScope value) => SelectedMailboxScope = value;
+    internal void SetSelectedMailboxCategory(EmailMailboxCategory value) => SelectedMailboxCategory = value;
     internal void SetIsBusy(bool value) => IsBusy = value;
     internal void SetLoadState(EmailListLoadState value) => LoadState = value;
     internal void SetLoadWarning(string? value) => LoadWarning = value;

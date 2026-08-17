@@ -39,6 +39,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private readonly ICurrentUserContext? _currentUser;
     private readonly IProjectGmailLabelSyncService? _projectLabelSync;
     private readonly IGmailMailboxLabelAuditService? _labelAudit;
+    private readonly IUserMailViewPreferencesService? _mailViewPrefs;
+    private readonly MailboxReloadOrchestrator _reloadGate;
 
     private readonly EmailListRowDisplayCoordinator _display;
     private readonly EmailListGroupingCoordinator _grouping;
@@ -65,6 +67,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private string _subjectFilter = string.Empty;
     private string? _selectedLabel;
     private EmailMailboxScope _selectedMailboxScope = EmailMailboxScope.Inbox;
+    private EmailMailboxCategory _selectedMailboxCategory = EmailMailboxCategory.All;
     private int _mailboxUnreadTotal;
     private bool _mailboxUnreadIsExact = true;
     private string? _lastLoadedGmailQuery;
@@ -98,13 +101,17 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         IGoogleIngestSessionEnsurer? ingestSessionEnsurer = null,
         IEmailThreadMappingSyncService? threadMappingSync = null,
         IProjectGmailLabelSyncService? projectLabelSync = null,
-        IGmailMailboxLabelAuditService? labelAudit = null)
+        IGmailMailboxLabelAuditService? labelAudit = null,
+        IUserMailViewPreferencesService? mailViewPrefs = null,
+        MailboxReloadOrchestrator? reloadOrchestrator = null)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
         _threadMappingSync = threadMappingSync;
         _projectLabelSync = projectLabelSync;
         _labelAudit = labelAudit;
+        _mailViewPrefs = mailViewPrefs;
+        _reloadGate = reloadOrchestrator ?? new MailboxReloadOrchestrator();
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _filingService = filingService;
         _statusService = statusService;
@@ -128,7 +135,15 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         [
             new EmailMailboxScopeOption(EmailMailboxScope.Inbox, "אינבוקס"),
             new EmailMailboxScopeOption(EmailMailboxScope.AllMail, "כל הדואר"),
-            new EmailMailboxScopeOption(EmailMailboxScope.Unread, "לא נקראו"),
+        ];
+        MailboxCategoryOptions =
+        [
+            new EmailMailboxCategoryOption(EmailMailboxCategory.All, "הכול"),
+            new EmailMailboxCategoryOption(EmailMailboxCategory.Primary, "ראשי"),
+            new EmailMailboxCategoryOption(EmailMailboxCategory.Updates, "עדכונים"),
+            new EmailMailboxCategoryOption(EmailMailboxCategory.Promotions, "מבצעים"),
+            new EmailMailboxCategoryOption(EmailMailboxCategory.Social, "חברתי"),
+            new EmailMailboxCategoryOption(EmailMailboxCategory.Forums, "פורומים"),
         ];
 
         _emailsView = CollectionViewSource.GetDefaultView(Emails);
@@ -245,6 +260,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public bool ShowProjectGroupAboveFlat => !GroupByLabel && _projectGroup is not null;
     public ObservableCollection<EmailProjectLinkFilterOption> ProjectLinkFilterOptions { get; }
     public ObservableCollection<EmailMailboxScopeOption> MailboxScopeOptions { get; }
+
+    public ObservableCollection<EmailMailboxCategoryOption> MailboxCategoryOptions { get; }
     public ICollectionView? EmailsView => _emailsView;
 
     public EmailListRow? SelectedEmail
@@ -357,7 +374,9 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
                 var scopeLabel = SelectedMailboxScope switch
                 {
                     EmailMailboxScope.AllMail => "בכל הדואר",
+#pragma warning disable CS0618
                     EmailMailboxScope.Unread => "לא נקראו",
+#pragma warning restore CS0618
                     EmailMailboxScope.Label => $"ב־{SelectedLabel ?? "label"}",
                     _ => "באינבוקס",
                 };
@@ -372,7 +391,10 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         ? MailboxUnreadTotal > 0 || UnreadInCurrentPage > 0
         : UnreadInCurrentPage > 0;
 
-    public bool ShowUnreadFilterActive => UnreadOnly || SelectedMailboxScope == EmailMailboxScope.Unread;
+    public bool ShowUnreadFilterActive =>
+#pragma warning disable CS0618
+        UnreadOnly || SelectedMailboxScope == EmailMailboxScope.Unread;
+#pragma warning restore CS0618
 
     public string MailboxDiagnostics =>
         $"Scope: {SelectedMailboxScope} | Query: {_lastLoadedGmailQuery ?? "—"} | Loaded: {DisplayedCount} | Unread total: {(MailboxUnreadIsExact ? MailboxUnreadTotal.ToString() : "n/a")} | Unread page: {UnreadInCurrentPage} | Next: {(HasNextPage ? "yes" : "no")}";
@@ -500,6 +522,19 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         get => _selectedMailboxScope;
         set
         {
+#pragma warning disable CS0618
+            if (value == EmailMailboxScope.Unread)
+            {
+                value = EmailMailboxScope.Inbox;
+                if (!_unreadOnly)
+                {
+                    _unreadOnly = true;
+                    OnPropertyChanged(nameof(UnreadOnly));
+                    OnPropertyChanged(nameof(ShowUnreadFilterActive));
+                }
+            }
+#pragma warning restore CS0618
+
             if (!SetField(ref _selectedMailboxScope, value))
             {
                 return;
@@ -513,6 +548,12 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
                 OnPropertyChanged(nameof(SelectedLabel));
             }
         }
+    }
+
+    public EmailMailboxCategory SelectedMailboxCategory
+    {
+        get => _selectedMailboxCategory;
+        set => SetField(ref _selectedMailboxCategory, value);
     }
 
     public EmailProjectLinkFilter SelectedProjectLinkFilter
@@ -667,6 +708,10 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     }
 
     public Task RefreshPageAsync() => _paging.ReloadForContextAsync();
+
+    /// <summary>Mailbox load without entering <see cref="MailboxReloadOrchestrator"/> (caller already holds the gate).</summary>
+    internal Task RefreshPageCoreAsync() => _paging.LoadMailboxAndProjectAsync(resetStack: true);
+
     public Task ApplyFiltersAsync() => _paging.ReloadForContextAsync();
     public Task ClearFiltersAndReloadAsync() => _paging.ClearFiltersAsync();
     public Task LoadNextPageAsync() => _paging.LoadPageAsync(resetStack: false, useNextToken: true);
@@ -678,6 +723,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         OnPropertyChanged(nameof(ConnectedAccountEmail));
         OnPropertyChanged(nameof(AccountStatusDisplay));
 
+        await LoadMailViewPreferencesAsync().ConfigureAwait(true);
+
         if (!IsConnected)
         {
             return;
@@ -685,6 +732,42 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
 
         await _paging.RefreshAccountProfileAsync().ConfigureAwait(true);
         await _paging.LoadLabelsAsync().ConfigureAwait(true);
+    }
+
+    internal async Task LoadMailViewPreferencesAsync()
+    {
+        if (_mailViewPrefs is null)
+            return;
+
+        try
+        {
+            var prefs = await _mailViewPrefs.GetAsync().ConfigureAwait(true);
+            SelectedMailboxScope = prefs.Scope;
+            SelectedMailboxCategory = prefs.Category;
+            SetUnreadOnly(prefs.UnreadOnly);
+        }
+        catch
+        {
+            // Prefer defaults over failing window open.
+        }
+    }
+
+    internal async Task SaveMailViewPreferencesAsync()
+    {
+        if (_mailViewPrefs is null)
+            return;
+
+        try
+        {
+            await _mailViewPrefs.SaveAsync(new UserMailViewPreferences(
+                SelectedMailboxScope,
+                SelectedMailboxCategory,
+                UnreadOnly)).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Non-fatal — list already reloaded.
+        }
     }
 
     /// <summary>

@@ -27,9 +27,8 @@ public sealed class GmailEmailGateway : IEmailGateway
     public const int MailboxPageSizeCap = 50;
     private const int UnreadCountPageSize = 500;
     private const int UnreadCountMaxPages = 3;
-    internal const string InboxPrimaryQuery = EmailMailboxQueryComposer.InboxPrimaryQuery;
+    internal const string InboxQuery = EmailMailboxQueryComposer.InboxQuery;
     internal const string AllMailQuery = EmailMailboxQueryComposer.AllMailQuery;
-    internal const string InboxPrimaryUnreadQuery = EmailMailboxQueryComposer.InboxPrimaryUnreadQuery;
     internal const string AllMailUnreadQuery = EmailMailboxQueryComposer.AllMailUnreadQuery;
     private static readonly string[] MetadataHeaders = { "Subject", "From", "To", "Date", "Message-ID" };
     internal const string SummaryFieldsMask =

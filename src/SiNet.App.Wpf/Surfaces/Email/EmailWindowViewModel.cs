@@ -37,6 +37,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     private readonly IEmailAccBackgroundWorkTracker? _backgroundWorkTracker;
     private readonly IProjectWorkSurfaceHost? _projectWorkHost;
     private readonly EmailExternalDownloadHandler? _externalDownloadHandler;
+    private readonly MailboxReloadOrchestrator _reloadGate;
+    private readonly IGmailMailboxChangeDetector? _historyDetector;
+    private CancellationTokenSource? _historyPollCts;
+    private Task? _historyPollLoop;
 
     private WorkSurfaceContext? _workSurfaceContext;
     private EmailFolderRow? _selectedFolder;
@@ -45,7 +49,6 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     private string _statusMessage = "מתחבר ומטען מיילים…";
     private int _backgroundWorkActiveCount;
     private int _lastBackgroundWorkCount;
-    private int _autoRefreshGate;
     private int _applyTaskContextGate;
     private bool _isFollowQuoteMode;
     private bool _isFollowQuoteEmptyState;
@@ -137,7 +140,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             TryGetService<IProjectWorkSurfaceHost>(services),
             TryGetService<IEmailGmailModifyService>(services),
             TryGetService<IProjectGmailLabelSyncService>(services),
-            TryGetService<IGmailMailboxLabelAuditService>(services));
+            TryGetService<IGmailMailboxLabelAuditService>(services),
+            TryGetService<IUserMailViewPreferencesService>(services),
+            TryGetService<MailboxReloadOrchestrator>(services),
+            TryGetService<IGmailMailboxChangeDetector>(services));
     }
 
     private static T? TryGetService<T>(IServiceProvider services) where T : class
@@ -190,13 +196,18 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IProjectWorkSurfaceHost? projectWorkHost = null,
         IEmailGmailModifyService? gmailModify = null,
         IProjectGmailLabelSyncService? projectLabelSync = null,
-        IGmailMailboxLabelAuditService? labelAudit = null)
+        IGmailMailboxLabelAuditService? labelAudit = null,
+        IUserMailViewPreferencesService? mailViewPrefs = null,
+        MailboxReloadOrchestrator? reloadOrchestrator = null,
+        IGmailMailboxChangeDetector? historyDetector = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
         _projectQuery = projectQuery;
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
         _googleAuthService = googleAuthService ?? throw new ArgumentNullException(nameof(googleAuthService));
+        _reloadGate = reloadOrchestrator ?? new MailboxReloadOrchestrator();
+        _historyDetector = historyDetector;
         _emailInboxQuery = emailInboxQuery;
         _accClosePrompt = accClosePrompt;
         _backgroundWorkTracker = backgroundWorkTracker;
@@ -220,7 +231,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             ingestSessionEnsurer,
             threadMappingSync,
             projectLabelSync,
-            labelAudit);
+            labelAudit,
+            mailViewPrefs,
+            _reloadGate);
 
         EmailDetail = new EmailDetailViewModel(
             EmailList,
@@ -486,11 +499,115 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     public async Task RefreshAsync()
     {
-        await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
-        await EmailList.InitializeAsync().ConfigureAwait(true);
-        if (IsConnected)
+        var needBaseline = _historyDetector?.LastHistoryId is null;
+        await RequestMailboxReloadAsync(establishHistoryBaseline: needBaseline).ConfigureAwait(true);
+    }
+
+    private async Task RequestMailboxReloadAsync(bool establishHistoryBaseline)
+    {
+        await _reloadGate.RequestAsync(
+            async ct =>
+            {
+                ulong? baseline = null;
+                if (establishHistoryBaseline && _historyDetector is not null && IsConnected)
+                {
+                    baseline = await _historyDetector.CaptureBaselineAsync(ct).ConfigureAwait(true);
+                }
+
+                await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
+                await EmailList.InitializeAsync().ConfigureAwait(true);
+                if (IsConnected)
+                {
+                    await EmailList.RefreshPageCoreAsync().ConfigureAwait(true);
+                    if (baseline is ulong captured)
+                    {
+                        _historyDetector?.CommitBaseline(captured);
+                    }
+
+                    EnsureHistoryPollingStarted();
+                }
+            },
+            onSuccessfulReload: null).ConfigureAwait(true);
+    }
+
+    private void EnsureHistoryPollingStarted()
+    {
+        if (_historyDetector is null || _historyPollLoop is not null)
+            return;
+
+        _historyPollCts = new CancellationTokenSource();
+        var token = _historyPollCts.Token;
+        _historyPollLoop = Task.Run(() => HistoryPollLoopAsync(token), token);
+    }
+
+    private void StopHistoryPolling()
+    {
+        try
         {
-            await EmailList.RefreshPageAsync().ConfigureAwait(true);
+            _historyPollCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _historyPollCts?.Dispose();
+        _historyPollCts = null;
+        _historyPollLoop = null;
+        _historyDetector?.Reset();
+    }
+
+    private async Task HistoryPollLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(3));
+        while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!IsConnected || _historyDetector is null)
+                continue;
+
+            try
+            {
+                var outcome = await _historyDetector
+                    .CheckForChangesAsync(EmailList.SelectedMailboxScope, cancellationToken)
+                    .ConfigureAwait(false);
+
+                switch (outcome)
+                {
+                    case GmailHistoryCheckOutcome.ReloadRequired:
+                        await _reloadGate.RequestAsync(
+                            async _ =>
+                            {
+                                await UiThread.RunAsync(async () =>
+                                {
+                                    await EmailList.RefreshPageCoreAsync().ConfigureAwait(true);
+                                    return true;
+                                }).ConfigureAwait(false);
+                            },
+                            onSuccessfulReload: _historyDetector.CommitPendingCheckpoint,
+                            cancellationToken).ConfigureAwait(false);
+                        break;
+
+                    case GmailHistoryCheckOutcome.HistoryExpired:
+                        await UiThread.RunAsync(async () =>
+                        {
+                            await RequestMailboxReloadAsync(establishHistoryBaseline: true).ConfigureAwait(true);
+                            return true;
+                        }).ConfigureAwait(false);
+                        break;
+
+                    case GmailHistoryCheckOutcome.NoRelevantChanges:
+                    case GmailHistoryCheckOutcome.TransientFailure:
+                    case GmailHistoryCheckOutcome.NotReady:
+                        break;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch
+            {
+                // Transient — next cycle.
+            }
         }
     }
 
@@ -503,6 +620,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        StopHistoryPolling();
         EmailList.SelectedEmailChanged -= OnEmailListSelectionChanged;
         EmailList.AccStatusPatched -= OnAccStatusPatched;
         EmailDetail.StatusMessageChanged -= (_, _) => { };
@@ -520,28 +638,34 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     private async Task AutoRefreshOnOpenAsync()
     {
-        if (Interlocked.CompareExchange(ref _autoRefreshGate, 1, 0) != 0)
-        {
-            return;
-        }
-
-        try
-        {
-            if (!IsConnected)
+        await _reloadGate.RequestAsync(
+            async _ =>
             {
+                if (!IsConnected)
+                {
+                    await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
+                    await EmailList.InitializeAsync().ConfigureAwait(true);
+                    StatusMessage = "חבר Gmail כדי לטעון מיילים.";
+                    return;
+                }
+
+                StatusMessage = "טוען מיילים…";
+                ulong? baseline = null;
+                if (_historyDetector is not null)
+                {
+                    baseline = await _historyDetector.CaptureBaselineAsync().ConfigureAwait(true);
+                }
+
                 await ApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
                 await EmailList.InitializeAsync().ConfigureAwait(true);
-                StatusMessage = "חבר Gmail כדי לטעון מיילים.";
-                return;
-            }
+                await EmailList.RefreshPageCoreAsync().ConfigureAwait(true);
+                if (baseline is ulong captured)
+                {
+                    _historyDetector?.CommitBaseline(captured);
+                }
 
-            StatusMessage = "טוען מיילים…";
-            await RefreshAsync().ConfigureAwait(true);
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _autoRefreshGate, 0);
-        }
+                EnsureHistoryPollingStarted();
+            }).ConfigureAwait(true);
     }
 
     private void OnBackgroundWorkActiveCountChanged(int count)

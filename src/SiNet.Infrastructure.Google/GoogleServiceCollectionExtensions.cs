@@ -52,6 +52,9 @@ public static class GoogleServiceCollectionExtensions
             sp.GetRequiredService<IAppLogger>(),
             sp.GetService<IGoogleClientSecretsPathProvider>()));
         services.AddSingleton<IEmailGateway, GmailEmailGateway>();
+        services.AddSingleton<IGmailHistoryApi, GmailHistoryApi>();
+        services.AddSingleton<IGmailMailboxChangeDetector, GmailMailboxChangeDetector>();
+        services.AddSingleton<MailboxReloadOrchestrator>();
 
         // Native auth/health bridge over the same provider singleton, so signed-in state and
         // AuthStateChanged notifications are a single source of truth shared with the gateway.

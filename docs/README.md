@@ -2,7 +2,7 @@
 
 > **Title:** docs/ README -- New System & ops documentation index
 > **Date:** 02.08.2026
-> **Updated:** 16.08.2026
+> **Updated:** 17.08.2026
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
 As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
@@ -95,6 +95,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) | Gmail label / ACC / DB truth |
 | [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md) | **FileMaterial / MoveToProject** — six decisions Target (canonical) |
 | [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md) | Email list migration |
+| [`GMAIL_MAILBOX_VIEW_AND_HISTORY.md`](./GMAIL_MAILBOX_VIEW_AND_HISTORY.md) | Mailbox Scope/Category/Unread prefs + History lightweight detection (New System) |
 | [`EMAIL_DETAIL_COMPONENT.md`](./EMAIL_DETAIL_COMPONENT.md) | Email detail component |
 | [`EMAIL_FILING_SERVICE_DESIGN.md`](./EMAIL_FILING_SERVICE_DESIGN.md) | `IEmailFilingService` design |
 | [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md) | Email → ACC Inbox ingest (N1–N5; FileMaterial pointer) |

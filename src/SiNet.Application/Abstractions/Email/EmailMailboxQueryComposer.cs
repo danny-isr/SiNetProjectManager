@@ -3,10 +3,42 @@ namespace SiNet.Application.Abstractions.Email;
 /// <summary>Builds Gmail search query strings from <see cref="EmailMailboxQuery"/>.</summary>
 public static class EmailMailboxQueryComposer
 {
+    /// <summary>Full Inbox label (default Scope base). Category is applied separately.</summary>
+    public const string InboxQuery = "label:INBOX";
+
+    /// <summary>
+    /// Historical Primary-Inbox compound query. Prefer <see cref="InboxQuery"/> + <see cref="EmailMailboxCategory.Primary"/>.
+    /// Kept for diagnostics / compatibility callers.
+    /// </summary>
+    [Obsolete("Use InboxQuery with EmailMailboxCategory.Primary instead.")]
     public const string InboxPrimaryQuery = "label:INBOX category:primary";
+
     public const string AllMailQuery = "-in:spam -in:trash -in:drafts -in:sent";
+
+    /// <summary>Deprecated compound unread+primary. Prefer Inbox + Category + UnreadOnly.</summary>
+    [Obsolete("Use InboxQuery with Category and UnreadOnly instead.")]
     public const string InboxPrimaryUnreadQuery = "label:INBOX category:primary is:unread";
+
     public const string AllMailUnreadQuery = "-in:spam -in:trash -in:drafts -in:sent is:unread";
+
+    /// <summary>
+    /// Maps deprecated <see cref="EmailMailboxScope.Unread"/> to Inbox + UnreadOnly.
+    /// Safe to call repeatedly.
+    /// </summary>
+#pragma warning disable CS0618 // Unread is retained for compatibility mapping
+    public static EmailMailboxQuery Normalize(EmailMailboxQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.MailboxScope != EmailMailboxScope.Unread)
+            return query;
+
+        return query with
+        {
+            MailboxScope = EmailMailboxScope.Inbox,
+            UnreadOnly = true,
+        };
+    }
+#pragma warning restore CS0618
 
     /// <summary>
     /// Builds a Gmail <c>rfc822msgid:</c> operator for exact Message-ID locate.
@@ -52,6 +84,7 @@ public static class EmailMailboxQueryComposer
     public static string BuildSearchQuery(EmailMailboxQuery query, string? inboxQueryOverride = null)
     {
         ArgumentNullException.ThrowIfNull(query);
+        query = Normalize(query);
 
         // Exact Message-ID locate must not be AND-ed with AllMail exclusions (-in:sent, …);
         // Gmail's rfc822msgid: operator already searches the account.
@@ -62,6 +95,10 @@ public static class EmailMailboxQueryComposer
         }
 
         var parts = new List<string> { ResolveScopeBaseQuery(query, inboxQueryOverride) };
+
+        var categoryClause = ResolveCategoryClause(query.Category);
+        if (categoryClause is not null)
+            parts.Add(categoryClause);
 
         if (!string.IsNullOrWhiteSpace(query.Subject))
         {
@@ -84,7 +121,7 @@ public static class EmailMailboxQueryComposer
             parts.Add("has:attachment");
         }
 
-        if (query.UnreadOnly && query.MailboxScope != EmailMailboxScope.Unread)
+        if (query.UnreadOnly)
         {
             parts.Add("is:unread");
         }
@@ -94,53 +131,81 @@ public static class EmailMailboxQueryComposer
 
     public static string ResolveScopeBaseQuery(EmailMailboxQuery query, string? inboxQueryOverride)
     {
+        query = Normalize(query);
         return query.MailboxScope switch
         {
             EmailMailboxScope.AllMail => AllMailQuery,
-            EmailMailboxScope.Unread => InboxPrimaryUnreadQuery,
             EmailMailboxScope.Label when !string.IsNullOrWhiteSpace(query.LabelName)
                 => $"label:{QuoteGmailTerm(query.LabelName.Trim())}",
             EmailMailboxScope.Sent => "in:sent",
             EmailMailboxScope.Inbox => string.IsNullOrWhiteSpace(inboxQueryOverride)
-                ? InboxPrimaryQuery
+                ? InboxQuery
                 : inboxQueryOverride.Trim(),
             _ => string.IsNullOrWhiteSpace(inboxQueryOverride)
-                ? InboxPrimaryQuery
+                ? InboxQuery
                 : inboxQueryOverride.Trim(),
         };
     }
 
-    public static string BuildUnreadCountQuery(EmailMailboxQuery query, string? inboxQueryOverride = null) =>
-        query.MailboxScope switch
+    public static string? ResolveCategoryClause(EmailMailboxCategory category) =>
+        category switch
         {
-            EmailMailboxScope.AllMail => AllMailUnreadQuery,
-            EmailMailboxScope.Unread => InboxPrimaryUnreadQuery,
-            EmailMailboxScope.Label when !string.IsNullOrWhiteSpace(query.LabelName)
-                => $"{ResolveScopeBaseQuery(query, inboxQueryOverride)} is:unread",
-            EmailMailboxScope.Inbox => InboxPrimaryUnreadQuery,
-            _ => InboxPrimaryUnreadQuery,
+            EmailMailboxCategory.All => null,
+            EmailMailboxCategory.Primary => "category:primary",
+            EmailMailboxCategory.Updates => "category:updates",
+            EmailMailboxCategory.Promotions => "category:promotions",
+            EmailMailboxCategory.Social => "category:social",
+            EmailMailboxCategory.Forums => "category:forums",
+            _ => null,
         };
 
-    public static bool HasNonScopeListFilters(EmailMailboxQuery query) =>
-        !string.IsNullOrWhiteSpace(query.Subject)
-        || !string.IsNullOrWhiteSpace(query.FromOrTo)
-        || !string.IsNullOrWhiteSpace(query.FreeText)
-        || query.ProjectLinkFilter != EmailProjectLinkFilter.All
-        || query.AttachmentsOnly
-        || (query.UnreadOnly && query.MailboxScope != EmailMailboxScope.Unread);
+    public static string BuildUnreadCountQuery(EmailMailboxQuery query, string? inboxQueryOverride = null)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        query = Normalize(query);
 
-    public static string DescribeMailboxScope(EmailMailboxQuery query) =>
-        query.MailboxScope switch
+        var baseParts = new List<string> { ResolveScopeBaseQuery(query, inboxQueryOverride) };
+        var categoryClause = ResolveCategoryClause(query.Category);
+        if (categoryClause is not null)
+            baseParts.Add(categoryClause);
+        baseParts.Add("is:unread");
+        return string.Join(' ', baseParts);
+    }
+
+    public static bool HasNonScopeListFilters(EmailMailboxQuery query)
+    {
+        query = Normalize(query);
+        return !string.IsNullOrWhiteSpace(query.Subject)
+            || !string.IsNullOrWhiteSpace(query.FromOrTo)
+            || !string.IsNullOrWhiteSpace(query.FreeText)
+            || query.ProjectLinkFilter != EmailProjectLinkFilter.All
+            || query.AttachmentsOnly
+            || query.UnreadOnly
+            || query.Category != EmailMailboxCategory.All;
+    }
+
+    public static string DescribeMailboxScope(EmailMailboxQuery query)
+    {
+        query = Normalize(query);
+        var scope = query.MailboxScope switch
         {
             EmailMailboxScope.Inbox => "Inbox",
             EmailMailboxScope.AllMail => "AllMail",
-            EmailMailboxScope.Unread => "Unread",
             EmailMailboxScope.Label => string.IsNullOrWhiteSpace(query.LabelName)
                 ? "Label"
                 : $"Label:{query.LabelName}",
             EmailMailboxScope.Sent => "Sent",
             _ => query.MailboxScope.ToString(),
         };
+
+        if (query.Category != EmailMailboxCategory.All)
+            scope = $"{scope}/{query.Category}";
+
+        if (query.UnreadOnly)
+            scope = $"{scope}+Unread";
+
+        return scope;
+    }
 
     private static string QuoteGmailTerm(string value)
         => value.Contains(' ', StringComparison.Ordinal) ? $"\"{value}\"" : value;
