@@ -216,6 +216,9 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _autoSyncProjectLabelNames = SystemSettingsDefaults.EmailAutoSyncProjectLabelNames;
     private int _accViewerMaxTabs = 10;
     private int _workflowMaxOpenChildInstances = SystemSettingsDefaults.WorkflowMaxOpenChildInstances;
+    private bool _pilotEnabled = SystemSettingsDefaults.PilotEnabled;
+    private string _pilotAllowedUserIds = SystemSettingsDefaults.PilotAllowedUserIds;
+    private string _pilotAllowedWorkflowCodes = SystemSettingsDefaults.PilotAllowedWorkflowCodes;
     private string _accServiceBaseUrl = string.Empty;
     private string _accServicePinnedCertificateThumbprints = string.Empty;
     private string _accBootstrapAdminEmail = string.Empty;
@@ -1233,7 +1236,11 @@ public sealed class SettingsViewModel : ObservableObject
             new AppLogLevelsDto(ParseLevel(AccServiceFileLevel), ParseLevel(AccServiceCentralLevel)),
             new AppLogLevelsDto(ParseLevel(SyncEngineFileLevel), ParseLevel(SyncEngineCentralLevel)),
             !string.IsNullOrWhiteSpace(CentralLogPath)),
-        new WorkflowSystemSettingsDto(Math.Max(1, WorkflowMaxOpenChildInstances)),
+        new WorkflowSystemSettingsDto(
+            Math.Max(1, WorkflowMaxOpenChildInstances),
+            _pilotEnabled,
+            _pilotAllowedUserIds ?? string.Empty,
+            _pilotAllowedWorkflowCodes ?? string.Empty),
         new ProjectWorkSystemSettingsDto(
             string.IsNullOrWhiteSpace(ProjectWorkScanExclusionRules)
                 ? SystemSettingsDefaults.ProjectWorkScanExclusionRules
@@ -1278,6 +1285,9 @@ public sealed class SettingsViewModel : ObservableObject
         AutoSyncProjectLabelNames = system.EmailOffice.AutoSyncProjectLabelNames;
         AccViewerMaxTabs = system.EmailOffice.AccViewerMaxTabs;
         WorkflowMaxOpenChildInstances = system.Workflow.MaxOpenChildInstances;
+        _pilotEnabled = system.Workflow.PilotEnabled;
+        _pilotAllowedUserIds = system.Workflow.PilotAllowedUserIds ?? string.Empty;
+        _pilotAllowedWorkflowCodes = system.Workflow.PilotAllowedWorkflowCodes ?? string.Empty;
         AccServiceBaseUrl = system.Acc.AccServiceBaseUrl;
         AccServicePinnedCertificateThumbprints = system.Acc.AccServicePinnedCertificateThumbprints;
         AccBootstrapAdminEmail = system.Acc.AccBootstrapAdminEmail;

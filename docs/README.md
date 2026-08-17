@@ -55,6 +55,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) | Pilot / expand phases and sign-off log |
 | [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md) | App.Wpf replaces V2 as shipped desktop |
 | [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md) | Pilot envelope / readiness notes |
+| [`PILOT_CONTROLS.md`](./PILOT_CONTROLS.md) | P1 Controlled Production Pilot — SystemSettings + StartAsync gate |
 | [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md) | DB backup / restore drill (P0) |
 | [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) | MasterPlan API key rotation (P0) |
 | [`LOGGING.md`](./LOGGING.md) | New System logging architecture (IAppLogger + Serilog); §9.4.1 Client heartbeat |

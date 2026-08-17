@@ -50,6 +50,19 @@ System host** for a controlled internal pilot when:
 
 **Interactive smoke status:** **Not Run** — see §9. Agent/build/tests do **not** authorize pilot users.
 
+### Controlled Production Pilot runtime (P1)
+
+Fail-closed root-start controls are documented in [`PILOT_CONTROLS.md`](./PILOT_CONTROLS.md):
+
+- SystemSettings: `Pilot.Enabled`, `Pilot.AllowedUserIds`, `Pilot.AllowedWorkflowCodes` (absent → deny)
+- Gate: `NativeWorkflowCommandService.StartAsync` (Email / Ops Start / System continuation)
+- Children under a parent bypass the root gate
+- `QuoteApprovedByClient` pre-validates required continuations with **`command.UserId`** before mutate
+
+**Ops must not enable allowlists until after code review and live smoke.** Defaults keep all new root starts blocked.
+
+**Operational risk (documented, not fixed in P1):** if System Settings Load fails before Pilot fields are applied and an admin still Saves, fail-closed defaults (`Pilot.Enabled=false`, empty allowlists) may be written. Normal Loaded→Load→Save preserves Pilot values (covered by Settings surface regression test).
+
 ---
 
 ## 2. Host model

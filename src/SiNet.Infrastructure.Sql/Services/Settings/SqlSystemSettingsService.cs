@@ -150,7 +150,13 @@ public sealed class SqlSystemSettingsService
                 Math.Max(1, ParseInt(
                     Get(SystemSettingKeys.WorkflowMaxOpenChildInstances,
                         SystemSettingsDefaults.WorkflowMaxOpenChildInstances.ToString()),
-                    SystemSettingsDefaults.WorkflowMaxOpenChildInstances))),
+                    SystemSettingsDefaults.WorkflowMaxOpenChildInstances)),
+                ParseBool(
+                    Get(SystemSettingKeys.PilotEnabled,
+                        SystemSettingsDefaults.PilotEnabled ? "true" : "false"),
+                    SystemSettingsDefaults.PilotEnabled),
+                Get(SystemSettingKeys.PilotAllowedUserIds, SystemSettingsDefaults.PilotAllowedUserIds),
+                Get(SystemSettingKeys.PilotAllowedWorkflowCodes, SystemSettingsDefaults.PilotAllowedWorkflowCodes)),
             new ProjectWorkSystemSettingsDto(
                 Get(SystemSettingKeys.ProjectWorkScanExclusionRules,
                     SystemSettingsDefaults.ProjectWorkScanExclusionRules)),
@@ -227,6 +233,12 @@ public sealed class SqlSystemSettingsService
             (SystemSettingKeys.AiConfiguredCloudModels, settings.Ai.ConfiguredCloudModelsCsv.Trim()),
             (SystemSettingKeys.WorkflowMaxOpenChildInstances,
                 Math.Max(1, settings.Workflow.MaxOpenChildInstances).ToString()),
+            (SystemSettingKeys.PilotEnabled,
+                settings.Workflow.PilotEnabled ? "true" : "false"),
+            (SystemSettingKeys.PilotAllowedUserIds,
+                settings.Workflow.PilotAllowedUserIds?.Trim() ?? string.Empty),
+            (SystemSettingKeys.PilotAllowedWorkflowCodes,
+                settings.Workflow.PilotAllowedWorkflowCodes?.Trim() ?? string.Empty),
             (SystemSettingKeys.ProjectWorkScanExclusionRules,
                 settings.ProjectWork.ScanExclusionRules.Trim()),
             (SystemSettingKeys.DiagnosticsCrashReportSharePath,

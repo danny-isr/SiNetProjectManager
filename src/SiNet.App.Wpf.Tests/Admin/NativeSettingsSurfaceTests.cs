@@ -141,6 +141,44 @@ public sealed class NativeSettingsSurfaceTests
     }
 
     [Fact]
+    public async Task System_save_unrelated_field_preserves_loaded_Pilot_settings()
+    {
+        var systemSaved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var systemCommand = new Mock<ISystemSettingsCommandService>();
+        SystemSettingsDto? savedDto = null;
+        systemCommand.Setup(s => s.SaveSystemSettingsAsync(It.IsAny<SystemSettingsDto>(), It.IsAny<CancellationToken>()))
+            .Returns<SystemSettingsDto, CancellationToken>((dto, _) =>
+            {
+                savedDto = dto;
+                systemSaved.TrySetResult();
+                return Task.CompletedTask;
+            });
+
+        var loaded = CreateNonDefaultSystemSettings();
+        Assert.True(loaded.Workflow.PilotEnabled);
+        Assert.Equal("7,42", loaded.Workflow.PilotAllowedUserIds);
+        Assert.Equal("Proposal,Opinion", loaded.Workflow.PilotAllowedWorkflowCodes);
+
+        var vm = CreateViewModel(
+            isAdmin: true,
+            userId: 1,
+            SettingsSurfaceScope.SystemAdmin,
+            systemQuery: MockSystemQuery(loaded),
+            systemCommand: systemCommand);
+
+        await vm.LoadAsync();
+        vm.AccServiceBaseUrl = "https://acc-updated.example.com";
+        vm.SaveCommand.Execute(null);
+        await systemSaved.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.NotNull(savedDto);
+        Assert.Equal("https://acc-updated.example.com", savedDto!.Acc.AccServiceBaseUrl);
+        Assert.True(savedDto.Workflow.PilotEnabled);
+        Assert.Equal("7,42", savedDto.Workflow.PilotAllowedUserIds);
+        Assert.Equal("Proposal,Opinion", savedDto.Workflow.PilotAllowedWorkflowCodes);
+    }
+
+    [Fact]
     public async Task System_load_populates_acc_runtime_status_panel()
     {
         var vm = CreateViewModel(
@@ -499,7 +537,11 @@ public sealed class NativeSettingsSurfaceTests
                 new AiModelLevelSelectionDto("deep-model", "openai"),
                 "model-a,model-b"),
             log,
-            new WorkflowSystemSettingsDto(3),
+            new WorkflowSystemSettingsDto(
+                3,
+                PilotEnabled: true,
+                PilotAllowedUserIds: "7,42",
+                PilotAllowedWorkflowCodes: "Proposal,Opinion"),
             new ProjectWorkSystemSettingsDto(".bak,.tmp,~$"),
             new DiagnosticsSystemSettingsDto("\\\\server\\crash", "acad.exe", 7, 30));
     }

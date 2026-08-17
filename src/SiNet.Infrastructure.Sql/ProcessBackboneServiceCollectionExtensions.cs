@@ -1,7 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Settings;
 using SiNet.Application.Workflow;
 using SiNet.Infrastructure.Sql.DependencyInjection;
 using SiNet.Infrastructure.Sql.Services.Workflow;
+using SiNetSQL.Data;
 
 namespace SiNet.Infrastructure.Sql;
 
@@ -26,6 +30,9 @@ public static class ProcessBackboneServiceCollectionExtensions
         services.AddSiNetWorkflowEngine();
         services.AddSiNetTaskServices();
         services.AddSiNetActionServices();
+        services.AddTransient<IPilotStartGate>(sp => new SqlPilotStartGate(
+            sp.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>(),
+            sp.GetService<ISystemSettingsQueryService>()));
         services.AddTransient<NativeWorkflowCommandService>();
         services.AddTransient<IWorkflowCommandService>(
             sp => sp.GetRequiredService<NativeWorkflowCommandService>());
@@ -35,7 +42,12 @@ public static class ProcessBackboneServiceCollectionExtensions
 
         // After QuoteApprovedByClient: validate JobType↔Workflow mappings and start continuations.
         // Registered after IWorkflowCommandService so the starter can resolve the native engine.
-        services.AddTransient<IProjectTypeContinuationStarter, SqlProjectTypeContinuationStarter>();
+        services.AddTransient<IProjectTypeContinuationStarter>(sp =>
+            new SqlProjectTypeContinuationStarter(
+                sp.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>(),
+                sp.GetRequiredService<IWorkflowCommandService>(),
+                sp.GetRequiredService<IPilotStartGate>(),
+                sp.GetService<IAppLogger>()));
 
         // Stalled-workflow safety net. Depends only on the DbContext factory and the native command
         // port above; the host schedules the periodic sweep (see V2 startup background loop).

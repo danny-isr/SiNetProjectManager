@@ -2,8 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Actions;
 using SiNet.Application.Email.Detail;
+using SiNet.Application.Settings;
 using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
+using SiNet.App.Wpf.Tests.Support;
 using SiNet.Infrastructure.Sql;
 using SiNet.Infrastructure.Sql.Constants;
 using SiNet.Infrastructure.Sql.Services.DevTools;
@@ -385,6 +387,7 @@ public sealed class NativeWorkflowEngineTests
 
         var services = new ServiceCollection();
         services.AddSingleton<IDbContextFactory<SiNetSQLDbContext>>(factory);
+        services.AddSingleton<ISystemSettingsQueryService>(new PermissivePilotSystemSettingsQueryService(UserId));
         services.AddSiNetProcessBackbone();
         return (services.BuildServiceProvider(), options);
     }

@@ -15,19 +15,29 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
 {
     private readonly WorkflowTaskOrchestrator _orchestrator;
     private readonly WorkflowEngine _engine;
+    private readonly IPilotStartGate _pilotStartGate;
 
-    public NativeWorkflowCommandService(WorkflowTaskOrchestrator orchestrator, WorkflowEngine engine)
+    public NativeWorkflowCommandService(
+        WorkflowTaskOrchestrator orchestrator,
+        WorkflowEngine engine,
+        IPilotStartGate pilotStartGate)
     {
         _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+        _pilotStartGate = pilotStartGate ?? throw new ArgumentNullException(nameof(pilotStartGate));
     }
 
-    public ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
+    public async ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
     {
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step("Engine.Command.Start",
             $"def={command.DefinitionId} project={command.ProjectId} trigger={command.TriggerType} entity={command.TriggerEntityId} user={command.UserId} bound={command.IsProjectBound} initialStage={command.InitialStageCode ?? "(default)"} jobType={command.JobTypeId?.ToString() ?? "(none)"}");
-        return _orchestrator.StartWorkflowAsync(
+
+        await _pilotStartGate
+            .EnsureRootStartAllowedAsync(command.UserId, command.DefinitionId, ct)
+            .ConfigureAwait(false);
+
+        return await _orchestrator.StartWorkflowAsync(
             command.DefinitionId,
             command.ProjectId,
             ToModel(command.TriggerType),
@@ -37,7 +47,7 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
             ct,
             command.IsProjectBound,
             command.InitialStageCode,
-            command.JobTypeId);
+            command.JobTypeId).ConfigureAwait(false);
     }
 
     public ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct) =>

@@ -9,10 +9,20 @@ public interface IProjectTypeContinuationStarter
 {
     /// <summary>
     /// Fails when the project has no project types, or any type lacks an enabled mapping
-    /// to an active workflow definition.
+    /// to an active workflow definition. Mapping-only; does not evaluate Pilot.
     /// </summary>
     Task<ProjectTypeContinuationResult> ValidateMappingsAsync(
         int projectId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validates mappings and that Pilot policy allows each required <em>new</em> continuation
+    /// start for <paramref name="actingUserId"/> (must be the real completion <c>command.UserId</c>).
+    /// Same policy as <see cref="IPilotStartGate"/> / <c>NativeWorkflowCommandService.StartAsync</c>.
+    /// </summary>
+    Task<ProjectTypeContinuationResult> ValidateBeforeQuoteApprovalAsync(
+        int projectId,
+        int actingUserId,
         CancellationToken cancellationToken = default);
 
     /// <summary>

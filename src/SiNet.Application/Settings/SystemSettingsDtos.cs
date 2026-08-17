@@ -47,9 +47,12 @@ public sealed record AiSystemSettingsDto(
     AiModelLevelSelectionDto DeepAnalysis,
     string ConfiguredCloudModelsCsv);
 
-/// <summary>Workflow runtime policy globals.</summary>
+/// <summary>Workflow runtime policy globals (including Controlled Production Pilot).</summary>
 public sealed record WorkflowSystemSettingsDto(
-    int MaxOpenChildInstances);
+    int MaxOpenChildInstances,
+    bool PilotEnabled = false,
+    string PilotAllowedUserIds = "",
+    string PilotAllowedWorkflowCodes = "");
 
 /// <summary>ProjectWork scan / tree filter globals (DEV-006).</summary>
 public sealed record ProjectWorkSystemSettingsDto(
@@ -101,6 +104,11 @@ public static class SystemSettingsDefaults
     public const string StatusLabelRecurringFailed = "הערה חוזרת";
     public const string StatusLabelNotApplicable = "לא רלוונטי";
     public const int WorkflowMaxOpenChildInstances = 2;
+
+    /// <summary>Fail-closed: Pilot off until ops explicitly enable.</summary>
+    public const bool PilotEnabled = false;
+    public const string PilotAllowedUserIds = "";
+    public const string PilotAllowedWorkflowCodes = "";
 
     /// <summary>Empty means «derive from <c>Logging.CentralLogPath</c>» (DEV-010).</summary>
     public const string DiagnosticsCrashReportSharePath = "";

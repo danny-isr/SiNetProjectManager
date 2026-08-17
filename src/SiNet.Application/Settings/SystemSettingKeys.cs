@@ -51,6 +51,22 @@ public static class SystemSettingKeys
     public const string WorkflowMaxOpenChildInstances = "Workflow.MaxOpenChildInstances";
 
     /// <summary>
+    /// Controlled Production Pilot kill-switch. Absent / empty / malformed → <c>false</c> (fail-closed).
+    /// When false, new root workflow starts via <c>IWorkflowCommandService.StartAsync</c> are blocked.
+    /// Does not stop existing instances, task completion, or child starts under a parent.
+    /// </summary>
+    public const string PilotEnabled = "Pilot.Enabled";
+
+    /// <summary>CSV of <c>SIUser.Id</c> values allowed to start root workflows when Pilot is enabled.</summary>
+    public const string PilotAllowedUserIds = "Pilot.AllowedUserIds";
+
+    /// <summary>
+    /// CSV of <c>WorkflowDefinition.Code</c> values allowed for root starts when Pilot is enabled
+    /// (e.g. <c>Proposal,Opinion</c>). Empty → no codes allowed.
+    /// </summary>
+    public const string PilotAllowedWorkflowCodes = "Pilot.AllowedWorkflowCodes";
+
+    /// <summary>
     /// CSV of ProjectWork scan exclusion rules: tokens starting with <c>.</c> are extensions;
     /// other tokens (e.g. <c>~$</c>) are file-name prefixes. Sidecar companions stay hard-coded.
     /// </summary>
@@ -105,6 +121,9 @@ public static class SystemSettingKeys
         AccViewerMaxTabs,
         AccManualUploadAllowedExtensions,
         WorkflowMaxOpenChildInstances,
+        PilotEnabled,
+        PilotAllowedUserIds,
+        PilotAllowedWorkflowCodes,
         ProjectWorkScanExclusionRules,
         DiagnosticsCrashReportSharePath,
         DiagnosticsCrashAppFilters,

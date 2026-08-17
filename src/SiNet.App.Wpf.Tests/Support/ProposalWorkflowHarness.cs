@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Settings;
 using SiNet.Infrastructure.Sql;
 using SiNet.Infrastructure.Sql.Constants;
 using SiNet.Infrastructure.Sql.Services.DevTools;
@@ -29,6 +30,7 @@ public static class ProposalWorkflowHarness
 
         var services = new ServiceCollection();
         services.AddSingleton<IDbContextFactory<SiNetSQLDbContext>>(factory);
+        services.AddSingleton<ISystemSettingsQueryService>(new PermissivePilotSystemSettingsQueryService(UserId));
         services.AddSiNetProcessBackbone();
         return (services.BuildServiceProvider(), options);
     }

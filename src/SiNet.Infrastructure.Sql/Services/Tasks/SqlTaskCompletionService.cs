@@ -146,12 +146,12 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             && _continuationStarter is not null)
         {
             var mappingCheck = await _continuationStarter
-                .ValidateMappingsAsync(approveProjectId, ct)
+                .ValidateBeforeQuoteApprovalAsync(approveProjectId, command.UserId, ct)
                 .ConfigureAwait(false);
             if (!mappingCheck.Success)
             {
                 return TaskCompletionResultDto.Failure(
-                    mappingCheck.Error ?? "חסר מיפוי תהליך לסוגי הפרויקט.");
+                    mappingCheck.Error ?? "חסר מיפוי תהליך לסוגי הפרויקט או חסימת פיילוט.");
             }
         }
 
