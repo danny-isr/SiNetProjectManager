@@ -117,6 +117,7 @@ internal static class SystemCertificationPrpCorridorSupport
     internal static Task<CorridorInbox?> TryResolveInboxForCreatePriceQuoteAsync(
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        SystemCertificationHost.SystemCertificationRunContext context,
         int proposalDefinitionId,
         SystemCertificationEnvironment.GmailLayer gmail,
         SystemCertificationEvidence evidence,
@@ -124,6 +125,7 @@ internal static class SystemCertificationPrpCorridorSupport
         SystemCertificationPrpSourceEmail.TryResolveExplicitSourceAsync(
             provider,
             dbFactory,
+            context,
             proposalDefinitionId,
             gmail,
             evidence,
@@ -138,13 +140,35 @@ internal static class SystemCertificationPrpCorridorSupport
         SystemCertificationEvidence evidence,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(dbFactory);
+        ArgumentNullException.ThrowIfNull(inbox);
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        if (inbox.InboxMessageId is not int inboxMessageId || inboxMessageId <= 0)
+        {
+            evidence.Fail(
+                "cert.prp.create_price_quote",
+                "CreatePriceQuote requires a fully ingested EmailInboxMessage with attachments; "
+                + "Gmail-only materialization is forbidden for PRP certification.");
+            return 0;
+        }
+
+        if (inbox.GmailSource is not null)
+        {
+            evidence.Fail(
+                "cert.prp.create_price_quote",
+                "CreatePriceQuote must not start from an un-ingested Gmail source identity.");
+            return 0;
+        }
+
         var execution = provider.GetRequiredService<IEmailSuggestedActionExecutionService>();
         var result = await execution.ExecuteAsync(
             new EmailSuggestedActionExecutionCommand(
                 EmailSuggestedActionCodes.CreatePriceQuote,
-                inbox.InboxMessageId,
+                inboxMessageId,
                 operatorUserId,
-                inbox.GmailSource),
+                GmailSource: null),
             cancellationToken);
 
         if (!result.Succeeded && result.WorkflowInstanceId is not int reused)

@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
 using SiNet.Application.Email;
-using SiNet.Application.Email.Detail;
 using SiNet.Infrastructure.Sql.Constants;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -19,6 +18,7 @@ internal static class SystemCertificationPrpSourceEmail
     internal static async Task<SystemCertificationPrpCorridorSupport.CorridorInbox?> TryResolveExplicitSourceAsync(
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        SystemCertificationHost.SystemCertificationRunContext context,
         int proposalDefinitionId,
         SystemCertificationEnvironment.GmailLayer gmail,
         SystemCertificationEvidence evidence,
@@ -57,6 +57,14 @@ internal static class SystemCertificationPrpSourceEmail
             return null;
         }
 
+        if (!string.Equals(details.MessageId, gmailMessageId, StringComparison.Ordinal))
+        {
+            evidence.Fail(
+                "cert.prp.source_email",
+                $"Loaded Gmail message id '{details.MessageId}' != explicit env id '{gmailMessageId}'.");
+            return null;
+        }
+
         if (!string.IsNullOrWhiteSpace(internetMessageId)
             && !string.Equals(
                 details.InternetMessageId?.Trim(),
@@ -89,53 +97,28 @@ internal static class SystemCertificationPrpSourceEmail
             return null;
         }
 
-        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-        var inboxId = await FindInboxMessageIdAsync(db, details, cancellationToken);
-        if (inboxId is int existing
-            && await HasActiveProposalForInboxAsync(db, proposalDefinitionId, existing, cancellationToken))
-        {
-            evidence.Fail(
-                "cert.prp.source_email",
-                $"Explicit source inbox id={existing} already has an active Proposal instance — "
-                + "FAIL BEFORE PRP WRITE.");
-            return null;
-        }
-
-        if (inboxId is int ready)
-        {
-            var detail =
-                $"explicit gmail={gmailMessageId} inbox id={ready} subject='{TrimSubject(details.Subject)}' "
-                + $"attachments={details.Attachments.Count}";
-            evidence.Pass("cert.prp.source_email", detail);
-            evidence.Pass("cert.prp.inbox", detail);
-            return new SystemCertificationPrpCorridorSupport.CorridorInbox(ready, null, detail);
-        }
-
         if (string.IsNullOrWhiteSpace(details.InternetMessageId))
         {
             evidence.Fail(
                 "cert.prp.source_email",
-                $"Explicit source message '{gmailMessageId}' has no InternetMessageId and no inbox row — "
-                + "cannot materialize safely for CreatePriceQuote.");
+                $"Explicit source message '{gmailMessageId}' has no InternetMessageId — "
+                + "production ingest and CreatePriceQuote are forbidden.");
             return null;
         }
 
-        var source = new EmailGmailSourceIdentity(
-            details.MessageId,
-            details.InternetMessageId,
-            details.References,
-            details.InReplyTo,
-            details.Subject,
-            details.From.Value,
-            details.ReceivedAt.UtcDateTime,
-            details.ThreadId);
+        evidence.Pass(
+            "cert.prp.source_email",
+            $"explicit gmail={gmailMessageId} subject='{TrimSubject(details.Subject)}' "
+            + $"attachments={details.Attachments.Count}");
 
-        var materializeDetail =
-            $"explicit will materialize gmail={details.MessageId} subject='{TrimSubject(details.Subject)}' "
-            + $"attachments={details.Attachments.Count}";
-        evidence.Pass("cert.prp.source_email", materializeDetail);
-        evidence.Pass("cert.prp.inbox", materializeDetail);
-        return new SystemCertificationPrpCorridorSupport.CorridorInbox(null, source, materializeDetail);
+        return await SystemCertificationPrpSourceIngest.TryEnsureFullyIngestedAsync(
+            provider,
+            dbFactory,
+            context,
+            proposalDefinitionId,
+            details,
+            evidence,
+            cancellationToken);
     }
 
     private static string? ReadRequiredGmailMessageId(out string? violation)
@@ -194,50 +177,6 @@ internal static class SystemCertificationPrpSourceEmail
     private static bool SubjectLooksLikeCertificationTestData(string subject) =>
         !string.IsNullOrWhiteSpace(subject)
         && subject.Contains(SystemCertificationEnvironment.CertificationTitlePrefix, StringComparison.Ordinal);
-
-    private static async Task<int?> FindInboxMessageIdAsync(
-        SiNetSQLDbContext db,
-        EmailMessageDetails details,
-        CancellationToken cancellationToken)
-    {
-        if (!string.IsNullOrWhiteSpace(details.InternetMessageId))
-        {
-            var unique = EmailMessageIdentity.GetMessageUniqueId(
-                details.InternetMessageId,
-                details.MessageId);
-            var byUnique = await db.EmailInboxMessages
-                .AsNoTracking()
-                .Where(m => m.MessageUniqueId == unique || m.InternetMessageId == details.InternetMessageId)
-                .OrderByDescending(m => m.Id)
-                .Select(m => (int?)m.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-            if (byUnique is > 0)
-            {
-                return byUnique;
-            }
-        }
-
-        var gmailKey = $"gmail:{details.MessageId}";
-        return await db.EmailInboxMessages
-            .AsNoTracking()
-            .Where(m => m.MessageUniqueId == details.MessageId || m.MessageUniqueId == gmailKey)
-            .OrderByDescending(m => m.Id)
-            .Select(m => (int?)m.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
-    private static async Task<bool> HasActiveProposalForInboxAsync(
-        SiNetSQLDbContext db,
-        int proposalDefinitionId,
-        int inboxMessageId,
-        CancellationToken cancellationToken) =>
-        await db.WorkflowInstances.AsNoTracking().AnyAsync(
-            w => w.WorkflowDefinitionId == proposalDefinitionId
-                 && w.TriggerType == WorkflowTriggerType.Email
-                 && w.TriggerEntityId == inboxMessageId
-                 && w.Status != WorkflowStatus.Completed
-                 && w.Status != WorkflowStatus.Cancelled,
-            cancellationToken);
 
     private static string TrimSubject(string subject) =>
         subject.Length <= 80 ? subject : subject[..77] + "...";
