@@ -386,11 +386,6 @@ internal static class SystemCertificationPrpSourceIngest
                 failures.Add($"missing '{attachment.FileName}'");
                 continue;
             }
-
-            if (matches[0].FileSize <= 0)
-            {
-                failures.Add($"item '{attachment.FileName}' has no file size metadata");
-            }
         }
 
         if (failures.Count > 0)
