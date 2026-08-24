@@ -6,6 +6,7 @@ using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 using SiNet.Infrastructure.Sql.Constants;
+using SiNet.Infrastructure.Sql.Services.Email.Acc;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -20,7 +21,9 @@ internal static class SystemCertificationPrpSourceIngest
     internal sealed record SqlAttachmentSnapshot(
         int Id,
         string FileName,
-        string? AccItemId);
+        string? AccItemId,
+        int AttachmentIndex,
+        bool IsExternalDownload);
 
     internal static async Task<SystemCertificationPrpCorridorSupport.CorridorInbox?> TryEnsureFullyIngestedAsync(
         IServiceProvider provider,
@@ -316,23 +319,62 @@ internal static class SystemCertificationPrpSourceIngest
 
         var sqlAttachments = await LoadSqlAttachmentsAsync(dbFactory, inboxMessageId, cancellationToken);
         var browser = provider.GetRequiredService<IAccFolderBrowserService>();
-        var browse = await browser.BrowseAsync(
+        var messageBrowse = await browser.BrowseAsync(
             row.InboxAccProjectId,
             row.InboxAccFolderId,
             cancellationToken);
-        if (browse is null)
+        if (messageBrowse is null)
         {
             evidence.Fail(
                 "cert.prp.source_ingest_acc_readback",
                 $"IAccFolderBrowserService.BrowseAsync returned null for inbox project "
-                + $"'{row.InboxAccProjectId}' folder '{row.InboxAccFolderId}'.");
+                + $"'{row.InboxAccProjectId}' message folder '{row.InboxAccFolderId}'.");
             return false;
         }
 
-        var items = browse.Entries.Where(e => e.Kind == AccFolderEntryKind.Item).ToList();
+        var messageItems = messageBrowse.Entries
+            .Where(e => e.Kind == AccFolderEntryKind.Item)
+            .ToList();
+        var attachmentsFolder = messageBrowse.Entries.FirstOrDefault(e =>
+            e.Kind == AccFolderEntryKind.Folder
+            && string.Equals(e.DisplayName, AccInboxLayout.AttachmentsFolderName, StringComparison.OrdinalIgnoreCase));
+
+        IReadOnlyList<AccFolderBrowseEntry> attachmentItems = [];
+        if (attachmentsFolder is not null)
+        {
+            var attachmentsBrowse = await browser.BrowseAsync(
+                row.InboxAccProjectId,
+                attachmentsFolder.Id,
+                cancellationToken);
+            if (attachmentsBrowse is null)
+            {
+                evidence.Fail(
+                    "cert.prp.source_ingest_acc_readback",
+                    $"IAccFolderBrowserService.BrowseAsync returned null for inbox project "
+                    + $"'{row.InboxAccProjectId}' attachments folder '{attachmentsFolder.Id}'.");
+                return false;
+            }
+
+            attachmentItems = attachmentsBrowse.Entries
+                .Where(e => e.Kind == AccFolderEntryKind.Item)
+                .ToList();
+        }
+
         var failures = new List<string>();
         foreach (var attachment in sqlAttachments)
         {
+            var role = AccInboxLayout.GetRole(
+                attachment.AttachmentIndex,
+                attachment.FileName,
+                attachment.IsExternalDownload);
+            var items = AccInboxLayout.UsesAttachmentsFolder(role) ? attachmentItems : messageItems;
+            if (AccInboxLayout.UsesAttachmentsFolder(role) && attachmentsFolder is null)
+            {
+                failures.Add(
+                    $"missing '{attachment.FileName}' — '{AccInboxLayout.AttachmentsFolderName}' folder absent under message folder");
+                continue;
+            }
+
             var matches = items.Where(i =>
                     string.Equals(i.DisplayName, attachment.FileName, StringComparison.OrdinalIgnoreCase)
                     || (!string.IsNullOrWhiteSpace(attachment.AccItemId)
@@ -401,6 +443,8 @@ internal static class SystemCertificationPrpSourceIngest
                 a.SavedFileName,
                 a.OriginalFileName,
                 a.AccItemId,
+                a.AttachmentIndex,
+                a.IsExternalDownload,
             })
             .ToListAsync(cancellationToken);
 
@@ -415,7 +459,12 @@ internal static class SystemCertificationPrpSourceIngest
                 continue;
             }
 
-            snapshots.Add(new SqlAttachmentSnapshot(row.Id, fileName, row.AccItemId));
+            snapshots.Add(new SqlAttachmentSnapshot(
+                row.Id,
+                fileName,
+                row.AccItemId,
+                row.AttachmentIndex,
+                row.IsExternalDownload));
         }
 
         return snapshots;

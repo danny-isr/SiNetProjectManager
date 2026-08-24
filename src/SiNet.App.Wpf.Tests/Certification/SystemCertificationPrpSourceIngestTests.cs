@@ -8,6 +8,7 @@ using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 using SiNet.Domain.ValueObjects;
+using SiNet.Infrastructure.Sql.Services.Email.Acc;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 using Xunit;
@@ -100,13 +101,13 @@ public sealed class SystemCertificationPrpSourceIngestTests
         var gmail = CreateGmailDetails();
         var matching = new[]
         {
-            new SystemCertificationPrpSourceIngest.SqlAttachmentSnapshot(1, AttachmentName, "item-1"),
+            new SystemCertificationPrpSourceIngest.SqlAttachmentSnapshot(1, AttachmentName, "item-1", 0, false),
         };
 
         Assert.True(SystemCertificationPrpSourceIngest.SqlAttachmentsMatchGmailIdentity(gmail, matching));
         Assert.False(SystemCertificationPrpSourceIngest.SqlAttachmentsMatchGmailIdentity(
             gmail,
-            [new SystemCertificationPrpSourceIngest.SqlAttachmentSnapshot(1, "other.pdf", "item-1")]));
+            [new SystemCertificationPrpSourceIngest.SqlAttachmentSnapshot(1, "other.pdf", "item-1", 0, false)]));
     }
 
     private static async Task<int> TryResolveAndMaybeStartAsync(Harness harness)
@@ -382,6 +383,8 @@ public sealed class SystemCertificationPrpSourceIngestTests
         string accFolderId,
         string attachmentName) : IAccFolderBrowserService
     {
+        private const string AttachmentsFolderId = "acc-attachments-folder-test";
+
         public bool ReturnEmptyItems { get; set; }
 
         public Task<AccFolderBrowseResult?> BrowseAsync(
@@ -390,25 +393,48 @@ public sealed class SystemCertificationPrpSourceIngestTests
             CancellationToken cancellationToken = default)
         {
             _ = projectId;
+            var requestedFolderId = folderId ?? accFolderId;
             if (ReturnEmptyItems)
             {
                 return Task.FromResult<AccFolderBrowseResult?>(
-                    new AccFolderBrowseResult(accProjectId, folderId ?? accFolderId, []));
+                    new AccFolderBrowseResult(accProjectId, requestedFolderId, []));
             }
 
-            return Task.FromResult<AccFolderBrowseResult?>(
-                new AccFolderBrowseResult(
-                    accProjectId,
-                    folderId ?? accFolderId,
-                    [
-                        new AccFolderBrowseEntry(
-                            "acc-item-1",
-                            attachmentName,
-                            AccFolderEntryKind.Item,
-                            FileSize: 100,
-                            LastModifiedTime: DateTime.UtcNow,
-                            CreateTime: DateTime.UtcNow),
-                    ]));
+            if (string.Equals(requestedFolderId, accFolderId, StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult<AccFolderBrowseResult?>(
+                    new AccFolderBrowseResult(
+                        accProjectId,
+                        accFolderId,
+                        [
+                            new AccFolderBrowseEntry(
+                                AttachmentsFolderId,
+                                AccInboxLayout.AttachmentsFolderName,
+                                AccFolderEntryKind.Folder,
+                                FileSize: 0,
+                                LastModifiedTime: null,
+                                CreateTime: null),
+                        ]));
+            }
+
+            if (string.Equals(requestedFolderId, AttachmentsFolderId, StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult<AccFolderBrowseResult?>(
+                    new AccFolderBrowseResult(
+                        accProjectId,
+                        AttachmentsFolderId,
+                        [
+                            new AccFolderBrowseEntry(
+                                "acc-item-1",
+                                attachmentName,
+                                AccFolderEntryKind.Item,
+                                FileSize: 100,
+                                LastModifiedTime: DateTime.UtcNow,
+                                CreateTime: DateTime.UtcNow),
+                        ]));
+            }
+
+            return Task.FromResult<AccFolderBrowseResult?>(null);
         }
     }
 
