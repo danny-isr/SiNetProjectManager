@@ -29,6 +29,7 @@ namespace SiNet.App.Wpf.Tests.Live;
 /// Its own category so <c>-Probe</c> can select it without selecting the write scenario.
 /// </para>
 /// </summary>
+[Collection(PilotSmokeTestCollection.Name)]
 [Trait("Category", ProbeCategory)]
 public sealed class P0PilotSmokeProbeTests(ITestOutputHelper output)
 {

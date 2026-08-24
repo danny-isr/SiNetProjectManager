@@ -35,6 +35,7 @@ namespace SiNet.App.Wpf.Tests.Live;
 /// only ever gains ids this run created or verified. See <c>docs/TEST_STRATEGY.md</c> ֲ§4W.
 /// </para>
 /// </summary>
+[Collection(PilotSmokeTestCollection.Name)]
 [Trait("Category", PilotSmokeFactAttribute.Category)]
 public sealed class P0PilotGmailAccLiveSmokeTests(ITestOutputHelper output)
 {

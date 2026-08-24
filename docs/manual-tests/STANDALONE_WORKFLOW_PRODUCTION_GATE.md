@@ -99,9 +99,9 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 **Gate rollup:** **Conditional** — automated Workflow suite Pass; C/D pilot-Blocked approved; A/B/E/F await operator soak.
 
-### P0 Live Smoke note (2026-08-17, commit `0ae3c90`)
+### P0 Live Smoke note (2026-08-24, commit `a9883af`)
 
-Interactive Tree A / Pilot gate live proof **Not Run** — Environment Gate Blocked (no confirmed isolated DEV Gmail; see [`STANDALONE_PILOT_SMOKE.md`](./STANDALONE_PILOT_SMOKE.md) §P0). Offline Release suite Pass (3449). Do not mark Tree A Pass until P0 steps 3–8 complete on approved replica.
+Automated L4W tier **Pass** on DEV — Pilot controls S1–S8a/S7b + Gmail/ACC G1–G2/A1–A7 ([`PILOT_CONTROLS.md`](../PILOT_CONTROLS.md) § Live evidence). **Interactive Tree A** is unblocked for operator soak on DEV; mark Tree A Pass/Fail only after Proposal runbook 2.0–2.8 with log tail from §0.1.
 
 ---
 

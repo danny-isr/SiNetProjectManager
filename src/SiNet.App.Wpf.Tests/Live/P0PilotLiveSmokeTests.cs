@@ -36,6 +36,7 @@ namespace SiNet.App.Wpf.Tests.Live;
 /// absent.
 /// </para>
 /// </summary>
+[Collection(PilotSmokeTestCollection.Name)]
 [Trait("Category", PilotSmokeFactAttribute.Category)]
 public sealed class P0PilotLiveSmokeTests
 {

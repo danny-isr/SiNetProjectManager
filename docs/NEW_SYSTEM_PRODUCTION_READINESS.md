@@ -310,7 +310,7 @@ Final decision:
 
 ## 10. Open decisions & next slices
 
-1. **Operator live smoke** (shell + Email ACC + optional Reports) — gate for pilot users.
+1. **Operator interactive smoke** (shell + Email ACC UI + optional Reports) — [`STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md) §Phase 2; automated L4W **Pass** on `a9883af`.
 2. **Workflow interactive soak** — [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./manual-tests/STANDALONE_WORKFLOW_PRODUCTION_GATE.md) (PRP→OPN→PLN→REV); flip §7.1 from Conditional to Pass/Fail.
 3. **G-Policy** — whether native `GmailSend` / Reply / Forward may appear in New System WPF.
 4. After smoke pass: **Email Composite Work Surface Contract** (docs only).

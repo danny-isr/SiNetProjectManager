@@ -1,6 +1,6 @@
 # Standalone Pilot — Operator Smoke Checklist
 
-> **Status:** Not Run (interactive) — P0 Live Smoke 2026-08-17 Blocked at Environment Gate; **2026-08-24 unblocked, steps 3–8 moved to the automated `Category=PilotSmoke` tier**  
+> **Status:** Automated L4W **Pass** (2026-08-24, commit `a9883af`) — **Phase 2: operator interactive smoke Not Run**  
 > **Host:** `SiNet.App.Wpf.exe` + AccService Remote (MultiStart)  
 > **Strategy:** [`docs/TEST_STRATEGY.md`](../TEST_STRATEGY.md)  
 > **Envelope:** [`docs/NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md)  
@@ -19,13 +19,23 @@ Run offline automation first (CI / local). Then optional Live (`SINET_LIVE_SMOKE
 
 | Field | Value |
 | --- | --- |
-| Date | 2026-08-17 |
-| Operator | Agent (P0 Live Smoke attempt) + `azuread\dannyisrael` |
-| Environment | Machine `danny` — **Environment Gate Blocked** (see §P0 below). No confirmed isolated DEV mailbox / replica session. |
-| Branch / commit | `development` @ `0ae3c906f8b591003d24869e8ee99ec6d37efe19` |
+| Date | 2026-08-24 |
+| Operator | Pending — Phase 2 interactive (automated tier Pass on DEV) |
+| Environment | DEV machine `danny` — `danny\SQLEXPRESS` / `SiData`, Gmail `shirly@si-eng.co.il`, ACC Place `SI` |
+| Branch / commit | `development` @ `a9883af` |
 | Build config | Release |
 | Offline tests | **Pass** — `SiNet.App.Wpf.Tests` Release, `Category!=LiveSmoke`: **3449** passed, 0 failed |
-| Live tests | **Not Run** — stopped before `SINET_LIVE_SMOKE=1` (Gmail/ACC write risk per [`ENVIRONMENTS.md`](../ENVIRONMENTS.md) §5–6) |
+| Live tests | **Pass** — `Category=PilotSmoke` on DEV (evidence `154135` / `154602`); `Category=LiveSmoke` when gates set |
+
+### Phase 2 — operator interactive smoke (current)
+
+Automated P0 controls and Gmail/ACC write paths are **Pass** — see [`PILOT_CONTROLS.md`](../PILOT_CONTROLS.md) § Live evidence.
+
+**Your turn:** walk §1–§6 below in Release (or DEBUG for `[WF-STEP]`), then update §6 final decision and [`NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md) §9 **Interactive smoke**.
+
+**Prerequisites:** MultiStart AccService + `SiNet.App.Wpf`; seed baseline complete; workflow groups populated; unassigned inbox email available.
+
+**After interactive Pass:** proceed to [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./STANDALONE_WORKFLOW_PRODUCTION_GATE.md) Tree A operator soak (Proposal happy path 2.0–2.8).
 
 ### P0 Live Smoke (Pilot controls) — 2026-08-17
 
