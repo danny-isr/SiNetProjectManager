@@ -412,7 +412,7 @@ internal static class SystemCertificationPrpFileMaterialProof
             return false;
         }
 
-        if (!string.Equals(browse.ProjectId, expected.AccProjectId, StringComparison.OrdinalIgnoreCase))
+        if (!SystemCertificationAccIdentity.ProjectIdsMatch(browse.ProjectId, expected.AccProjectId))
         {
             evidence.Fail(
                 "cert.prp.acc.readback",
