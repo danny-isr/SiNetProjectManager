@@ -33,6 +33,7 @@ internal sealed class SystemCertificationPrpScenario : ISystemCertificationScena
             ("cert.prp.gmail_required", "Gmail layer valid for CreatePriceQuote start"),
             ("cert.prp.preconditions", "Proposal definition and seed project prerequisites"),
             ("cert.prp.integrity_baseline", "Integrity baseline before first write"),
+            ("cert.prp.source_email", "Explicit PRP source Gmail message id from environment"),
             ("cert.prp.inbox", "Resolve inbox row or Gmail source for CreatePriceQuote"),
             ("cert.prp.gmail_identity", "Gmail silent restore matches declared mailbox"),
             ("cert.prp.create_price_quote", "Start PRP through IEmailSuggestedActionExecutionService"),
@@ -101,7 +102,7 @@ internal sealed class SystemCertificationPrpScenario : ISystemCertificationScena
         evidence.Pass(
             "cert.prp.preflight_evidence",
             $"Bound CERTIFIED preflight evidence at '{preflightPath}' matches current target, layers, "
-            + $"commit {SystemCertificationGitMetadata.TryResolveHeadCommitSha() ?? "<unknown>"}, "
+            + $"commit {SystemCertificationGitMetadata.ResolveHeadCommitSha().Sha ?? "<unknown>"}, "
             + $"and freshness <= {SystemCertificationPreflightBinding.MaxAge.TotalHours:0}h.");
 
         if (!host.Context.Gmail.IsEnabled || host.Context.Gmail.Violation is not null)

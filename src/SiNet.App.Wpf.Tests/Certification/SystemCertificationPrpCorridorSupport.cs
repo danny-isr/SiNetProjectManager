@@ -114,101 +114,20 @@ internal static class SystemCertificationPrpCorridorSupport
             planningJobTypeId);
     }
 
-    internal static async Task<CorridorInbox?> TryResolveInboxForCreatePriceQuoteAsync(
+    internal static Task<CorridorInbox?> TryResolveInboxForCreatePriceQuoteAsync(
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         int proposalDefinitionId,
         SystemCertificationEnvironment.GmailLayer gmail,
         SystemCertificationEvidence evidence,
-        CancellationToken cancellationToken = default)
-    {
-        if (!gmail.IsEnabled || gmail.Violation is not null)
-        {
-            evidence.Fail(
-                "cert.prp.inbox",
-                "CreatePriceQuote requires a valid Gmail layer; manual IWorkflowCommandService start is forbidden.");
-            return null;
-        }
-
-        var auth = provider.GetRequiredService<IConnectorAuthService>();
-        var restored = await auth.TryRestoreSessionAsync(cancellationToken);
-        if (!restored)
-        {
-            evidence.Fail(
-                "cert.prp.inbox",
-                "Gmail token could not be restored silently — CreatePriceQuote cannot run.");
-            return null;
-        }
-
-        await auth.RefreshAccountProfileAsync(cancellationToken);
-        var connected = auth.ConnectedAccountEmail;
-        if (!string.Equals(connected?.Trim(), gmail.ExpectedAccount, StringComparison.OrdinalIgnoreCase))
-        {
-            evidence.Fail(
-                "cert.prp.inbox",
-                $"Restored Gmail session is '{connected ?? "<unknown>"}' but expected '{gmail.ExpectedAccount}'.");
-            return null;
-        }
-
-        evidence.Pass(
-            "cert.prp.gmail_identity",
-            $"Silent restore authenticated as '{connected}'.");
-
-        var gateway = provider.GetRequiredService<IEmailGateway>();
-        var page = await gateway.GetMailboxPageAsync(
-            new EmailMailboxQuery
-            {
-                MailboxScope = EmailMailboxScope.AllMail,
-                AttachmentsOnly = true,
-                PageSize = 50,
-            },
-            pageToken: null,
+        CancellationToken cancellationToken = default) =>
+        SystemCertificationPrpSourceEmail.TryResolveExplicitSourceAsync(
+            provider,
+            dbFactory,
+            proposalDefinitionId,
+            gmail,
+            evidence,
             cancellationToken);
-
-        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-        foreach (var summary in page.Items.OrderByDescending(m => m.ReceivedAt))
-        {
-            var inboxId = await FindInboxMessageIdAsync(db, summary, cancellationToken);
-            if (inboxId is int existing
-                && await HasActiveProposalForInboxAsync(db, proposalDefinitionId, existing, cancellationToken))
-            {
-                continue;
-            }
-
-            if (inboxId is int ready)
-            {
-                var detail = $"inbox id={ready} gmail={summary.MessageId} subject='{TrimSubject(summary.Subject)}'";
-                evidence.Pass("cert.prp.inbox", detail);
-                return new CorridorInbox(ready, null, detail);
-            }
-
-            if (string.IsNullOrWhiteSpace(summary.InternetMessageId))
-            {
-                continue;
-            }
-
-            var source = new EmailGmailSourceIdentity(
-                summary.MessageId,
-                summary.InternetMessageId,
-                References: null,
-                InReplyTo: null,
-                summary.Subject,
-                summary.From.Value,
-                summary.ReceivedAt.UtcDateTime,
-                summary.ThreadId);
-
-            var detailMaterialize =
-                $"will materialize on CreatePriceQuote gmail={summary.MessageId} "
-                + $"subject='{TrimSubject(summary.Subject)}'";
-            evidence.Pass("cert.prp.inbox", detailMaterialize);
-            return new CorridorInbox(null, source, detailMaterialize);
-        }
-
-        evidence.Fail(
-            "cert.prp.inbox",
-            "No AllMail message with attachments and without an active Proposal instance was found.");
-        return null;
-    }
 
     internal static async Task<int> ExecuteCreatePriceQuoteAsync(
         IServiceProvider provider,
@@ -524,50 +443,6 @@ internal static class SystemCertificationPrpCorridorSupport
         return allowed.Count == 1 ? allowed[0] : null;
     }
 
-    private static async Task<int?> FindInboxMessageIdAsync(
-        SiNetSQLDbContext db,
-        EmailSummary summary,
-        CancellationToken cancellationToken)
-    {
-        if (!string.IsNullOrWhiteSpace(summary.InternetMessageId))
-        {
-            var unique = EmailMessageIdentity.GetMessageUniqueId(
-                summary.InternetMessageId,
-                summary.MessageId);
-            var byUnique = await db.EmailInboxMessages
-                .AsNoTracking()
-                .Where(m => m.MessageUniqueId == unique || m.InternetMessageId == summary.InternetMessageId)
-                .OrderByDescending(m => m.Id)
-                .Select(m => (int?)m.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-            if (byUnique is > 0)
-            {
-                return byUnique;
-            }
-        }
-
-        var gmailKey = $"gmail:{summary.MessageId}";
-        return await db.EmailInboxMessages
-            .AsNoTracking()
-            .Where(m => m.MessageUniqueId == summary.MessageId || m.MessageUniqueId == gmailKey)
-            .OrderByDescending(m => m.Id)
-            .Select(m => (int?)m.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
-    private static async Task<bool> HasActiveProposalForInboxAsync(
-        SiNetSQLDbContext db,
-        int proposalDefinitionId,
-        int inboxMessageId,
-        CancellationToken cancellationToken) =>
-        await db.WorkflowInstances.AsNoTracking().AnyAsync(
-            w => w.WorkflowDefinitionId == proposalDefinitionId
-                 && w.TriggerType == WorkflowTriggerType.Email
-                 && w.TriggerEntityId == inboxMessageId
-                 && w.Status != WorkflowStatus.Completed
-                 && w.Status != WorkflowStatus.Cancelled,
-            cancellationToken);
-
     private static async Task<int> FindActiveProposalInstanceForInboxAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         int proposalDefinitionId,
@@ -590,9 +465,6 @@ internal static class SystemCertificationPrpCorridorSupport
             .Select(w => w.Id)
             .FirstOrDefaultAsync(cancellationToken);
     }
-
-    private static string TrimSubject(string subject) =>
-        subject.Length <= 80 ? subject : subject[..77] + "...";
 
     private static string Trim(string? text)
     {

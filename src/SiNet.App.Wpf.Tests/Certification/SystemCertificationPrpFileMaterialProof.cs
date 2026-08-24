@@ -20,8 +20,19 @@ namespace SiNet.App.Wpf.Tests.Certification;
 /// </summary>
 internal static class SystemCertificationPrpFileMaterialProof
 {
-    internal sealed record ExpectedMovedFile(
-        string FileName,
+    internal sealed record ExpectedAttachment(
+        int InboxAttachmentId,
+        string FileName);
+
+    internal sealed record PreMoveExpectedState(
+        string AccProjectId,
+        string AccTargetFolderId,
+        int CertProjectId,
+        IReadOnlyList<ExpectedAttachment> Attachments,
+        IReadOnlyDictionary<string, AccFolderBrowseEntry> PreWriteItemsByFileName);
+
+    internal sealed record PostMoveAccIds(
+        int InboxAttachmentId,
         string? AccItemId,
         string? AccVersionId);
 
@@ -78,6 +89,19 @@ internal static class SystemCertificationPrpFileMaterialProof
             return false;
         }
 
+        var preMoveExpected = await CapturePreMoveExpectedStateAsync(
+            provider,
+            dbFactory,
+            accProjectId,
+            certProjectId,
+            inboxId,
+            evidence,
+            cancellationToken);
+        if (preMoveExpected is null)
+        {
+            return false;
+        }
+
         var move = provider.GetRequiredService<IEmailMoveToProjectService>();
         if (!move.IsAvailable)
         {
@@ -107,23 +131,18 @@ internal static class SystemCertificationPrpFileMaterialProof
             $"Production move via IEmailMoveToProjectService → NativeEmailMoveToProjectExecutor: "
             + $"moved={writeResult.MovedCount} alreadySameSource={writeResult.AlreadySameSourceCount} "
             + $"total={writeResult.TotalCount} failed={writeResult.FailedCount}. "
-            + "Succeeded/AllFilesTransferred are recorded but are not treated as external proof.");
+            + $"Immutable pre-move expected count={preMoveExpected.Attachments.Count} "
+            + $"for project {preMoveExpected.CertProjectId} / ACC folder '{preMoveExpected.AccTargetFolderId}'.");
 
-        var expectedFiles = await LoadExpectedMovedFilesAsync(dbFactory, inboxId, cancellationToken);
-        if (expectedFiles.Count == 0)
-        {
-            evidence.Fail(
-                "cert.prp.acc.readback",
-                "No tagged inbox attachments with filenames remain after the ACC write.");
-            return false;
-        }
+        var postMoveAccIds = await LoadPostMoveAccIdsAsync(
+            dbFactory,
+            preMoveExpected.Attachments,
+            cancellationToken);
 
         if (!await VerifyAccReadBackAsync(
                 provider,
-                dbFactory,
-                accProjectId,
-                certProjectId,
-                expectedFiles,
+                preMoveExpected,
+                postMoveAccIds,
                 evidence,
                 cancellationToken))
         {
@@ -277,76 +296,119 @@ internal static class SystemCertificationPrpFileMaterialProof
         return true;
     }
 
-    private static async Task<List<ExpectedMovedFile>> LoadExpectedMovedFilesAsync(
-        IDbContextFactory<SiNetSQLDbContext> dbFactory,
-        int inboxMessageId,
-        CancellationToken cancellationToken)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-        return await db.EmailInboxAttachments.AsNoTracking()
-            .Where(a => a.MessageId == inboxMessageId && a.ProjectFileId != null)
-            .Select(a => new ExpectedMovedFile(
-                !string.IsNullOrWhiteSpace(a.SavedFileName) ? a.SavedFileName! : a.OriginalFileName!,
-                a.AccItemId,
-                a.AccVersionId))
-            .Where(a => !string.IsNullOrWhiteSpace(a.FileName))
-            .ToListAsync(cancellationToken);
-    }
-
-    private static async Task<bool> VerifyAccReadBackAsync(
+    private static async Task<PreMoveExpectedState?> CapturePreMoveExpectedStateAsync(
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         string accProjectId,
         int certProjectId,
-        IReadOnlyList<ExpectedMovedFile> expectedFiles,
+        int inboxMessageId,
         SystemCertificationEvidence evidence,
         CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         var mapping = await db.ProjectAccMappings.AsNoTracking()
-            .FirstAsync(m => m.ProjectId == certProjectId, cancellationToken);
+            .FirstOrDefaultAsync(m => m.ProjectId == certProjectId, cancellationToken);
 
-        if (!string.Equals(mapping.AccProjectId, accProjectId, StringComparison.OrdinalIgnoreCase))
+        if (mapping is null || string.IsNullOrWhiteSpace(mapping.AccTargetFolderId))
         {
             evidence.Fail(
-                "cert.prp.acc.readback",
-                $"ACC mapping project id '{mapping.AccProjectId}' != write target '{accProjectId}'.");
-            return false;
+                "cert.prp.acc.write",
+                $"Project {certProjectId} mapping has no AccTargetFolderId before MoveAsync.");
+            return null;
         }
 
-        var targetFolderId = mapping.AccTargetFolderId;
-        if (string.IsNullOrWhiteSpace(targetFolderId))
+        var attachments = await db.EmailInboxAttachments.AsNoTracking()
+            .Where(a => a.MessageId == inboxMessageId && a.ProjectFileId != null)
+            .Select(a => new ExpectedAttachment(
+                a.Id,
+                !string.IsNullOrWhiteSpace(a.SavedFileName) ? a.SavedFileName! : a.OriginalFileName!))
+            .Where(a => !string.IsNullOrWhiteSpace(a.FileName))
+            .ToListAsync(cancellationToken);
+
+        if (attachments.Count == 0)
         {
             evidence.Fail(
-                "cert.prp.acc.readback",
-                $"Project {certProjectId} mapping has no AccTargetFolderId for independent read-back.");
-            return false;
+                "cert.prp.acc.write",
+                "No tagged inbox attachments with filenames exist before MoveAsync — cannot define expected ACC set.");
+            return null;
         }
 
         var browser = provider.GetRequiredService<IAccFolderBrowserService>();
-        var browse = await browser.BrowseAsync(accProjectId, targetFolderId, cancellationToken);
+        var browse = await browser.BrowseAsync(accProjectId, mapping.AccTargetFolderId, cancellationToken);
+        if (browse is null)
+        {
+            evidence.Fail(
+                "cert.prp.acc.write",
+                $"Pre-write IAccFolderBrowserService.BrowseAsync returned null for project '{accProjectId}' "
+                + $"folder '{mapping.AccTargetFolderId}'.");
+            return null;
+        }
+
+        var preWriteItems = browse.Entries
+            .Where(e => e.Kind == AccFolderEntryKind.Item)
+            .GroupBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        evidence.Pass(
+            "cert.prp.acc.write",
+            $"Captured immutable pre-move expected set: {attachments.Count} attachment id(s), "
+            + $"{preWriteItems.Count} pre-existing ACC item(s) in folder '{mapping.AccTargetFolderId}'.");
+
+        return new PreMoveExpectedState(
+            accProjectId,
+            mapping.AccTargetFolderId,
+            certProjectId,
+            attachments,
+            preWriteItems);
+    }
+
+    private static async Task<IReadOnlyList<PostMoveAccIds>> LoadPostMoveAccIdsAsync(
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        IReadOnlyList<ExpectedAttachment> expectedAttachments,
+        CancellationToken cancellationToken)
+    {
+        var ids = expectedAttachments.Select(a => a.InboxAttachmentId).ToList();
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        return await db.EmailInboxAttachments.AsNoTracking()
+            .Where(a => ids.Contains(a.Id))
+            .Select(a => new PostMoveAccIds(a.Id, a.AccItemId, a.AccVersionId))
+            .ToListAsync(cancellationToken);
+    }
+
+    private static async Task<bool> VerifyAccReadBackAsync(
+        IServiceProvider provider,
+        PreMoveExpectedState expected,
+        IReadOnlyList<PostMoveAccIds> postMoveAccIds,
+        SystemCertificationEvidence evidence,
+        CancellationToken cancellationToken)
+    {
+        var browser = provider.GetRequiredService<IAccFolderBrowserService>();
+        var browse = await browser.BrowseAsync(
+            expected.AccProjectId,
+            expected.AccTargetFolderId,
+            cancellationToken);
         if (browse is null)
         {
             evidence.Fail(
                 "cert.prp.acc.readback",
-                $"IAccFolderBrowserService.BrowseAsync returned null for project '{accProjectId}' "
-                + $"folder '{targetFolderId}'.");
+                $"IAccFolderBrowserService.BrowseAsync returned null for project '{expected.AccProjectId}' "
+                + $"folder '{expected.AccTargetFolderId}'.");
             return false;
         }
 
-        if (!string.Equals(browse.ProjectId, accProjectId, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(browse.ProjectId, expected.AccProjectId, StringComparison.OrdinalIgnoreCase))
         {
             evidence.Fail(
                 "cert.prp.acc.readback",
-                $"ACC browse project '{browse.ProjectId}' != expected '{accProjectId}'.");
+                $"ACC browse project '{browse.ProjectId}' != expected '{expected.AccProjectId}'.");
             return false;
         }
 
-        if (!string.Equals(browse.FolderId, targetFolderId, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(browse.FolderId, expected.AccTargetFolderId, StringComparison.OrdinalIgnoreCase))
         {
             evidence.Fail(
                 "cert.prp.acc.readback",
-                $"ACC browse folder '{browse.FolderId}' != expected target '{targetFolderId}'.");
+                $"ACC browse folder '{browse.FolderId}' != expected target '{expected.AccTargetFolderId}'.");
             return false;
         }
 
@@ -354,56 +416,92 @@ internal static class SystemCertificationPrpFileMaterialProof
             .Where(e => e.Kind == AccFolderEntryKind.Item)
             .ToList();
 
+        var postMoveByAttachmentId = postMoveAccIds.ToDictionary(a => a.InboxAttachmentId);
         var failures = new List<string>();
-        foreach (var expected in expectedFiles)
+        foreach (var attachment in expected.Attachments)
         {
             var matches = items.Where(i =>
-                    string.Equals(i.DisplayName, expected.FileName, StringComparison.OrdinalIgnoreCase)
-                    || (!string.IsNullOrWhiteSpace(expected.AccItemId)
-                        && string.Equals(i.Id, expected.AccItemId, StringComparison.OrdinalIgnoreCase)))
+                    string.Equals(i.DisplayName, attachment.FileName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (matches.Count == 0)
             {
-                failures.Add($"missing '{expected.FileName}'");
+                failures.Add($"missing '{attachment.FileName}' (attachment id={attachment.InboxAttachmentId})");
                 continue;
             }
 
             var match = matches[0];
-            if (!string.IsNullOrWhiteSpace(expected.AccItemId)
-                && !string.Equals(match.Id, expected.AccItemId, StringComparison.OrdinalIgnoreCase))
-            {
-                failures.Add(
-                    $"filename '{expected.FileName}' found as item '{match.Id}', expected item "
-                    + $"'{expected.AccItemId}'");
-            }
-
             if (match.FileSize <= 0)
             {
                 failures.Add($"item '{match.DisplayName}' has no file size metadata");
             }
+
+            if (expected.PreWriteItemsByFileName.TryGetValue(attachment.FileName, out var preWrite))
+            {
+                if (string.Equals(match.Id, preWrite.Id, StringComparison.OrdinalIgnoreCase)
+                    && !ItemLooksUpdated(preWrite, match))
+                {
+                    failures.Add(
+                        $"item '{attachment.FileName}' unchanged since pre-write snapshot "
+                        + $"(id='{match.Id}') — stale file would cause false PASS");
+                }
+            }
+
+            if (postMoveByAttachmentId.TryGetValue(attachment.InboxAttachmentId, out var written)
+                && !string.IsNullOrWhiteSpace(written.AccItemId)
+                && !string.Equals(match.Id, written.AccItemId, StringComparison.OrdinalIgnoreCase))
+            {
+                failures.Add(
+                    $"filename '{attachment.FileName}' browse item '{match.Id}' != post-write AccItemId "
+                    + $"'{written.AccItemId}'");
+            }
         }
 
-        if (items.Count < expectedFiles.Count)
+        if (items.Count < expected.Attachments.Count)
         {
             failures.Add(
-                $"folder item count {items.Count} < expected moved file count {expectedFiles.Count}");
+                $"folder item count {items.Count} < immutable pre-move expected count {expected.Attachments.Count}");
         }
 
         if (failures.Count > 0)
         {
             evidence.Fail(
                 "cert.prp.acc.readback",
-                "Independent IAccFolderBrowserService read-back failed: "
+                "Independent IAccFolderBrowserService read-back failed against pre-move expected set: "
                 + string.Join("; ", failures));
             return false;
         }
 
         evidence.Pass(
             "cert.prp.acc.readback",
-            $"Independent IAccFolderBrowserService read-back matched project '{accProjectId}', "
-            + $"folder '{targetFolderId}', {expectedFiles.Count} expected filename(s), item ids and sizes.");
+            $"Independent IAccFolderBrowserService read-back matched immutable pre-move expected set "
+            + $"({expected.Attachments.Count} attachment id(s)/filename(s)) in project '{expected.AccProjectId}', "
+            + $"folder '{expected.AccTargetFolderId}', with new-or-updated item proof.");
         return true;
+    }
+
+    private static bool ItemLooksUpdated(AccFolderBrowseEntry before, AccFolderBrowseEntry after)
+    {
+        if (!string.Equals(before.Id, after.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (after.LastModifiedTime is DateTime afterModified
+            && before.LastModifiedTime is DateTime beforeModified
+            && afterModified > beforeModified)
+        {
+            return true;
+        }
+
+        if (after.CreateTime is DateTime afterCreated
+            && before.CreateTime is DateTime beforeCreated
+            && afterCreated > beforeCreated)
+        {
+            return true;
+        }
+
+        return after.FileSize != before.FileSize;
     }
 
     private static Task<bool> VerifyGmailFilingReadBackAsync(

@@ -33,13 +33,17 @@ public sealed class SystemCertificationPreflightEvidenceTests
     [Fact]
     public void TryValidate_accepts_bound_certified_json_for_current_runtime()
     {
-        var commit = "abc123def456";
+        if (!TryGetActualGitHead(out var head))
+        {
+            return;
+        }
+
         var previousEvidence = Environment.GetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv);
         var previousCommit = Environment.GetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv);
-        var file = WriteBindingJson(commit, DateTimeOffset.Now);
+        var file = WriteBindingJson(head, DateTimeOffset.Now);
 
         Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, file);
-        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, commit);
+        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, null);
 
         try
         {
@@ -63,12 +67,20 @@ public sealed class SystemCertificationPreflightEvidenceTests
     [Fact]
     public void TryValidate_fails_when_commit_sha_differs()
     {
-        var file = WriteBindingJson("old-commit", DateTimeOffset.Now);
+        if (!TryGetActualGitHead(out var head))
+        {
+            return;
+        }
+
+        var mismatchedSha = head[0] == 'a'
+            ? "b" + head[1..]
+            : "a" + head[1..];
+        var file = WriteBindingJson(mismatchedSha, DateTimeOffset.Now);
         var previousEvidence = Environment.GetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv);
         var previousCommit = Environment.GetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv);
 
         Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, file);
-        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, "new-commit");
+        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, null);
 
         try
         {
@@ -97,13 +109,19 @@ public sealed class SystemCertificationPreflightEvidenceTests
     [Fact]
     public void TryValidate_fails_when_preflight_is_stale()
     {
-        var commit = "abc123def456";
-        var file = WriteBindingJson(commit, DateTimeOffset.Now - SystemCertificationPreflightBinding.MaxAge - TimeSpan.FromMinutes(5));
+        if (!TryGetActualGitHead(out var head))
+        {
+            return;
+        }
+
+        var file = WriteBindingJson(
+            head,
+            DateTimeOffset.Now - SystemCertificationPreflightBinding.MaxAge - TimeSpan.FromMinutes(5));
         var previousEvidence = Environment.GetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv);
         var previousCommit = Environment.GetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv);
 
         Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, file);
-        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, commit);
+        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, null);
 
         try
         {
@@ -121,6 +139,102 @@ public sealed class SystemCertificationPreflightEvidenceTests
             Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, previousEvidence);
             Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, previousCommit);
             File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void TryValidate_fails_when_preflight_started_in_future()
+    {
+        if (!TryGetActualGitHead(out var head))
+        {
+            return;
+        }
+
+        var file = WriteBindingJson(
+            head,
+            DateTimeOffset.Now + SystemCertificationPreflightBinding.MaxFutureSkew + TimeSpan.FromMinutes(10));
+        var previousEvidence = Environment.GetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv);
+        var previousCommit = Environment.GetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv);
+
+        Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, file);
+        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, null);
+
+        try
+        {
+            var violation = SystemCertificationPreflightEvidence.TryValidate(
+                CreateTarget(),
+                CreateGmail(),
+                CreateAcc(),
+                out _);
+
+            Assert.NotNull(violation);
+            Assert.Contains("future", violation, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, previousEvidence);
+            Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, previousCommit);
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void TryValidate_fails_when_env_commit_sha_differs_from_git_head()
+    {
+        if (!TryGetActualGitHead(out var head))
+        {
+            return;
+        }
+
+        var envSha = head[0] == 'a'
+            ? "b" + head[1..]
+            : "a" + head[1..];
+        var file = WriteBindingJson(head, DateTimeOffset.Now);
+        var previousEvidence = Environment.GetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv);
+        var previousCommit = Environment.GetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv);
+
+        Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, file);
+        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, envSha);
+
+        try
+        {
+            var violation = SystemCertificationPreflightEvidence.TryValidate(
+                CreateTarget(),
+                CreateGmail(),
+                CreateAcc(),
+                out _);
+
+            Assert.NotNull(violation);
+            Assert.Contains("does not match git HEAD", violation, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, previousEvidence);
+            Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, previousCommit);
+            File.Delete(file);
+        }
+    }
+
+    private static bool TryGetActualGitHead(out string head)
+    {
+        head = string.Empty;
+        var previousCommit = Environment.GetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv);
+        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, null);
+
+        try
+        {
+            var resolution = SystemCertificationGitMetadata.ResolveHeadCommitSha();
+            if (resolution.Violation is not null || resolution.Sha is null)
+            {
+                return false;
+            }
+
+            head = resolution.Sha;
+            return true;
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, previousCommit);
         }
     }
 

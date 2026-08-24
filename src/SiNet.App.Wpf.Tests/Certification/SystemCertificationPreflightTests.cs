@@ -62,7 +62,7 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         evidence.Fact(SystemCertificationPreflightBinding.FactOperatorUserId, target.OperatorUserId.ToString());
         evidence.Fact(
             SystemCertificationPreflightBinding.FactCommitSha,
-            SystemCertificationGitMetadata.TryResolveHeadCommitSha() ?? "<unknown>");
+            SystemCertificationGitMetadata.ResolveHeadCommitSha().Sha ?? "<unknown>");
 
         if (target.Violation is not null)
         {

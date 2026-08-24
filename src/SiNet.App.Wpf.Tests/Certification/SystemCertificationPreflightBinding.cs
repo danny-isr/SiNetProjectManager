@@ -32,6 +32,9 @@ internal sealed record SystemCertificationPreflightBinding(
     /// <summary>Maximum age of a preflight report that PRP live may trust.</summary>
     public static readonly TimeSpan MaxAge = TimeSpan.FromHours(8);
 
+    /// <summary>Maximum clock skew allowed for a future-dated preflight StartedAt.</summary>
+    public static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(5);
+
     public static bool TryParse(JsonDocument document, out SystemCertificationPreflightBinding? binding, out string? error)
     {
         binding = null;
@@ -107,6 +110,12 @@ internal sealed record SystemCertificationPreflightBinding(
         string? currentCommitSha)
     {
         ArgumentNullException.ThrowIfNull(target);
+
+        if (StartedAt > DateTimeOffset.Now + MaxFutureSkew)
+        {
+            return $"Preflight evidence StartedAt {StartedAt:O} is in the future "
+                   + $"(>{MaxFutureSkew.TotalMinutes:0} minute skew allowed).";
+        }
 
         if (DateTimeOffset.Now - StartedAt > MaxAge)
         {

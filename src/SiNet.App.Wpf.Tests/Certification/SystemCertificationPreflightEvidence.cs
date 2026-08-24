@@ -45,11 +45,17 @@ internal static class SystemCertificationPreflightEvidence
                 return parseError;
             }
 
+            var commitResolution = SystemCertificationGitMetadata.ResolveHeadCommitSha();
+            if (commitResolution.Violation is not null)
+            {
+                return commitResolution.Violation;
+            }
+
             var runtimeViolation = binding!.ValidateAgainstCurrentRuntime(
                 target,
                 gmail,
                 acc,
-                SystemCertificationGitMetadata.TryResolveHeadCommitSha());
+                commitResolution.Sha);
 
             return runtimeViolation;
         }

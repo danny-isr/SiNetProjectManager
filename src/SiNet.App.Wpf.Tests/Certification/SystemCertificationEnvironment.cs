@@ -51,6 +51,16 @@ internal static class SystemCertificationEnvironment
     /// <summary>Explicit opt-in for PRP live writes after preflight PASS.</summary>
     public const string PrpLiveEnabledEnv = "SINET_SYSTEM_CERT_PRP_LIVE";
 
+    /// <summary>
+    /// Required Gmail API message id for PRP CreatePriceQuote. No mailbox scanning fallback.
+    /// </summary>
+    public const string PrpSourceGmailMessageIdEnv = "SINET_SYSTEM_CERT_PRP_SOURCE_GMAIL_MESSAGE_ID";
+
+    /// <summary>
+    /// Optional RFC822 Message-Id for the PRP source email; when set it must match the loaded message.
+    /// </summary>
+    public const string PrpSourceInternetMessageIdEnv = "SINET_SYSTEM_CERT_PRP_SOURCE_INTERNET_MESSAGE_ID";
+
     /// <summary>The only Place title the ACC layer may target — see <c>docs/ENVIRONMENTS.md</c> §5.1.</summary>
     public const string RequiredAccPlaceTitle = "SI";
 
