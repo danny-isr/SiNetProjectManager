@@ -2,12 +2,17 @@ using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Tasks;
+using SiNet.Infrastructure.AccBootstrap;
+using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
 using SiNet.Infrastructure.Sql;
+using SiNet.Infrastructure.Sql.AutodeskLocal;
+using SiNet.App.Wpf.Tests.Live;
 using SiNetSQL.Data;
 
 namespace SiNet.App.Wpf.Tests.Certification;
@@ -51,7 +56,8 @@ internal static class SystemCertificationHost
         SystemCertificationEnvironment.Target Target,
         int OperatorUserId,
         SystemCertificationEnvironment.GmailLayer Gmail,
-        SystemCertificationEnvironment.AccLayer Acc);
+        SystemCertificationEnvironment.AccLayer Acc,
+        PilotSmokeAccGuard? AccGuard);
 
     /// <summary>
     /// Read-only graph: SQL and settings only. Used by preflight — no Gmail, ACC, or workflow writes.
@@ -90,6 +96,26 @@ internal static class SystemCertificationHost
             return new WriteAuthorizationResult(null, "target resolution did not produce an authorised connection.");
         }
 
+        var gmail = SystemCertificationEnvironment.TryResolveGmailLayer();
+        if (SystemCertificationEnvironment.IsLayerRequested(SystemCertificationEnvironment.GmailEnabledEnv)
+            && gmail.Violation is not null)
+        {
+            return new WriteAuthorizationResult(
+                null,
+                $"Gmail layer requested ({SystemCertificationEnvironment.GmailEnabledEnv}=1) but invalid: "
+                + gmail.Violation);
+        }
+
+        var acc = SystemCertificationEnvironment.TryResolveAccLayer(gmail);
+        if (SystemCertificationEnvironment.IsLayerRequested(SystemCertificationEnvironment.AccEnabledEnv)
+            && acc.Violation is not null)
+        {
+            return new WriteAuthorizationResult(
+                null,
+                $"ACC layer requested ({SystemCertificationEnvironment.AccEnabledEnv}=1) but invalid: "
+                + acc.Violation);
+        }
+
         await using var readProvider = BuildReadOnly(target.ConnectionString);
         var dbFactory = readProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
         var marker = await SystemCertificationDatabaseMarker.VerifyAsync(dbFactory, cancellationToken);
@@ -98,10 +124,9 @@ internal static class SystemCertificationHost
             return new WriteAuthorizationResult(null, marker.Violation);
         }
 
-        var gmail = SystemCertificationEnvironment.TryResolveGmailLayer();
-        var acc = SystemCertificationEnvironment.TryResolveAccLayer(gmail);
-        var context = new SystemCertificationRunContext(target, target.OperatorUserId, gmail, acc);
-        var provider = BuildWriteProvider(target, context);
+        var context = new SystemCertificationRunContext(target, target.OperatorUserId, gmail, acc, null);
+        var provider = BuildWriteProvider(target, context, out var accGuard);
+        context = context with { AccGuard = accGuard };
 
         try
         {
@@ -137,12 +162,14 @@ internal static class SystemCertificationHost
 
     private static ServiceProvider BuildWriteProvider(
         SystemCertificationEnvironment.Target target,
-        SystemCertificationRunContext context)
+        SystemCertificationRunContext context,
+        out PilotSmokeAccGuard? accGuard)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentException.ThrowIfNullOrWhiteSpace(target.ConnectionString);
         ArgumentNullException.ThrowIfNull(context);
 
+        accGuard = null;
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection().Build());
         services.AddSiNetLogging();
@@ -153,8 +180,6 @@ internal static class SystemCertificationHost
         services.AddSiNetSystemSettingsSql();
         services.AddSiNetProcessBackbone();
 
-        // Production email-detail composition — PRP must start through IEmailSuggestedActionExecutionService /
-        // CreatePriceQuote, not a bypass around the real host seam.
         services.AddSiNetEmailReadSql();
         services.AddSiNetEmailWriteSql();
         services.AddSiNetEmailDetailSql();
@@ -173,13 +198,35 @@ internal static class SystemCertificationHost
             });
         }
 
-        services.AddSingleton(context);
+        if (context.Acc.IsEnabled && context.Acc.Violation is null)
+        {
+            accGuard = new PilotSmokeAccGuard();
+            services.AddSingleton(accGuard);
+            services.AddSiNetAutodeskVaultTokenProvider();
+            services.AddSiNetAutodesk();
+            services.AddSiNetAutodeskLocalSql();
+            services.AddSiNetAccInboxBootstrapLocal();
+            services.AddSiNetAccProjectProvisioning();
+            services.AddSiNetEmailAccSql();
+            services.AddSiNetFilingServices();
+            services.AddSingleton<IAccInboxBootstrapService, PilotSmokeHost.LocalOnlyInboxBootstrap>();
+            accGuard.Decorate(services);
+        }
+        else if (!SystemCertificationEnvironment.IsLayerRequested(SystemCertificationEnvironment.AccEnabledEnv))
+        {
+            PilotSmokeAccGuard.AssertNoAccWritePortsRegistered(services);
+        }
+
+        services.AddSingleton(context with { AccGuard = accGuard });
         return services.BuildServiceProvider();
     }
 
     /// <summary>Test seam for verifying production write composition without live SQL guards.</summary>
     internal static ServiceProvider BuildWriteProviderForTests(
         SystemCertificationEnvironment.Target target,
-        SystemCertificationRunContext context) =>
-        BuildWriteProvider(target, context);
+        SystemCertificationRunContext context)
+    {
+        var provider = BuildWriteProvider(target, context, out _);
+        return provider;
+    }
 }

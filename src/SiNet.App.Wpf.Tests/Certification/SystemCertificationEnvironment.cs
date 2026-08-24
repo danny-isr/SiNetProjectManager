@@ -45,6 +45,12 @@ internal static class SystemCertificationEnvironment
     public const string AccPlaceEnv = "SINET_SYSTEM_CERT_ACC_PLACE";
     public const string AccInboxProjectEnv = "SINET_SYSTEM_CERT_ACC_INBOX_PROJECT";
 
+    /// <summary>Path to a saved preflight evidence JSON whose verdict is <c>CERTIFIED</c>.</summary>
+    public const string PreflightEvidenceEnv = "SINET_SYSTEM_CERT_PREFLIGHT_EVIDENCE";
+
+    /// <summary>Explicit opt-in for PRP live writes after preflight PASS.</summary>
+    public const string PrpLiveEnabledEnv = "SINET_SYSTEM_CERT_PRP_LIVE";
+
     /// <summary>The only Place title the ACC layer may target — see <c>docs/ENVIRONMENTS.md</c> §5.1.</summary>
     public const string RequiredAccPlaceTitle = "SI";
 
@@ -86,6 +92,9 @@ internal static class SystemCertificationEnvironment
 
     /// <summary>True when an optional layer flag is set (Gmail or ACC).</summary>
     public static bool IsLayerRequested(string layerEnabledEnv) => IsFlagSet(layerEnabledEnv);
+
+    /// <summary>True when PRP live writes are explicitly enabled.</summary>
+    public static bool IsPrpLiveRequested() => IsFlagSet(PrpLiveEnabledEnv);
 
     /// <summary>
     /// Resolves and authorises the SQL target from environment only. Does not touch the database; the

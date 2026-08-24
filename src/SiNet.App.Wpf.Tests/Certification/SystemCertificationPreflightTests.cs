@@ -160,6 +160,9 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         }
 
         Report(evidence);
+        _output.WriteLine(
+            $"Set {SystemCertificationEnvironment.PreflightEvidenceEnv}={evidence.MarkdownPath.Replace(".md", ".json", StringComparison.Ordinal)} "
+            + "before enabling PRP live writes.");
         evidence.FinalizeCertification();
     }
 
