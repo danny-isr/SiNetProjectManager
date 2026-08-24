@@ -393,14 +393,32 @@ internal static class SystemCertificationPrpSourceIngest
         CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-        return await db.EmailInboxAttachments.AsNoTracking()
+        var rows = await db.EmailInboxAttachments.AsNoTracking()
             .Where(a => a.MessageId == inboxMessageId)
-            .Select(a => new SqlAttachmentSnapshot(
+            .Select(a => new
+            {
                 a.Id,
-                !string.IsNullOrWhiteSpace(a.SavedFileName) ? a.SavedFileName! : a.OriginalFileName!,
-                a.AccItemId))
-            .Where(a => !string.IsNullOrWhiteSpace(a.FileName))
+                a.SavedFileName,
+                a.OriginalFileName,
+                a.AccItemId,
+            })
             .ToListAsync(cancellationToken);
+
+        var snapshots = new List<SqlAttachmentSnapshot>(rows.Count);
+        foreach (var row in rows)
+        {
+            var fileName = !string.IsNullOrWhiteSpace(row.SavedFileName)
+                ? row.SavedFileName.Trim()
+                : row.OriginalFileName?.Trim();
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                continue;
+            }
+
+            snapshots.Add(new SqlAttachmentSnapshot(row.Id, fileName, row.AccItemId));
+        }
+
+        return snapshots;
     }
 
     private static async Task<string?> ResolveActingUserLoginAsync(
