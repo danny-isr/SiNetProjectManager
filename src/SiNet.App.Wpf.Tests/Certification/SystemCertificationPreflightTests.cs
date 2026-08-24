@@ -59,6 +59,10 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         evidence.Fact("WindowsIdentity", target.WindowsIdentityName ?? "<unknown>");
         evidence.Fact("SqlServer", target.ServerName ?? "<unknown>");
         evidence.Fact("SqlDatabase", target.DatabaseName ?? "<unknown>");
+        evidence.Fact(SystemCertificationPreflightBinding.FactOperatorUserId, target.OperatorUserId.ToString());
+        evidence.Fact(
+            SystemCertificationPreflightBinding.FactCommitSha,
+            SystemCertificationGitMetadata.TryResolveHeadCommitSha() ?? "<unknown>");
 
         if (target.Violation is not null)
         {
@@ -85,7 +89,7 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         var dbFactory = provider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
 
         var marker = await SystemCertificationDatabaseMarker.VerifyAsync(dbFactory, ct);
-        evidence.Fact("DatabaseMarker", marker.FoundValue ?? "<absent>");
+        evidence.Fact(SystemCertificationPreflightBinding.FactDatabaseMarker, marker.FoundValue ?? "<absent>");
 
         if (!marker.IsApproved)
         {
@@ -127,7 +131,7 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         SystemCertificationAssertions.AssertCoverageComplete(inventory, evidence, "preflight.inventory");
 
         var gmail = SystemCertificationEnvironment.TryResolveGmailLayer();
-        evidence.Fact("GmailExpectedAccount", gmail.ExpectedAccount ?? "<not configured>");
+        evidence.Fact(SystemCertificationPreflightBinding.FactGmailExpectedAccount, gmail.ExpectedAccount ?? "<not configured>");
         if (gmail.Violation is not null)
         {
             evidence.Fail("preflight.gmail", gmail.Violation);
@@ -142,8 +146,8 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         }
 
         var acc = SystemCertificationEnvironment.TryResolveAccLayer(gmail);
-        evidence.Fact("AccPlace", acc.PlaceTitle ?? "<not configured>");
-        evidence.Fact("AccInboxProject", acc.InboxProjectName ?? "<not configured>");
+        evidence.Fact(SystemCertificationPreflightBinding.FactAccPlace, acc.PlaceTitle ?? "<not configured>");
+        evidence.Fact(SystemCertificationPreflightBinding.FactAccInboxProject, acc.InboxProjectName ?? "<not configured>");
         if (acc.Violation is not null)
         {
             evidence.Fail("preflight.acc", acc.Violation);

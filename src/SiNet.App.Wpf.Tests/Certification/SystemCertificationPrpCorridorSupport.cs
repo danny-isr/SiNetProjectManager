@@ -297,6 +297,7 @@ internal static class SystemCertificationPrpCorridorSupport
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         SystemCertificationIntegrityValidator integrity,
+        SystemCertificationHost.SystemCertificationRunContext context,
         SystemCertificationEvidence evidence,
         int instanceId,
         int certProjectId,
@@ -339,9 +340,12 @@ internal static class SystemCertificationPrpCorridorSupport
             var completed = await TryCompleteTaskAsync(
                 provider,
                 dbFactory,
+                integrity,
+                context,
                 navigation,
                 completion,
                 open,
+                instanceId,
                 certProjectId,
                 operatorUserId,
                 evidence,
@@ -350,6 +354,11 @@ internal static class SystemCertificationPrpCorridorSupport
             if (!completed)
             {
                 return false;
+            }
+
+            if (string.Equals(open.TaskTypeCode, TaskTypeCodes.FileQuoteMaterial, StringComparison.Ordinal))
+            {
+                continue;
             }
 
             var expectedStage = SystemCertificationTransitionAssertions.ExpectedStageAfterTask(open.TaskTypeCode);
@@ -381,9 +390,12 @@ internal static class SystemCertificationPrpCorridorSupport
     private static async Task<bool> TryCompleteTaskAsync(
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        SystemCertificationIntegrityValidator integrity,
+        SystemCertificationHost.SystemCertificationRunContext context,
         ITaskNavigationService navigation,
         ITaskCompletionService completion,
         SystemCertificationTransitionAssertions.OpenDrivingTask open,
+        int instanceId,
         int certProjectId,
         int operatorUserId,
         SystemCertificationEvidence evidence,
@@ -397,11 +409,21 @@ internal static class SystemCertificationPrpCorridorSupport
 
         if (string.Equals(open.TaskTypeCode, TaskTypeCodes.FileQuoteMaterial, StringComparison.Ordinal))
         {
-            return await TryCompleteFileQuoteMaterialAsync(completion, open.TaskId, operatorUserId, evidence);
+            return await SystemCertificationPrpFileMaterialProof.TryProveAndCompleteAsync(
+                provider,
+                dbFactory,
+                integrity,
+                context,
+                evidence,
+                open.TaskId,
+                certProjectId,
+                instanceId,
+                operatorUserId,
+                cancellationToken);
         }
 
-        var context = await navigation.ResolveAsync(open.TaskId, cancellationToken);
-        if (context?.CompletionEventCode is not { Length: > 0 } eventCode)
+        var navigationContext = await navigation.ResolveAsync(open.TaskId, cancellationToken);
+        if (navigationContext?.CompletionEventCode is not { Length: > 0 } eventCode)
         {
             evidence.Fail(
                 "cert.prp.corridor",
@@ -409,13 +431,13 @@ internal static class SystemCertificationPrpCorridorSupport
             return false;
         }
 
-        var resultCode = ChooseResultCode(open.TaskTypeCode, context.AllowedResultCodes);
-        if (resultCode is null && context.AllowedResultCodes.Count > 0)
+        var resultCode = ChooseResultCode(open.TaskTypeCode, navigationContext.AllowedResultCodes);
+        if (resultCode is null && navigationContext.AllowedResultCodes.Count > 0)
         {
             evidence.Fail(
                 "cert.prp.corridor",
                 $"Task {open.TaskId} ({open.TaskTypeCode}) offers ambiguous results ["
-                + string.Join(", ", context.AllowedResultCodes)
+                + string.Join(", ", navigationContext.AllowedResultCodes)
                 + "] with no declared happy-path choice.");
             return false;
         }
@@ -480,32 +502,6 @@ internal static class SystemCertificationPrpCorridorSupport
             evidence.Fail(
                 "cert.prp.corridor",
                 $"OpenQuoteProject completion refused: {Trim(outcome.ErrorMessage)}.");
-            return false;
-        }
-
-        return true;
-    }
-
-    private static async Task<bool> TryCompleteFileQuoteMaterialAsync(
-        ITaskCompletionService completion,
-        int taskId,
-        int operatorUserId,
-        SystemCertificationEvidence evidence)
-    {
-        var outcome = await completion.CompleteAsync(
-            new CompleteTaskCommand(
-                taskId,
-                ReviewCompletionEvents.ReviewMaterialFiled,
-                TaskResultCode: null,
-                CompletedTaskLinkIds: null,
-                operatorUserId),
-            CancellationToken.None);
-
-        if (!outcome.Success)
-        {
-            evidence.Fail(
-                "cert.prp.corridor",
-                $"FileQuoteMaterial completion refused: {Trim(outcome.ErrorMessage)}.");
             return false;
         }
 

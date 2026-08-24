@@ -38,6 +38,8 @@ internal sealed class SystemCertificationPrpScenario : ISystemCertificationScena
             ("cert.prp.create_price_quote", "Start PRP through IEmailSuggestedActionExecutionService"),
             ("cert.prp.transition.start", "Post-start stage, task and delta integrity"),
             ("cert.prp.project", "Create [SYS-CERT] project for OpenQuoteProject"),
+            ("cert.prp.acc.write", "FileQuoteMaterial ACC move through IEmailMoveToProjectService"),
+            ("cert.prp.acc.readback", "Independent IAccFolderBrowserService read-back after ACC write"),
             ("cert.prp.corridor", "Walk PRP corridor through production seams to SendQuote"),
             ("cert.prp.continuation_stage", "Expected continuation stage at SendQuote policy boundary"),
             ("cert.prp.continuation_task", "Expected open SendQuoteToClient task"),
@@ -46,11 +48,26 @@ internal sealed class SystemCertificationPrpScenario : ISystemCertificationScena
 
         foreach (var taskType in SystemCertificationTransitionAssertions.PrpHappyPathTaskTypes)
         {
+            if (string.Equals(taskType, TaskTypeCodes.FileQuoteMaterial, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             evidence.Declare(
                 $"cert.prp.transition.{taskType}",
                 CertificationRequirement.Required,
                 $"After completing {taskType}: stage, closed task, single next task, assignee, delta integrity");
         }
+
+        evidence.Declare(
+            "cert.prp.transition.FileQuoteMaterial",
+            CertificationRequirement.Required,
+            "After ACC write + read-back: ReviewMaterialFiled through ITaskCompletionService");
+
+        evidence.Declare(
+            "cert.prp.gmail.filing.readback",
+            CertificationRequirement.Optional,
+            "Gmail label read-back after filing when the production move mutates Gmail");
 
         evidence.Declare(
             "cert.prp.send_quote",
@@ -70,7 +87,11 @@ internal sealed class SystemCertificationPrpScenario : ISystemCertificationScena
             "cert.prp.live_gate",
             $"{SystemCertificationEnvironment.PrpLiveEnabledEnv}=1.");
 
-        var preflightViolation = SystemCertificationPreflightEvidence.TryValidate(out var preflightPath);
+        var preflightViolation = SystemCertificationPreflightEvidence.TryValidate(
+            host.Target,
+            host.Context.Gmail,
+            host.Context.Acc,
+            out var preflightPath);
         if (preflightViolation is not null)
         {
             evidence.Fail("cert.prp.preflight_evidence", preflightViolation);
@@ -79,7 +100,9 @@ internal sealed class SystemCertificationPrpScenario : ISystemCertificationScena
 
         evidence.Pass(
             "cert.prp.preflight_evidence",
-            $"CERTIFIED preflight evidence at '{preflightPath}'.");
+            $"Bound CERTIFIED preflight evidence at '{preflightPath}' matches current target, layers, "
+            + $"commit {SystemCertificationGitMetadata.TryResolveHeadCommitSha() ?? "<unknown>"}, "
+            + $"and freshness <= {SystemCertificationPreflightBinding.MaxAge.TotalHours:0}h.");
 
         if (!host.Context.Gmail.IsEnabled || host.Context.Gmail.Violation is not null)
         {
@@ -152,6 +175,7 @@ internal sealed class SystemCertificationPrpScenario : ISystemCertificationScena
             provider,
             dbFactory,
             integrity,
+            host.Context,
             evidence,
             instanceId,
             projectId,

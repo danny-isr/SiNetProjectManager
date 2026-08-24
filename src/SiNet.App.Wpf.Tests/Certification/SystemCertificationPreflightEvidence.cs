@@ -4,16 +4,24 @@ using System.Text.Json;
 namespace SiNet.App.Wpf.Tests.Certification;
 
 /// <summary>
-/// Validates that a saved preflight report exists and reached <see cref="SystemCertificationEvidence.CertifiedVerdict"/>.
-/// PRP live writes must not start without this proof.
+/// Validates that a saved preflight report is <see cref="SystemCertificationEvidence.CertifiedVerdict"/>,
+/// bound to the current runtime, and fresh enough for PRP live writes.
 /// </summary>
 internal static class SystemCertificationPreflightEvidence
 {
     /// <summary>
     /// Returns a violation message when the preflight evidence gate fails; otherwise <see langword="null"/>.
     /// </summary>
-    public static string? TryValidate(out string? evidencePath)
+    public static string? TryValidate(
+        SystemCertificationEnvironment.Target target,
+        SystemCertificationEnvironment.GmailLayer gmail,
+        SystemCertificationEnvironment.AccLayer acc,
+        out string? evidencePath)
     {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(gmail);
+        ArgumentNullException.ThrowIfNull(acc);
+
         evidencePath = Environment.GetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv);
         if (string.IsNullOrWhiteSpace(evidencePath))
         {
@@ -31,17 +39,19 @@ internal static class SystemCertificationPreflightEvidence
         {
             using var stream = File.OpenRead(evidencePath);
             using var document = JsonDocument.Parse(stream);
-            if (!document.RootElement.TryGetProperty("Verdict", out var verdictElement))
+
+            if (!SystemCertificationPreflightBinding.TryParse(document, out var binding, out var parseError))
             {
-                return "Preflight evidence JSON does not contain a Verdict property.";
+                return parseError;
             }
 
-            var verdict = verdictElement.GetString();
-            if (!string.Equals(verdict, SystemCertificationEvidence.CertifiedVerdict, StringComparison.Ordinal))
-            {
-                return $"Preflight evidence verdict is '{verdict ?? "<null>"}', not "
-                       + $"'{SystemCertificationEvidence.CertifiedVerdict}'.";
-            }
+            var runtimeViolation = binding!.ValidateAgainstCurrentRuntime(
+                target,
+                gmail,
+                acc,
+                SystemCertificationGitMetadata.TryResolveHeadCommitSha());
+
+            return runtimeViolation;
         }
         catch (JsonException ex)
         {
@@ -51,7 +61,5 @@ internal static class SystemCertificationPreflightEvidence
         {
             return $"Preflight evidence file could not be read: {ex.Message}";
         }
-
-        return null;
     }
 }
