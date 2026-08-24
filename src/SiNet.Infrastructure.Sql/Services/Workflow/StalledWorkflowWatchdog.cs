@@ -61,6 +61,36 @@ public sealed class StalledWorkflowWatchdog(
             if (string.Equals(instance.CurrentStage.NodeType, "End", StringComparison.OrdinalIgnoreCase)) continue;
             if (string.Equals(instance.CurrentStage.NodeType, "Start", StringComparison.OrdinalIgnoreCase)) continue;
 
+            // A SubWorkflow host stage has no tasks of its own by design, and WorkflowStatus has no
+            // "Waiting" value, so a parent legitimately waiting for a running child is otherwise
+            // indistinguishable from a stalled one. Only an actually-running child excuses it: a host stage
+            // with no child, or whose child already finished without the parent advancing, is still stuck
+            // and must stay detectable.
+            if (string.Equals(instance.CurrentStage.NodeType, "SubWorkflow", StringComparison.OrdinalIgnoreCase))
+            {
+                var hasRunningChild = await db.WorkflowInstances
+                    .AsNoTracking()
+                    .AnyAsync(
+                        child => child.ParentWorkflowInstanceId == instance.Id
+                              && (child.Status == WorkflowStatus.Active
+                               || child.Status == WorkflowStatus.Paused),
+                        ct);
+
+                if (hasRunningChild)
+                {
+                    WorkflowDebugTrace.Step(
+                        "Watchdog.Detect",
+                        $"instance={instance.Id} stage={instance.CurrentStage.Code} waitingForChild=true");
+                    continue;
+                }
+            }
+
+            // Scoped to the current stage. Provisioning already records the owning stage in
+            // TaskLink.Description, so without this filter a task closed at a stage the workflow left long
+            // ago still counts here — and worse, becomes MostRecentClosedTaskId, which recovery then
+            // replays through CheckAndAutoAdvanceAsync.
+            var stageTag = WorkflowConstants.BuildStageTag(instance.CurrentStageId!.Value);
+
             var linkedTasks = await (
                 from link in db.TaskLinks.AsNoTracking()
                 join task in db.ProjectAssignments.AsNoTracking()
@@ -70,6 +100,7 @@ public sealed class StalledWorkflowWatchdog(
                 where link.LinkedEntityType == TaskLinkEntityType.WorkflowInstance
                    && link.LinkedEntityId == instance.Id
                    && link.Role == TaskLinkRole.Trigger
+                   && link.Description == stageTag
                 select new { task.Id, task.Modified, status.IsOpen }
             ).ToListAsync(ct);
 

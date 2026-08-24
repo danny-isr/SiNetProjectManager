@@ -77,15 +77,39 @@ public sealed class SystemCertificationEvidenceTests : IDisposable
     }
 
     [Fact]
-    public void WhenRequiredStepIsBlockedThenCertificationDoesNotThrow()
+    public void WhenRequiredStepIsBlockedThenCertificationFails()
     {
-        // A product gap analysed in advance is information, not a regression, so it must not make the tier
-        // permanently red — but the verdict above still refuses to call the run certified.
+        // A green test process alongside a report that says NOT CERTIFIED is the precise failure mode this
+        // tier exists to remove, so Blocked must fail the gate even though it was analysed in advance.
         var evidence = NewEvidence();
         evidence.Declare("prp.sendquote", CertificationRequirement.Required, "Send quote to client");
         evidence.Blocked("prp.sendquote", "sending real email is out of scope by policy");
 
-        evidence.FinalizeCertification();
+        Assert.Throws<SystemCertificationFailedException>(evidence.FinalizeCertification);
+    }
+
+    [Fact]
+    public void WhenRequiredStepIsNotApplicableThenVerdictIsCertified()
+    {
+        var evidence = NewEvidence();
+        evidence.Declare("acc.readback", CertificationRequirement.Required, "ACC read-back");
+        evidence.NotApplicable("acc.readback", "ACC layer deliberately excluded from this run");
+
+        Assert.Equal(SystemCertificationEvidence.CertifiedVerdict, evidence.Verdict);
+    }
+
+    [Fact]
+    public void WhenRequiredStepIsBlockedThenReportIsStillWritten()
+    {
+        // Audit and gate are separate: the report must survive a failing run, otherwise a failure would
+        // destroy the evidence explaining it.
+        var evidence = NewEvidence();
+        evidence.Declare("prp.sendquote", CertificationRequirement.Required, "Send quote to client");
+        evidence.Blocked("prp.sendquote", "sending real email is out of scope by policy");
+
+        Assert.Throws<SystemCertificationFailedException>(evidence.FinalizeCertification);
+
+        Assert.Contains("NOT CERTIFIED", File.ReadAllText(evidence.MarkdownPath), StringComparison.Ordinal);
     }
 
     [Fact]

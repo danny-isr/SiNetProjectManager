@@ -13,11 +13,23 @@ namespace SiNet.App.Wpf.Tests.Certification;
 /// on EF InMemory, so no integrity rule was previously proven against SQL Server.
 /// </para>
 /// <para>
-/// Checks are global rather than scoped to rows this run created, as requested. To make that usable on a
-/// restored DEV database, a <see cref="BaselineAsync"/> snapshot is taken before the first write and every
-/// later check is reported as a delta: pre-existing violations are informational, while any <b>new</b>
-/// violation fails the run. Without the baseline, inherited data would either mask real regressions or
-/// make a pass impossible.
+/// Checks are global rather than scoped to rows this run created. Two separate metrics are reported, and
+/// conflating them is what the baseline is <em>not</em> for:
+/// </para>
+/// <list type="bullet">
+/// <item><b>Delta</b> — violations this run introduced, measured against a <see cref="BaselineAsync"/>
+/// snapshot taken before the first write. Must be zero for any scenario to pass.</item>
+/// <item><b>Absolute</b> — every violation present at the end of the run. Must be zero for a full
+/// certification. A pre-existing violation is reported separately so it is clear the scenario did not cause
+/// it, but it never becomes invisible: "it was already broken" is not a pass.</item>
+/// </list>
+/// <para>
+/// The only way to stand down an absolute violation is an explicit <see cref="Waiver"/> naming the exact
+/// entity, a reason and an approver. There is no blanket "existed before" exemption.
+/// </para>
+/// <para>
+/// This type never deletes or repairs anything. Data that predates the run is left exactly as found, so a
+/// certification run cannot destroy the evidence of a pre-existing problem.
 /// </para>
 /// </summary>
 internal sealed class SystemCertificationIntegrityValidator(
@@ -25,45 +37,96 @@ internal sealed class SystemCertificationIntegrityValidator(
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory = dbFactory;
 
-    internal sealed record Violation(string Check, string Detail);
+    /// <summary>
+    /// A single integrity violation. <paramref name="EntityId"/> is carried separately from the human text
+    /// so waivers can name an exact entity instead of matching on a message.
+    /// </summary>
+    internal sealed record Violation(string Check, string EntityId, string Detail);
 
-    internal sealed record Report(IReadOnlyList<Violation> All, IReadOnlyList<Violation> New)
+    /// <summary>
+    /// An approved, individually justified exemption from the absolute metric. Deliberately requires the
+    /// exact entity: a waiver by check name alone would silently cover future entities too.
+    /// </summary>
+    internal sealed record Waiver(string Check, string EntityId, string Reason, string ApprovedBy);
+
+    internal sealed record Report(
+        IReadOnlyList<Violation> All,
+        IReadOnlyList<Violation> New,
+        IReadOnlyList<Violation> Waived)
     {
-        public bool IsClean => New.Count == 0;
+        /// <summary>Nothing was introduced by the run. Required of every scenario step.</summary>
+        public bool IsDeltaClean => New.Count == 0;
 
-        public string Describe() =>
-            New.Count == 0
-                ? $"no new integrity violations ({All.Count} pre-existing, unchanged)"
-                : $"{New.Count} NEW violation(s): "
-                  + string.Join(" || ", New.Select(v => $"[{v.Check}] {v.Detail}"));
+        /// <summary>Nothing is outstanding at all, waivers aside. Required for full certification.</summary>
+        public bool IsAbsolutelyClean => All.Count == Waived.Count;
+
+        public IReadOnlyList<Violation> PreExisting =>
+            All.Except(New).Except(Waived).ToList();
+
+        public string DescribeDelta() =>
+            IsDeltaClean
+                ? "no new integrity violations introduced by this run"
+                : $"{New.Count} NEW violation(s): {Join(New)}";
+
+        public string DescribeAbsolute() =>
+            IsAbsolutelyClean
+                ? $"database is integrity-clean ({Waived.Count} waived)"
+                : $"{All.Count - Waived.Count} outstanding violation(s), of which {New.Count} new: "
+                  + $"new=[{Join(New)}] pre-existing=[{Join(PreExisting)}]";
+
+        private static string Join(IEnumerable<Violation> violations) =>
+            string.Join(" || ", violations.Select(v => $"[{v.Check}:{v.EntityId}] {v.Detail}"));
     }
 
     private HashSet<string>? _baseline;
+    private IReadOnlyList<Waiver> _waivers = [];
 
-    /// <summary>Snapshots existing violations so later checks can report only what this run introduced.</summary>
+    /// <summary>Registers approved exemptions from the absolute metric.</summary>
+    public void UseWaivers(IReadOnlyList<Waiver> waivers)
+    {
+        ArgumentNullException.ThrowIfNull(waivers);
+        _waivers = waivers;
+    }
+
+    /// <summary>
+    /// Snapshots existing violations before the first write, so the delta metric can attribute later
+    /// violations to this run.
+    /// </summary>
     public async Task<Report> BaselineAsync(CancellationToken cancellationToken = default)
     {
         var violations = await CollectAsync(cancellationToken);
         _baseline = violations.Select(Key).ToHashSet(StringComparer.Ordinal);
-        return new Report(violations, []);
+        return Build(violations, []);
     }
 
-    /// <summary>Re-runs every check and returns violations that were not present at baseline.</summary>
+    /// <summary>Re-runs every check and reports both metrics.</summary>
     public async Task<Report> CheckAsync(CancellationToken cancellationToken = default)
     {
         if (_baseline is null)
         {
             throw new InvalidOperationException(
-                $"{nameof(BaselineAsync)} must run before the first write, otherwise inherited DEV data "
-                + "cannot be told apart from violations this run caused.");
+                $"{nameof(BaselineAsync)} must run before the first write, otherwise a violation cannot be "
+                + "attributed to this run rather than to inherited DEV data.");
         }
 
         var violations = await CollectAsync(cancellationToken);
         var newViolations = violations.Where(v => !_baseline.Contains(Key(v))).ToList();
-        return new Report(violations, newViolations);
+        return Build(violations, newViolations);
     }
 
-    private static string Key(Violation violation) => $"{violation.Check}::{violation.Detail}";
+    private Report Build(List<Violation> all, List<Violation> newViolations)
+    {
+        var waived = all
+            .Where(v => _waivers.Any(w =>
+                string.Equals(w.Check, v.Check, StringComparison.Ordinal)
+                && string.Equals(w.EntityId, v.EntityId, StringComparison.Ordinal)))
+            .ToList();
+
+        return new Report(all, newViolations, waived);
+    }
+
+    private static string Key(Violation violation) =>
+        $"{violation.Check}::{violation.EntityId}::{violation.Detail}";
 
     private async Task<List<Violation>> CollectAsync(CancellationToken cancellationToken)
     {
@@ -127,6 +190,7 @@ internal sealed class SystemCertificationIntegrityValidator(
         {
             violations.Add(new Violation(
                 "OrphanTaskLink",
+                $"link:{task.LinkId}",
                 $"TaskLink {task.LinkId} (task {task.TaskId}) points at missing WorkflowInstance "
                 + $"{task.InstanceId}"));
         }
@@ -136,6 +200,7 @@ internal sealed class SystemCertificationIntegrityValidator(
         {
             violations.Add(new Violation(
                 "DanglingCurrentStage",
+                $"instance:{instance.Id}",
                 $"Instance {instance.Id} references missing stage {instance.CurrentStageId}"));
         }
 
@@ -147,6 +212,7 @@ internal sealed class SystemCertificationIntegrityValidator(
             {
                 violations.Add(new Violation(
                     "CrossDefinitionStage",
+                    $"instance:{instance.Id}",
                     $"Instance {instance.Id} (definition {instance.WorkflowDefinitionId}) sits on stage "
                     + $"{stage.Code} belonging to definition {stage.WorkflowDefinitionId}"));
             }
@@ -165,6 +231,7 @@ internal sealed class SystemCertificationIntegrityValidator(
             {
                 violations.Add(new Violation(
                     "TerminalInstanceWithOpenTasks",
+                    $"instance:{instance.Id}",
                     $"Instance {instance.Id} is {instance.Status} but has open driving task(s) "
                     + $"{string.Join(",", open)}"));
             }
@@ -177,6 +244,7 @@ internal sealed class SystemCertificationIntegrityValidator(
         {
             violations.Add(new Violation(
                 "DuplicateTriggerLink",
+                $"instance:{group.Key.InstanceId}/task:{group.Key.TaskId}",
                 $"Task {group.Key.TaskId} is linked to instance {group.Key.InstanceId} "
                 + $"{group.Count()} times"));
         }
@@ -190,6 +258,7 @@ internal sealed class SystemCertificationIntegrityValidator(
         {
             violations.Add(new Violation(
                 "DuplicateActiveTrack",
+                $"project:{group.Key.ProjectId}/definition:{group.Key.WorkflowDefinitionId}",
                 $"Project {group.Key.ProjectId} has {group.Count()} active root instances of definition "
                 + $"{group.Key.WorkflowDefinitionId} / jobType {group.Key.JobTypeId?.ToString() ?? "none"}: "
                 + string.Join(",", group.Select(i => i.Id))));
@@ -210,12 +279,14 @@ internal sealed class SystemCertificationIntegrityValidator(
             {
                 violations.Add(new Violation(
                     "UnassignedOpenTask",
+                    $"task:{task.TaskId}",
                     $"Open driving task {task.TaskId} on instance {task.InstanceId} has no assignee"));
             }
             else if (!activeUsers.Contains(task.AssignedToId.Value))
             {
                 violations.Add(new Violation(
                     "InactiveAssignee",
+                    $"task:{task.TaskId}",
                     $"Open driving task {task.TaskId} on instance {task.InstanceId} is assigned to "
                     + $"user {task.AssignedToId} who is missing or inactive"));
             }
@@ -224,6 +295,7 @@ internal sealed class SystemCertificationIntegrityValidator(
             {
                 violations.Add(new Violation(
                     "OpenTaskWithoutTaskType",
+                    $"task:{task.TaskId}",
                     $"Open driving task {task.TaskId} on instance {task.InstanceId} has no TaskTypeId, so "
                     + "no transition rule can match its result"));
             }
@@ -236,6 +308,7 @@ internal sealed class SystemCertificationIntegrityValidator(
             {
                 violations.Add(new Violation(
                     "MissingParentInstance",
+                    $"instance:{child.Id}",
                     $"Instance {child.Id} references missing parent "
                     + $"{child.ParentWorkflowInstanceId}"));
             }
@@ -250,6 +323,7 @@ internal sealed class SystemCertificationIntegrityValidator(
             {
                 violations.Add(new Violation(
                     "ActiveInstanceWithoutStage",
+                    $"instance:{instance.Id}",
                     $"Instance {instance.Id} is Active with no CurrentStageId"));
                 continue;
             }
@@ -288,6 +362,7 @@ internal sealed class SystemCertificationIntegrityValidator(
 
                 violations.Add(new Violation(
                     activeChildren == 0 ? "SubWorkflowHostWithoutChild" : "SubWorkflowHostWithManyChildren",
+                    $"instance:{instance.Id}",
                     $"Instance {instance.Id} is parked on SubWorkflow stage {stage.Code} with "
                     + $"{activeChildren} active child instance(s)"));
                 continue;
@@ -295,6 +370,7 @@ internal sealed class SystemCertificationIntegrityValidator(
 
             violations.Add(new Violation(
                 "ActiveInstanceWithNoWayForward",
+                $"instance:{instance.Id}",
                 $"Instance {instance.Id} is Active on non-terminal stage {stage.Code} "
                 + $"(NodeType={stage.NodeType}) with no open driving task and no active child"));
         }

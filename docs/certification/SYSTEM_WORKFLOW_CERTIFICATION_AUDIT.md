@@ -72,7 +72,8 @@ These are the only write paths the certification tier may use. No new abstractio
 
 ### 2.1 DEFECT — the watchdog cannot distinguish "waiting for child" from "stalled"
 
-**Severity: high.** This is the single most likely way a real workflow gets mishandled in production.
+**Severity: high. Reproduced, then fixed — see §2.1.1.** This was the single most likely way a real workflow
+got mishandled in production.
 
 Three verified facts combine:
 
@@ -96,6 +97,47 @@ both recovery branches are reachable:
 the SubWorkflow stage. A `subExists` guard exists in `EnsureInitialStageTasksAsync`, but it is not
 necessarily on the path a transition action takes. This is a primary question for the live tier to answer
 empirically — it must not be asserted either way from reading alone.
+
+### 2.1.1 Proven, then fixed
+
+`src/SiNet.App.Wpf.Tests/Workflow/StalledWatchdogSubWorkflowTests.cs` reproduces both halves on the **real
+seeded graph** (Review's actual `SubWorkflow` host stage, located by `NodeType` rather than by restating a
+stage code), on EF InMemory like the existing workflow tests. Detection is asserted directly rather than
+running recovery, so the tests state what is wrong without depending on which recovery branch is reached.
+
+Before the fix: **4 failed, 2 passed of 6.**
+
+| Test | Before | Proves |
+| --- | --- | --- |
+| `Parent_waiting_for_active_child_on_subworkflow_stage_is_not_stalled` | FAIL | defect B |
+| `Parent_waiting_for_paused_child_on_subworkflow_stage_is_not_stalled` | FAIL | defect B |
+| `Stalled_report_does_not_name_a_task_closed_at_an_earlier_stage` | FAIL — named the historical task | defect A |
+| `Stalled_report_counts_only_tasks_of_the_current_stage` | FAIL — counted 1, expected 0 | defect A |
+| `Parent_on_subworkflow_stage_without_any_child_is_still_detected` | PASS | guard against over-fixing |
+| `Parent_whose_child_is_completed_is_still_detected` | PASS | guard against over-fixing |
+
+The two passing tests are the important ones: they existed from the start so the fix could not degenerate
+into "ignore every SubWorkflow stage".
+
+**The fix turned out to need no new state.** Provisioning *already* records the owning stage in
+`TaskLink.Description` as `Stage:{id}` via `WorkflowConstants.BuildStageTag`, so the watchdog had the
+information and simply was not using it. Two narrow changes in `DetectStalledAsync`:
+
+1. The trigger-link query is scoped to the current stage with `link.Description == stageTag`.
+2. A `SubWorkflow` host stage is skipped **only** when a child in `Active` or `Paused` actually exists. No
+   child, or a child that already finished while the parent stayed put, remains detectable.
+
+Side effect, and a desirable one: an instance whose only trigger links are historical now reports
+`MostRecentClosedTaskId = null`, so recovery routes to `CheckAndAutoAdvanceStalledAsync` — instance-level
+evaluation — instead of replaying a stale task through `CheckAndAutoAdvanceAsync`.
+
+After the fix: **6 of 6 pass**, and the full offline suite stayed green, so no existing watchdog behaviour
+regressed.
+
+Still open, and still not asserted from reading: whether recovery on a host stage could start a second
+child. The nine-step live sequence (create parent → exactly one child → watchdog → complete child → parent
+advances exactly once → next work provisioned exactly once → watchdog again → zero orphan/stalled/duplicate)
+remains the empirical check.
 
 ### 2.2 DEFECT — two email actions are offered to users and always fail
 
@@ -244,9 +286,36 @@ unaffected. When it *is* switched on but the target cannot be proven approved, t
 
 ### 4.4 Evidence with a real gate
 
-Result vocabulary becomes `PASS`, `FAIL`, `BLOCKED`, `N/A`, `OPTIONAL` — `Skipped` is removed as a way to
-hide a failure. Each step declares up front whether it is required. `FinalizeCertification()` fails the test
-if any required step is not `PASS`, and must be unavoidable rather than a courtesy call at the end.
+Result vocabulary is `PASS`, `FAIL`, `BLOCKED`, `N/A`, with `Required` or `Optional` declared per step.
+There is no `Skipped`: a declared step that is never reached stays `NOT RUN`, so skipping cannot make a
+missing proof look benign.
+
+Audit and gate are separate concerns. The writer records every result to the end, so a failing run still
+produces a complete report. `FinalizeCertification()` then fails the run whenever the verdict is not
+`CERTIFIED` — **including a required `BLOCKED`**. Only `Optional` steps and an explicit `N/A` may stand
+without proof. The rule this enforces: a report saying `NOT CERTIFIED` can never coexist with a green test
+process.
+
+### 4.4.1 Integrity: two separate metrics
+
+| Metric | Definition | Requirement |
+| --- | --- | --- |
+| **Delta** | violations introduced by this run, versus a pre-write baseline | zero, for every scenario |
+| **Absolute** | every violation present at the end of the run | zero, for full certification |
+
+Pre-existing violations are reported separately so it is clear the scenario did not cause them, but they are
+never invisible — "it was already broken" is not a pass. The only way to stand one down is an explicit
+waiver naming the exact `Check` and entity id, plus a reason and an approver. There is no blanket
+"existed before" exemption, and the validator never deletes or repairs anything, so a run cannot destroy the
+evidence of a pre-existing problem.
+
+### 4.4.2 Preflight
+
+`SystemCertificationPreflightTests` is read-only and must pass before any scenario writes. It resolves the
+target, verifies the marker, opens a read-only connection, and reports the live workflow inventory plus the
+expected Gmail mailbox and ACC place. Its composition is SQL and settings only — the Google and ACC modules
+are deliberately absent, so a preflight cannot touch an external system even by accident. It never echoes
+the connection string; only the server and database parsed from it.
 
 ### 4.5 Naming, isolation and cleanup
 
@@ -281,8 +350,10 @@ will be reported as `BLOCKED / PRODUCT GAP` rather than worked around.
 | Question | Decision |
 | --- | --- |
 | DEV protection | Three independent conditions, per §4.3 |
-| The two defects in §2.1 and §2.2 | **Prove first, then decide.** Write a certification scenario that demonstrates each on a real database; no product code changes in this round |
-| `SendQuoteToClient` proof | **`BLOCKED BY POLICY`.** No real email is sent, and the internal `QuoteSendProofStore` is not accepted as a substitute for delivery |
+| The two defects in §2.1 and §2.2 | **Prove first, then fix.** §2.1 is now proven and fixed (§2.1.1). §2.2 is still awaiting its failing regression test |
+| Required `BLOCKED` | Fails the gate. Collecting results and exiting green are separate concerns (§4.4) |
+| Integrity | Delta **and** absolute, waivers by exact entity id only (§4.4.1) |
+| `SendQuoteToClient` proof | **`BLOCKED BY POLICY`** while G-Policy blocks outbound Gmail. No artificial `QuoteSendProof`. The contract may be exercised offline before and after the stage, but a live certification is not a `PASS` on a send that never happened |
 
 ### Phase 2 delivered so far
 
@@ -297,4 +368,14 @@ will be reported as `BLOCKED / PRODUCT GAP` rather than worked around.
 | `Certification/SystemCertificationFactAttribute.cs` | `Category=SystemCertification`, separate from `Category=PilotSmoke` |
 | `Certification/SystemCertificationTestCollection.cs` | serialises the tier |
 
-Outstanding in Phase 2: the DI host that composes the production write ports for the scenarios.
+Added in the second round:
+
+| File | Role |
+| --- | --- |
+| `Certification/SystemCertificationPreflightTests.cs` | read-only DEV preflight and live workflow inventory (§4.4.2) |
+| `Workflow/StalledWatchdogSubWorkflowTests.cs` | 6 regression tests that proved defects A and B before the fix (§2.1.1) |
+| `Services/Workflow/StalledWorkflowWatchdog.cs` | the two-part fix — stage-scoped trigger links, and waiting-for-a-running-child |
+
+Outstanding in Phase 2: the DI certification host that composes the production write ports, the scenario
+registry coverage check, and the shared step assertions. Also outstanding: the failing regression tests for
+the §2.2 email defects, which must come before any behaviour change there.

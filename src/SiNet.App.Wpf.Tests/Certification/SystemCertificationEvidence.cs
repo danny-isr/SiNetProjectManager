@@ -42,9 +42,16 @@ internal enum CertificationRequirement
 /// pass unless every required step reached <see cref="CertificationResult.Pass"/>.
 /// </para>
 /// <para>
-/// <see cref="CertificationResult.Blocked"/> does not throw, because a product gap identified in advance
-/// is information rather than a regression — but it does force the overall verdict to
-/// <c>NOT CERTIFIED</c>, so it can never be read as success.
+/// The writer always records every result to the end, so the report is complete even for a failing run —
+/// that is the audit half. <see cref="FinalizeCertification"/> is the gate half: it fails the run whenever
+/// the verdict is not <c>CERTIFIED</c>, including a required <see cref="CertificationResult.Blocked"/>.
+/// Only <see cref="CertificationRequirement.Optional"/> steps and an explicit
+/// <see cref="CertificationResult.NotApplicable"/> may stand without proof.
+/// </para>
+/// <para>
+/// There is no "skipped" result. A step that is declared but never reached stays
+/// <see cref="CertificationResult.NotRun"/>, which fails the gate, so skipping cannot be used to make a
+/// missing proof look benign.
 /// </para>
 /// </summary>
 internal sealed class SystemCertificationEvidence
@@ -189,43 +196,57 @@ internal sealed class SystemCertificationEvidence
     }
 
     /// <summary>
-    /// Fails the run unless every required step passed. Throws on required Fail or NotRun; a required
-    /// Blocked is reported and blocks the verdict without throwing, since it was analysed in advance.
+    /// Gate mode. Runs to the end first so the report is complete, then fails the run unless the verdict is
+    /// <c>CERTIFIED</c>.
+    /// <para>
+    /// A required <see cref="CertificationResult.Blocked"/> fails here too. Collecting every result and
+    /// letting the process exit green are separate concerns: recording the run is the job of the writer,
+    /// which keeps working regardless, while this method exists purely so that a report saying
+    /// <c>NOT CERTIFIED</c> can never coexist with a green test. That combination is the exact failure mode
+    /// this tier was built to remove.
+    /// </para>
     /// </summary>
     public void FinalizeCertification()
     {
         Flush();
 
-        var failed = Required(CertificationResult.Fail);
-        var notRun = Required(CertificationResult.NotRun);
-
-        if (failed.Count == 0 && notRun.Count == 0)
+        if (Verdict == CertifiedVerdict)
         {
             return;
         }
 
-        var message = new StringBuilder("Certification did not pass. ");
-        if (failed.Count > 0)
-        {
-            message.Append($"Required steps FAILED: {string.Join("; ", failed)}. ");
-        }
-
-        if (notRun.Count > 0)
-        {
-            message.Append($"Required steps NOT RUN: {string.Join("; ", notRun)}. ");
-        }
-
+        var message = new StringBuilder($"Certification verdict is {Verdict}. ");
+        Append(message, "FAILED", CertificationResult.Fail);
+        Append(message, "BLOCKED", CertificationResult.Blocked);
+        Append(message, "NOT RUN", CertificationResult.NotRun);
         message.Append($"Evidence: {_markdownPath}");
+
         throw new SystemCertificationFailedException(message.ToString());
+
+        void Append(StringBuilder target, string label, CertificationResult result)
+        {
+            var steps = Required(result);
+            if (steps.Count > 0)
+            {
+                target.Append($"Required {label}: {string.Join("; ", steps)}. ");
+            }
+        }
     }
 
-    /// <summary>Overall verdict. Certified only when nothing required is outstanding, blocked or failed.</summary>
+    public const string CertifiedVerdict = "CERTIFIED";
+    public const string NotCertifiedVerdict = "NOT CERTIFIED";
+
+    /// <summary>
+    /// Overall verdict. Certified only when every required step passed — nothing failed, blocked or left
+    /// unrun. Only <see cref="CertificationRequirement.Optional"/> steps and explicit
+    /// <see cref="CertificationResult.NotApplicable"/> are allowed to stand without proof.
+    /// </summary>
     public string Verdict =>
         Required(CertificationResult.Fail).Count == 0
         && Required(CertificationResult.NotRun).Count == 0
         && Required(CertificationResult.Blocked).Count == 0
-            ? "CERTIFIED"
-            : "NOT CERTIFIED";
+            ? CertifiedVerdict
+            : NotCertifiedVerdict;
 
     private List<string> Required(CertificationResult result) =>
         _order
