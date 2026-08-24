@@ -14,14 +14,14 @@ namespace SiNet.App.Wpf.Tests.Certification;
 /// </summary>
 internal static class WorkflowCoverageInventory
 {
-    /// <summary>How a definition is accounted for. Every active definition needs one of these.</summary>
-    internal enum Classification
+    /// <summary>How the registry accounts for a definition before any scenario runs.</summary>
+    internal enum ScenarioDisposition
     {
-        /// <summary>A certification scenario drives this workflow end to end.</summary>
-        Certified,
+        /// <summary>A runnable scenario must exist for this workflow.</summary>
+        ScenarioRequired,
 
-        /// <summary>Cannot be driven end to end because of a product or seed gap, with a written reason.</summary>
-        Blocked,
+        /// <summary>Cannot be driven end-to-end because of a product or seed gap, with a written reason.</summary>
+        ScenarioBlocked,
 
         /// <summary>Out of scope for this tier, with a written reason.</summary>
         NotApplicable,
@@ -52,7 +52,7 @@ internal static class WorkflowCoverageInventory
     /// </summary>
     public static async Task<Inventory> BuildAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
-        IReadOnlyDictionary<string, (Classification Classification, string Reason)> classifications,
+        IReadOnlyDictionary<string, (ScenarioDisposition Disposition, string Reason)> classifications,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dbFactory);

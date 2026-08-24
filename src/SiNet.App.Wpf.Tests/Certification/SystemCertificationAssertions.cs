@@ -40,6 +40,23 @@ internal static class SystemCertificationAssertions
         evidence.Fail(step, report.DescribeAbsolute());
     }
 
+    public static void AssertRunnableScenariosLinked(
+        SystemCertificationEvidence evidence,
+        string step)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        try
+        {
+            SystemCertificationScenarioRegistry.AssertRunnableScenariosLinked();
+            evidence.Pass(step, "every ScenarioRequired workflow is linked to a runnable scenario type");
+        }
+        catch (InvalidOperationException ex)
+        {
+            evidence.Fail(step, ex.Message);
+        }
+    }
+
     public static void AssertCoverageComplete(
         WorkflowCoverageInventory.Inventory inventory,
         SystemCertificationEvidence evidence,

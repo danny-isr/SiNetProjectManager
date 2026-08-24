@@ -118,7 +118,7 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         // is information rather than a failure.
         var inventory = await WorkflowCoverageInventory.BuildAsync(
             dbFactory,
-            SystemCertificationScenarioRegistry.CoverageClassifications,
+            SystemCertificationScenarioRegistry.CoverageDispositions,
             ct);
 
         evidence.Fact("ActiveWorkflowDefinitions", inventory.ActiveDefinitions.Count.ToString());

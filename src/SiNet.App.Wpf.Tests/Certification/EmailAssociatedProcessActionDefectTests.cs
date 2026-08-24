@@ -17,10 +17,9 @@ namespace SiNet.App.Wpf.Tests.Certification;
 /// <summary>
 /// Proves the two email suggested-action defects from audit §2.2 before any product behaviour change.
 /// <para>
-/// The email pane dispatches associated process actions with only
-/// <c>{ ActionCode, UserId, InboxMessageId }</c>. The handlers require workflow-transition context that
-/// is never supplied, so the actions fail at runtime even though the UI offers them unconditionally
-/// (SetProjectStatus) or when workflows are active (RecordTaskResult).
+/// When the product wiring is fixed, convert these tests to assert success and post-conditions instead
+/// of expecting failure messages — do not leave characterization tests that encode the bug as the desired
+/// behaviour.
 /// </para>
 /// </summary>
 public sealed class EmailAssociatedProcessActionDefectTests
