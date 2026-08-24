@@ -57,8 +57,9 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         var target = SystemCertificationEnvironment.TryResolveTarget();
 
         evidence.Fact("WindowsIdentity", target.WindowsIdentityName ?? "<unknown>");
-        evidence.Fact("SqlServer", target.ServerName ?? "<unknown>");
-        evidence.Fact("SqlDatabase", target.DatabaseName ?? "<unknown>");
+        evidence.Fact(
+            SystemCertificationPreflightBinding.FactDeclaredSqlDataSource,
+            target.DeclaredDataSource ?? "<unknown>");
         evidence.Fact(SystemCertificationPreflightBinding.FactOperatorUserId, target.OperatorUserId.ToString());
         evidence.Fact(
             SystemCertificationPreflightBinding.FactCommitSha,
@@ -80,10 +81,32 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
             return;
         }
 
+        var (verifiedTarget, actualViolation) = await SystemCertificationEnvironment.TryVerifyActualSqlTargetAsync(
+            target,
+            ct);
+
+        evidence.Fact(
+            SystemCertificationPreflightBinding.FactActualSqlServer,
+            verifiedTarget.ActualServerName ?? "<unknown>");
+        evidence.Fact(
+            SystemCertificationPreflightBinding.FactActualSqlDatabase,
+            verifiedTarget.ActualDatabaseName ?? "<unknown>");
+
+        if (actualViolation is not null)
+        {
+            evidence.Fail("preflight.target", actualViolation);
+            Report(evidence);
+            evidence.FinalizeCertification();
+            return;
+        }
+
+        target = verifiedTarget;
+
         evidence.Pass(
             "preflight.target",
-            $"identity '{target.WindowsIdentityName}', server '{target.ServerName}', database "
-            + $"'{target.DatabaseName}', operator SIUser {target.OperatorUserId} — all allowlisted");
+            $"identity '{target.WindowsIdentityName}', declared endpoint '{target.DeclaredDataSource}', "
+            + $"actual server '{target.ActualServerName}', actual database '{target.ActualDatabaseName}', "
+            + $"operator SIUser {target.OperatorUserId} — all allowlisted");
 
         await using var provider = SystemCertificationHost.BuildReadOnly(target.ConnectionString);
         var dbFactory = provider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();

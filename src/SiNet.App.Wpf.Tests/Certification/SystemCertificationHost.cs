@@ -116,6 +116,16 @@ internal static class SystemCertificationHost
                 + acc.Violation);
         }
 
+        var (verifiedTarget, actualViolation) = await SystemCertificationEnvironment.TryVerifyActualSqlTargetAsync(
+            target,
+            cancellationToken);
+        if (actualViolation is not null)
+        {
+            return new WriteAuthorizationResult(null, actualViolation);
+        }
+
+        target = verifiedTarget;
+
         await using var readProvider = BuildReadOnly(target.ConnectionString);
         var dbFactory = readProvider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
         var marker = await SystemCertificationDatabaseMarker.VerifyAsync(dbFactory, cancellationToken);

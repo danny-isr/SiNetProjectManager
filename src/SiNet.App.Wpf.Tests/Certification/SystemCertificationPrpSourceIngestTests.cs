@@ -155,8 +155,10 @@ public sealed class SystemCertificationPrpSourceIngestTests
             SkipReason: null,
             Violation: null,
             ConnectionString: "Server=.;Database=SystemCertificationTest;Trusted_Connection=True;",
-            ServerName: ".",
-            DatabaseName: "SystemCertificationTest",
+            DeclaredDataSource: ".",
+            DeclaredDatabase: "SystemCertificationTest",
+            ActualServerName: ".",
+            ActualDatabaseName: "SystemCertificationTest",
             WindowsIdentityName: Environment.UserName,
             OperatorUserId: 1);
 

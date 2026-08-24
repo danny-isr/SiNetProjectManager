@@ -10,8 +10,9 @@ internal sealed record SystemCertificationPreflightBinding(
     string Verdict,
     DateTimeOffset StartedAt,
     string CommitSha,
-    string SqlServer,
-    string SqlDatabase,
+    string DeclaredSqlDataSource,
+    string ActualSqlServer,
+    string ActualSqlDatabase,
     string WindowsIdentity,
     int OperatorUserId,
     string DatabaseMarker,
@@ -20,8 +21,9 @@ internal sealed record SystemCertificationPreflightBinding(
     string? AccInboxProject)
 {
     public const string FactCommitSha = "CommitSha";
-    public const string FactSqlServer = "SqlServer";
-    public const string FactSqlDatabase = "SqlDatabase";
+    public const string FactDeclaredSqlDataSource = "DeclaredSqlDataSource";
+    public const string FactActualSqlServer = "ActualSqlServer";
+    public const string FactActualSqlDatabase = "ActualSqlDatabase";
     public const string FactWindowsIdentity = "WindowsIdentity";
     public const string FactOperatorUserId = "OperatorUserId";
     public const string FactDatabaseMarker = "DatabaseMarker";
@@ -67,8 +69,9 @@ internal sealed record SystemCertificationPreflightBinding(
             return false;
         }
 
-        if (!TryReadFact(document, FactSqlServer, out var sqlServer)
-            || !TryReadFact(document, FactSqlDatabase, out var sqlDatabase)
+        if (!TryReadFact(document, FactDeclaredSqlDataSource, out var declaredSqlDataSource)
+            || !TryReadFact(document, FactActualSqlServer, out var actualSqlServer)
+            || !TryReadFact(document, FactActualSqlDatabase, out var actualSqlDatabase)
             || !TryReadFact(document, FactWindowsIdentity, out var windowsIdentity)
             || !TryReadFact(document, FactDatabaseMarker, out var databaseMarker))
         {
@@ -92,8 +95,9 @@ internal sealed record SystemCertificationPreflightBinding(
             verdict!,
             startedAt,
             commitSha!,
-            sqlServer!,
-            sqlDatabase!,
+            declaredSqlDataSource!,
+            actualSqlServer!,
+            actualSqlDatabase!,
             windowsIdentity!,
             operatorUserId,
             databaseMarker!,
@@ -132,14 +136,31 @@ internal sealed record SystemCertificationPreflightBinding(
             return $"Preflight evidence CommitSha '{CommitSha}' does not match current HEAD '{currentCommitSha}'.";
         }
 
-        if (!string.Equals(SqlServer, target.ServerName, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(
+                DeclaredSqlDataSource,
+                target.DeclaredDataSource,
+                StringComparison.OrdinalIgnoreCase))
         {
-            return $"Preflight SqlServer '{SqlServer}' != current '{target.ServerName}'.";
+            return $"Preflight DeclaredSqlDataSource '{DeclaredSqlDataSource}' != current "
+                   + $"'{target.DeclaredDataSource ?? "<null>"}'.";
         }
 
-        if (!string.Equals(SqlDatabase, target.DatabaseName, StringComparison.OrdinalIgnoreCase))
+        if (!target.IsActualVerified)
         {
-            return $"Preflight SqlDatabase '{SqlDatabase}' != current '{target.DatabaseName}'.";
+            return "Current runtime has not verified the actual SQL server identity; PRP live refuses "
+                   + "to trust preflight evidence without a live actual-server match.";
+        }
+
+        if (!string.Equals(ActualSqlServer, target.ActualServerName, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Preflight ActualSqlServer '{ActualSqlServer}' != current "
+                   + $"'{target.ActualServerName ?? "<null>"}'.";
+        }
+
+        if (!string.Equals(ActualSqlDatabase, target.ActualDatabaseName, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Preflight ActualSqlDatabase '{ActualSqlDatabase}' != current "
+                   + $"'{target.ActualDatabaseName ?? "<null>"}'.";
         }
 
         if (!string.Equals(WindowsIdentity, target.WindowsIdentityName, StringComparison.OrdinalIgnoreCase))

@@ -76,12 +76,17 @@ internal static class SystemCertificationEnvironment
         string? SkipReason,
         string? Violation,
         string? ConnectionString,
-        string? ServerName,
-        string? DatabaseName,
+        string? DeclaredDataSource,
+        string? DeclaredDatabase,
+        string? ActualServerName,
+        string? ActualDatabaseName,
         string? WindowsIdentityName,
         int OperatorUserId)
     {
         public bool IsAuthorised => IsEnabled && Violation is null;
+
+        public bool IsActualVerified =>
+            !string.IsNullOrWhiteSpace(ActualServerName) && !string.IsNullOrWhiteSpace(ActualDatabaseName);
     }
 
     internal sealed record GmailLayer(
@@ -107,9 +112,9 @@ internal static class SystemCertificationEnvironment
     public static bool IsPrpLiveRequested() => IsFlagSet(PrpLiveEnabledEnv);
 
     /// <summary>
-    /// Resolves and authorises the SQL target from environment only. Does not touch the database; the
-    /// in-database marker is checked by <see cref="SystemCertificationDatabaseMarker"/> once a context
-    /// exists, and both must pass before any write.
+    /// Resolves the declared SQL target from environment only. The connection string
+    /// <c>Data Source</c> and <c>Initial Catalog</c> are recorded as declared facts — they are not proof
+    /// of which server answered. Call <see cref="TryVerifyActualSqlTargetAsync"/> after opening a session.
     /// </summary>
     public static Target TryResolveTarget()
     {
@@ -129,20 +134,20 @@ internal static class SystemCertificationEnvironment
                 + "string from the vault, because on a PROD machine that is the production database.");
         }
 
-        string server;
-        string database;
+        string declaredDataSource;
+        string declaredDatabase;
         try
         {
             var builder = new SqlConnectionStringBuilder(connection);
-            server = builder.DataSource;
-            database = builder.InitialCatalog;
+            declaredDataSource = builder.DataSource;
+            declaredDatabase = builder.InitialCatalog;
         }
         catch (ArgumentException ex)
         {
             return Violated($"{SqlConnectionEnv} is not a valid SQL connection string: {ex.Message}");
         }
 
-        if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(database))
+        if (string.IsNullOrWhiteSpace(declaredDataSource) || string.IsNullOrWhiteSpace(declaredDatabase))
         {
             return Violated(
                 $"{SqlConnectionEnv} must name both a server (Data Source) and a database (Initial Catalog).");
@@ -155,15 +160,9 @@ internal static class SystemCertificationEnvironment
             return Violated(
                 $"{AllowedServersEnv} is required: the approved SQL server(s), supplied independently of "
                 + "the connection string. Re-stating the connection string proves nothing.",
-                server, database, windowsIdentity);
-        }
-
-        if (!allowedServers.Contains(server, StringComparer.OrdinalIgnoreCase))
-        {
-            return Violated(
-                $"SQL server '{server}' is not on {AllowedServersEnv} "
-                + $"([{string.Join(", ", allowedServers)}]). Refusing to write to an unapproved server.",
-                server, database, windowsIdentity);
+                declaredDataSource,
+                declaredDatabase,
+                windowsIdentity);
         }
 
         var allowedDatabases = ReadAllowlist(AllowedDatabasesEnv);
@@ -171,15 +170,9 @@ internal static class SystemCertificationEnvironment
         {
             return Violated(
                 $"{AllowedDatabasesEnv} is required: the approved database name(s).",
-                server, database, windowsIdentity);
-        }
-
-        if (!allowedDatabases.Contains(database, StringComparer.OrdinalIgnoreCase))
-        {
-            return Violated(
-                $"Database '{database}' is not on {AllowedDatabasesEnv} "
-                + $"([{string.Join(", ", allowedDatabases)}]). Refusing to write to an unapproved database.",
-                server, database, windowsIdentity);
+                declaredDataSource,
+                declaredDatabase,
+                windowsIdentity);
         }
 
         var allowedUsers = ReadAllowlist(AllowedWindowsUsersEnv);
@@ -188,7 +181,9 @@ internal static class SystemCertificationEnvironment
             return Violated(
                 $"{AllowedWindowsUsersEnv} is required: the approved DEV operator Windows identity, "
                 + @"for example 'AzureAD\dannyisrael'.",
-                server, database, windowsIdentity);
+                declaredDataSource,
+                declaredDatabase,
+                windowsIdentity);
         }
 
         // Exact match only. The SIUser mechanism this mirrors compares LoginName by equality
@@ -198,7 +193,9 @@ internal static class SystemCertificationEnvironment
             return Violated(
                 $"Windows identity '{windowsIdentity}' is not on {AllowedWindowsUsersEnv} "
                 + $"([{string.Join(", ", allowedUsers)}]). Exact match is required — no partial matching.",
-                server, database, windowsIdentity);
+                declaredDataSource,
+                declaredDatabase,
+                windowsIdentity);
         }
 
         var operatorRaw = Read(OperatorUserIdEnv);
@@ -206,7 +203,9 @@ internal static class SystemCertificationEnvironment
         {
             return Violated(
                 $"{OperatorUserIdEnv} must be the operator's positive SIUser.Id on the target database.",
-                server, database, windowsIdentity);
+                declaredDataSource,
+                declaredDatabase,
+                windowsIdentity);
         }
 
         return new Target(
@@ -214,24 +213,74 @@ internal static class SystemCertificationEnvironment
             SkipReason: null,
             Violation: null,
             connection.Trim(),
-            server,
-            database,
+            declaredDataSource,
+            declaredDatabase,
+            ActualServerName: null,
+            ActualDatabaseName: null,
             windowsIdentity,
             operatorUserId);
 
         static Target NotEnabled(string reason) =>
-            new(false, reason, null, null, null, null, null, 0);
+            new(false, reason, null, null, null, null, null, null, null, 0);
 
-        static Target Violated(string violation, string? server = null, string? database = null, string? identity = null) =>
+        static Target Violated(
+            string violation,
+            string? declaredDataSource = null,
+            string? declaredDatabase = null,
+            string? identity = null) =>
             new(
                 true,
                 null,
                 violation,
                 null,
-                server,
-                database,
+                declaredDataSource,
+                declaredDatabase,
+                ActualServerName: null,
+                ActualDatabaseName: null,
                 identity ?? WindowsIdentity.GetCurrent().Name,
                 0);
+    }
+
+    /// <summary>
+    /// Reads the actual SQL server/database from an established session and matches them against the explicit
+    /// allowlists. The declared connection-string endpoint is never accepted as proof.
+    /// </summary>
+    public static async Task<(Target Target, string? Violation)> TryVerifyActualSqlTargetAsync(
+        Target declaredTarget,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(declaredTarget);
+
+        if (declaredTarget.Violation is not null)
+        {
+            return (declaredTarget, declaredTarget.Violation);
+        }
+
+        if (!declaredTarget.IsAuthorised || declaredTarget.ConnectionString is null)
+        {
+            return (declaredTarget, "target resolution did not produce an authorised connection.");
+        }
+
+        var verification = await SystemCertificationSqlTargetIdentity.VerifyAsync(
+            declaredTarget.ConnectionString,
+            ReadAllowlist(AllowedServersEnv),
+            ReadAllowlist(AllowedDatabasesEnv),
+            cancellationToken);
+
+        if (verification.Identity is null)
+        {
+            return (declaredTarget, verification.Violation ?? "actual SQL identity could not be read.");
+        }
+
+        var verifiedTarget = declaredTarget with
+        {
+            ActualServerName = verification.Identity.ServerName,
+            ActualDatabaseName = verification.Identity.DatabaseName,
+        };
+
+        return verification.IsApproved
+            ? (verifiedTarget, null)
+            : (verifiedTarget, verification.Violation);
     }
 
     public static GmailLayer TryResolveGmailLayer()

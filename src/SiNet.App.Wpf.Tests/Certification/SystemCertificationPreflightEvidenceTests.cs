@@ -215,6 +215,46 @@ public sealed class SystemCertificationPreflightEvidenceTests
         }
     }
 
+    [Fact]
+    public void TryValidate_fails_when_actual_sql_target_is_not_verified()
+    {
+        if (!TryGetActualGitHead(out var head))
+        {
+            return;
+        }
+
+        var file = WriteBindingJson(head, DateTimeOffset.Now);
+        var previousEvidence = Environment.GetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv);
+        var previousCommit = Environment.GetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv);
+
+        Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, file);
+        Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, null);
+
+        try
+        {
+            var unverifiedTarget = CreateTarget() with
+            {
+                ActualServerName = null,
+                ActualDatabaseName = null,
+            };
+
+            var violation = SystemCertificationPreflightEvidence.TryValidate(
+                unverifiedTarget,
+                CreateGmail(),
+                CreateAcc(),
+                out _);
+
+            Assert.NotNull(violation);
+            Assert.Contains("actual SQL server identity", violation, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SystemCertificationEnvironment.PreflightEvidenceEnv, previousEvidence);
+            Environment.SetEnvironmentVariable(SystemCertificationGitMetadata.CommitShaEnv, previousCommit);
+            File.Delete(file);
+        }
+    }
+
     private static bool TryGetActualGitHead(out string head)
     {
         head = string.Empty;
@@ -248,8 +288,9 @@ public sealed class SystemCertificationPreflightEvidenceTests
             Facts = new Dictionary<string, string>
             {
                 [SystemCertificationPreflightBinding.FactCommitSha] = commitSha,
-                [SystemCertificationPreflightBinding.FactSqlServer] = ".",
-                [SystemCertificationPreflightBinding.FactSqlDatabase] = "SystemCertificationTest",
+                [SystemCertificationPreflightBinding.FactDeclaredSqlDataSource] = ".",
+                [SystemCertificationPreflightBinding.FactActualSqlServer] = ".",
+                [SystemCertificationPreflightBinding.FactActualSqlDatabase] = "SystemCertificationTest",
                 [SystemCertificationPreflightBinding.FactWindowsIdentity] = Environment.UserName,
                 [SystemCertificationPreflightBinding.FactOperatorUserId] = "1",
                 [SystemCertificationPreflightBinding.FactDatabaseMarker] = SystemCertificationDatabaseMarker.RequiredValue,
@@ -269,8 +310,10 @@ public sealed class SystemCertificationPreflightEvidenceTests
             SkipReason: null,
             Violation: null,
             ConnectionString: "Server=.;Database=SystemCertificationTest;Trusted_Connection=True;",
-            ServerName: ".",
-            DatabaseName: "SystemCertificationTest",
+            DeclaredDataSource: ".",
+            DeclaredDatabase: "SystemCertificationTest",
+            ActualServerName: ".",
+            ActualDatabaseName: "SystemCertificationTest",
             WindowsIdentityName: Environment.UserName,
             OperatorUserId: 1);
 
