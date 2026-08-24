@@ -85,7 +85,38 @@ internal sealed class SystemCertificationIntegrityValidator(
     public void UseWaivers(IReadOnlyList<Waiver> waivers)
     {
         ArgumentNullException.ThrowIfNull(waivers);
+
+        foreach (var waiver in waivers)
+        {
+            ValidateWaiver(waiver);
+        }
+
         _waivers = waivers;
+    }
+
+    internal static void ValidateWaiver(Waiver waiver)
+    {
+        ArgumentNullException.ThrowIfNull(waiver);
+
+        if (string.IsNullOrWhiteSpace(waiver.Check))
+        {
+            throw new ArgumentException("Waiver.Check is required.", nameof(waiver));
+        }
+
+        if (string.IsNullOrWhiteSpace(waiver.EntityId))
+        {
+            throw new ArgumentException("Waiver.EntityId is required.", nameof(waiver));
+        }
+
+        if (string.IsNullOrWhiteSpace(waiver.Reason))
+        {
+            throw new ArgumentException("Waiver.Reason is required.", nameof(waiver));
+        }
+
+        if (string.IsNullOrWhiteSpace(waiver.ApprovedBy))
+        {
+            throw new ArgumentException("Waiver.ApprovedBy is required.", nameof(waiver));
+        }
     }
 
     /// <summary>

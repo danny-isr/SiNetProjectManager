@@ -68,7 +68,11 @@ internal static class SystemCertificationEnvironment
         public bool IsAuthorised => IsEnabled && Violation is null;
     }
 
-    internal sealed record GmailLayer(bool IsEnabled, string? SkipReason, string? ExpectedAccount);
+    internal sealed record GmailLayer(
+        bool IsEnabled,
+        string? SkipReason,
+        string? Violation,
+        string? ExpectedAccount);
 
     internal sealed record AccLayer(
         bool IsEnabled,
@@ -76,6 +80,12 @@ internal static class SystemCertificationEnvironment
         string? Violation,
         string? PlaceTitle,
         string? InboxProjectName);
+
+    /// <summary>True when the operator opted into the certification tier via <see cref="EnabledEnv"/>.</summary>
+    public static bool IsCertificationTierRequested() => IsFlagSet(EnabledEnv);
+
+    /// <summary>True when an optional layer flag is set (Gmail or ACC).</summary>
+    public static bool IsLayerRequested(string layerEnabledEnv) => IsFlagSet(layerEnabledEnv);
 
     /// <summary>
     /// Resolves and authorises the SQL target from environment only. Does not touch the database; the
@@ -95,10 +105,7 @@ internal static class SystemCertificationEnvironment
         var connection = Read(SqlConnectionEnv);
         if (string.IsNullOrWhiteSpace(connection))
         {
-            // Absent connection string is a configuration omission, not an unauthorised target: there is
-            // nothing to write to yet, so skipping is honest. Never fall back to the vault — on a PROD
-            // workstation that key is the production database.
-            return NotEnabled(
+            return Violated(
                 $"{SqlConnectionEnv} is required. The certification tier never resolves the connection "
                 + "string from the vault, because on a PROD machine that is the production database.");
         }
@@ -113,19 +120,16 @@ internal static class SystemCertificationEnvironment
         }
         catch (ArgumentException ex)
         {
-            return NotEnabled($"{SqlConnectionEnv} is not a valid SQL connection string: {ex.Message}");
+            return Violated($"{SqlConnectionEnv} is not a valid SQL connection string: {ex.Message}");
         }
 
         if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(database))
         {
-            return NotEnabled(
+            return Violated(
                 $"{SqlConnectionEnv} must name both a server (Data Source) and a database (Initial Catalog).");
         }
 
         var windowsIdentity = WindowsIdentity.GetCurrent().Name;
-
-        // From here on the operator has explicitly asked for a certification write run against a named
-        // target. Anything that fails to prove the target is approved is a violation, not a skip.
         var allowedServers = ReadAllowlist(AllowedServersEnv);
         if (allowedServers.Count == 0)
         {
@@ -199,29 +203,42 @@ internal static class SystemCertificationEnvironment
         static Target NotEnabled(string reason) =>
             new(false, reason, null, null, null, null, null, 0);
 
-        static Target Violated(string violation, string server, string database, string identity) =>
-            new(true, null, violation, null, server, database, identity, 0);
+        static Target Violated(string violation, string? server = null, string? database = null, string? identity = null) =>
+            new(
+                true,
+                null,
+                violation,
+                null,
+                server,
+                database,
+                identity ?? WindowsIdentity.GetCurrent().Name,
+                0);
     }
 
     public static GmailLayer TryResolveGmailLayer()
     {
         if (!IsFlagSet(GmailEnabledEnv))
         {
-            return new GmailLayer(false, $"Set {GmailEnabledEnv}=1 to include the Gmail layer.", null);
+            return new GmailLayer(
+                false,
+                $"Set {GmailEnabledEnv}=1 to include the Gmail layer.",
+                null,
+                null);
         }
 
         var account = Read(GmailAccountEnv);
         if (string.IsNullOrWhiteSpace(account))
         {
             return new GmailLayer(
-                false,
+                true,
+                null,
                 $"{GmailAccountEnv} is required: the mailbox the stored token must authenticate as. The "
                 + @"token under %LOCALAPPDATA%\SiNet\google-token belongs to whichever account last "
                 + "consented on this machine, which may not be the intended mailbox.",
                 null);
         }
 
-        return new GmailLayer(true, null, account.Trim());
+        return new GmailLayer(true, null, null, account.Trim());
     }
 
     public static AccLayer TryResolveAccLayer(GmailLayer gmail)
@@ -230,15 +247,23 @@ internal static class SystemCertificationEnvironment
 
         if (!IsFlagSet(AccEnabledEnv))
         {
-            return new AccLayer(false, $"Set {AccEnabledEnv}=1 to include the ACC layer.", null, null, null);
-        }
-
-        if (!gmail.IsEnabled)
-        {
             return new AccLayer(
                 false,
-                $"The ACC layer requires the Gmail layer ({GmailEnabledEnv}=1): {gmail.SkipReason}",
+                $"Set {AccEnabledEnv}=1 to include the ACC layer.",
                 null,
+                null,
+                null);
+        }
+
+        if (!gmail.IsEnabled || gmail.Violation is not null)
+        {
+            var reason = gmail.Violation
+                           ?? gmail.SkipReason
+                           ?? $"Set {GmailEnabledEnv}=1 before enabling ACC.";
+            return new AccLayer(
+                true,
+                null,
+                $"The ACC layer requires a valid Gmail layer ({GmailEnabledEnv}=1): {reason}",
                 null,
                 null);
         }
@@ -247,7 +272,7 @@ internal static class SystemCertificationEnvironment
         if (!string.Equals(place, RequiredAccPlaceTitle, StringComparison.Ordinal))
         {
             return new AccLayer(
-                false,
+                true,
                 null,
                 $"{AccPlaceEnv} must be exactly '{RequiredAccPlaceTitle}' (docs/ENVIRONMENTS.md §5.1). "
                 + $"Got '{place ?? "<null>"}'.",
@@ -259,7 +284,7 @@ internal static class SystemCertificationEnvironment
         if (string.IsNullOrWhiteSpace(inboxProject))
         {
             return new AccLayer(
-                false,
+                true,
                 null,
                 $"{AccInboxProjectEnv} is required: the disposable ACC project written temporarily into "
                 + "InboxProjectName. Without it, ingest targets the office Inbox project named by the "

@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using SiNet.Infrastructure.Sql;
 using SiNetSQL.Data;
 using Xunit;
 using Xunit.Abstractions;
@@ -36,20 +34,43 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
             ("preflight.marker", "Verify the in-database Certification.Environment marker"),
             ("preflight.connect", "Open a read-only connection to the target"),
             ("preflight.inventory", "Read the active workflow definition inventory"));
-        evidence.DeclareAll(
-            CertificationRequirement.Optional,
-            ("preflight.gmail", "Report the expected Gmail mailbox"),
-            ("preflight.acc", "Report the ACC place and inbox project"));
+
+        var gmailRequested = SystemCertificationEnvironment.IsLayerRequested(
+            SystemCertificationEnvironment.GmailEnabledEnv);
+        var accRequested = SystemCertificationEnvironment.IsLayerRequested(
+            SystemCertificationEnvironment.AccEnabledEnv);
+
+        evidence.Declare(
+            "preflight.gmail",
+            gmailRequested ? CertificationRequirement.Required : CertificationRequirement.Optional,
+            gmailRequested
+                ? "Gmail layer requested — verify configuration without connecting"
+                : "Gmail layer not requested for this run");
+
+        evidence.Declare(
+            "preflight.acc",
+            accRequested ? CertificationRequirement.Required : CertificationRequirement.Optional,
+            accRequested
+                ? "ACC layer requested — verify configuration without connecting"
+                : "ACC layer not requested for this run");
 
         var target = SystemCertificationEnvironment.TryResolveTarget();
 
-        evidence.Fact("WindowsIdentity", target.WindowsIdentityName);
-        evidence.Fact("SqlServer", target.ServerName);
-        evidence.Fact("SqlDatabase", target.DatabaseName);
+        evidence.Fact("WindowsIdentity", target.WindowsIdentityName ?? "<unknown>");
+        evidence.Fact("SqlServer", target.ServerName ?? "<unknown>");
+        evidence.Fact("SqlDatabase", target.DatabaseName ?? "<unknown>");
 
         if (target.Violation is not null)
         {
             evidence.Fail("preflight.target", target.Violation);
+            Report(evidence);
+            evidence.FinalizeCertification();
+            return;
+        }
+
+        if (!target.IsAuthorised || target.ConnectionString is null)
+        {
+            evidence.Fail("preflight.target", "target resolution did not produce an authorised connection.");
             Report(evidence);
             evidence.FinalizeCertification();
             return;
@@ -60,7 +81,7 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
             $"identity '{target.WindowsIdentityName}', server '{target.ServerName}', database "
             + $"'{target.DatabaseName}', operator SIUser {target.OperatorUserId} — all allowlisted");
 
-        await using var provider = BuildReadOnlyProvider(target.ConnectionString!);
+        await using var provider = SystemCertificationHost.BuildReadOnly(target.ConnectionString);
         var dbFactory = provider.GetRequiredService<IDbContextFactory<SiNetSQLDbContext>>();
 
         var marker = await SystemCertificationDatabaseMarker.VerifyAsync(dbFactory, ct);
@@ -97,23 +118,27 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         // is information rather than a failure.
         var inventory = await WorkflowCoverageInventory.BuildAsync(
             dbFactory,
-            new Dictionary<string, (WorkflowCoverageInventory.Classification, string)>(StringComparer.Ordinal),
+            SystemCertificationScenarioRegistry.CoverageClassifications,
             ct);
 
         evidence.Fact("ActiveWorkflowDefinitions", inventory.ActiveDefinitions.Count.ToString());
         evidence.Fact("TotalStages", inventory.TotalStages.ToString());
         evidence.Fact("TotalTransitions", inventory.TotalTransitions.ToString());
-        evidence.Pass("preflight.inventory", WorkflowCoverageInventory.Describe(inventory));
+        SystemCertificationAssertions.AssertCoverageComplete(inventory, evidence, "preflight.inventory");
 
         var gmail = SystemCertificationEnvironment.TryResolveGmailLayer();
         evidence.Fact("GmailExpectedAccount", gmail.ExpectedAccount ?? "<not configured>");
-        if (gmail.IsEnabled)
+        if (gmail.Violation is not null)
         {
-            evidence.Pass("preflight.gmail", $"expected mailbox '{gmail.ExpectedAccount}'");
+            evidence.Fail("preflight.gmail", gmail.Violation);
+        }
+        else if (gmail.IsEnabled)
+        {
+            evidence.Pass("preflight.gmail", $"expected mailbox '{gmail.ExpectedAccount}' (no connection attempted)");
         }
         else
         {
-            evidence.NotApplicable("preflight.gmail", gmail.SkipReason ?? "Gmail layer not enabled");
+            evidence.NotApplicable("preflight.gmail", gmail.SkipReason ?? "Gmail layer not requested");
         }
 
         var acc = SystemCertificationEnvironment.TryResolveAccLayer(gmail);
@@ -127,28 +152,15 @@ public sealed class SystemCertificationPreflightTests(ITestOutputHelper output)
         {
             evidence.Pass(
                 "preflight.acc",
-                $"place '{acc.PlaceTitle}', inbox project '{acc.InboxProjectName}'");
+                $"place '{acc.PlaceTitle}', inbox project '{acc.InboxProjectName}' (no connection attempted)");
         }
         else
         {
-            evidence.NotApplicable("preflight.acc", acc.SkipReason ?? "ACC layer not enabled");
+            evidence.NotApplicable("preflight.acc", acc.SkipReason ?? "ACC layer not requested");
         }
 
         Report(evidence);
         evidence.FinalizeCertification();
-    }
-
-    /// <summary>
-    /// Minimal read-only composition: SQL and settings only. The Google and ACC modules are deliberately
-    /// absent so a preflight cannot touch an external system even by accident.
-    /// </summary>
-    private static ServiceProvider BuildReadOnlyProvider(string connectionString)
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection().Build());
-        services.AddSiNetSql(connectionString);
-        services.AddSiNetSystemSettingsSql();
-        return services.BuildServiceProvider();
     }
 
     private void Report(SystemCertificationEvidence evidence) =>
