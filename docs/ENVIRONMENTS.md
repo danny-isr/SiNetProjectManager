@@ -2,7 +2,8 @@
 
 > **Title:** Environments -- Production vs Development
 > **Date:** 02.08.2026
-> **Updated:** 07.08.2026 (As-Is reconciliation -- §0 dimension separation; Debug != Development runtime)
+> **Updated:** 24.08.2026 (§5.1.1 Office Inbox not covered by the place convention; §5.2.1 bounded shared-mailbox exception)
+> **Previously updated:** 07.08.2026 (As-Is reconciliation -- §0 dimension separation; Debug != Development runtime)
 > **Status:** Active / Current Source of Truth
 > **Scope:** Machine roles, configuration placement, allowed/forbidden operations per environment, and the target state for Google/ACC isolation. Documentation only -- no code changes in this round.
 > **Reconciliation:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
@@ -156,6 +157,27 @@ Same ACC hub / Autodesk app. Projects are distinguished by the **place (מיקו
 
 This is a **process + naming** control, not yet an automatic code gate. A future code slice may refuse DEV AccService calls against non-`SI` places (**Needs Review** / follow-up).
 
+#### 5.1.1 The place convention does not cover the Office Inbox (2026-08-24)
+
+Verified while designing the automated P0 smoke: there are **two independent ACC write targets**, and the place convention only governs one of them.
+
+| Target | Resolved from | Follows the place? |
+| --- | --- | --- |
+| Per-project filing / MoveToProject | `"SI-" + Place.Title` (`AccProjectProvisioningService`) | Yes |
+| Office Inbox email ingest | `InboxProjectName` system setting, fallback `"מיילים למשרד - POC 4"` | **No** |
+
+Consequences for DEV:
+
+- Because the DEV database is restored from a production backup, its `InboxProjectName` names the **production** Inbox ACC project. Email ACC ingest from DEV therefore uploads into production unless that setting is overridden first.
+- There is **no** `#if DEBUG` redirection anywhere in the ACC path, and AccService's `appsettings.Development.json` changes only the Serilog level. Debug builds do not steer ACC anywhere.
+- `SqlProjectCreateService.CreateAsync` provisions ACC eagerly right after the SQL commit, with no feature flag, so creating a project programmatically on DEV is itself an ACC write.
+
+Until a code gate exists, DEV ACC exercises must override `InboxProjectName` to a disposable project first. The automated smoke does this and enforces it in-harness — see [`TEST_STRATEGY.md`](./TEST_STRATEGY.md) §4W.2.
+
+**And the override only works in Local mode.** `ModeSwitchingAccInboxBootstrapService` chooses between the in-process executor and a POST to AccService `/acc/inbox/ensure`. Only the in-process path reads `InboxProjectName` from *this* database; the remote path resolves it inside AccService, from **AccService's own** database. So on DEV, changing `InboxProjectName` locally does nothing at all if ACC is running in Remote mode against an AccService pointed at another database.
+
+Practical rule: before any DEV ACC Inbox exercise, check `IAccServiceModeProvider.Mode`. If it is Remote, either confirm which database that AccService instance uses or force the local path. Extending the mode switch so ACC-relevant settings cannot silently come from a different database is **Needs Review**.
+
 ### 5.2 Google / Gmail (direction decided; details open)
 
 | Surface | Decision | Status |
@@ -165,12 +187,26 @@ This is a **process + naming** control, not yet an automatic code gate. A future
 
 Until the DEV mailbox exists: on DEV, treat Gmail filing and Drive writes as **production-impacting**. Prefer read-only verification. Do not run bulk ingest against the office mailbox.
 
+#### 5.2.1 Bounded exception — shared mailbox not yet in office use (2026-08-24)
+
+Owner decision: the office **shared** mailbox and its Drive folder are newly created and **not yet used anywhere in the office**, and the owner will delete the test artifacts afterwards. For that reason single-message Gmail filing from DEV is acceptable for the automated P0 smoke.
+
+This exception is **time-limited and narrow**:
+
+- It covers a single operator-supplied test message and one project label, filed and then unfiled.
+- It does **not** authorise bulk ingest, outbound mail, or Drive/report writes.
+- It **expires the moment the office starts using that mailbox**. After that, the dedicated DEV mailbox in the table above is required again.
+
+A dedicated DEV Google account remains the correct long-term fix. Provisioning it needs: the vault secret `SiNet/Google/ClientSecrets` replaced on the DEV machine, one interactive consent (`Gmail.AllowInteractiveSignIn` is `false`, so `GmailClientProvider.SignInInteractiveAsync` must be used explicitly), and no `Gmail.RootLabel` override — in a separate mailbox the same label name is already a separate label tree.
+
 ### 5.3 Residual risk table
 
 | Surface | Isolation today | Residual risk |
 | --- | --- | --- |
 | ACC hub | Same hub; DEV projects under place `SI` | Mistake using a production place-name from DEV |
-| Gmail | Planned separate DEV mailbox | Until provisioned, same mailbox / `Gmail.RootLabel` |
+| ACC Office Inbox | **None by convention** — `InboxProjectName` must be overridden explicitly (§5.1.1) | DEV ingest uploads into the production Inbox project by default |
+| ACC items / versions | Application soft-deletes only (`HideAsync`) | Uploaded files cannot be removed without the ACC Admin Console |
+| Gmail | Planned separate DEV mailbox; bounded exception for the unused shared mailbox (§5.2.1) | Exception expires once the office adopts that mailbox |
 | Google Drive templates / reports | Same Shared Drive IDs in git | DEV can still write if code paths run |
 
 ---

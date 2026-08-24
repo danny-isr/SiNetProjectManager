@@ -247,8 +247,9 @@ Live layer (`Category=LiveSmoke`) was **Not Run** here (no AccService/DB session
 | Field | Value |
 | --- | --- |
 | **Interactive smoke** | **Not Run** |
+| **P0 Live Smoke (L4W automated, 2026-08-24)** | **Pass** on DEV — SQL/Pilot corridor + Gmail/ACC; evidence `p0-pilot-smoke-20260824-154135.md` / `154602.md` — see [`PILOT_CONTROLS.md`](./PILOT_CONTROLS.md) § Live evidence; offline **3449** Pass |
 | **Primary host** | `SiNet.App.Wpf.exe` + AccService MultiStart |
-| **Operator checklist** | [`manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md`](./manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md) |
+| **Operator checklist** | [`manual-tests/STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md) (+ workflow gate) |
 | **Rollout** | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) |
 | **Pilot after Pass** | 1–2 internal users while external legacy system stays available |
 

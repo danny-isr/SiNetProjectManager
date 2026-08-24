@@ -1,10 +1,11 @@
 # Standalone Pilot — Operator Smoke Checklist
 
-> **Status:** Not Run  
+> **Status:** Not Run (interactive) — P0 Live Smoke 2026-08-17 Blocked at Environment Gate; **2026-08-24 unblocked, steps 3–8 moved to the automated `Category=PilotSmoke` tier**  
 > **Host:** `SiNet.App.Wpf.exe` + AccService Remote (MultiStart)  
 > **Strategy:** [`docs/TEST_STRATEGY.md`](../TEST_STRATEGY.md)  
 > **Envelope:** [`docs/NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md)  
 > **Workflow gate:** [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./STANDALONE_WORKFLOW_PRODUCTION_GATE.md)  
+> **Pilot controls:** [`docs/PILOT_CONTROLS.md`](../PILOT_CONTROLS.md)  
 > **Supersedes:** [`NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md),
 > [`EMAIL_ACC_STANDALONE_SMOKE.md`](./EMAIL_ACC_STANDALONE_SMOKE.md)
 
@@ -18,13 +19,42 @@ Run offline automation first (CI / local). Then optional Live (`SINET_LIVE_SMOKE
 
 | Field | Value |
 | --- | --- |
-| Date | |
-| Operator | |
-| Environment | |
-| Branch / commit | |
-| Build config | Release recommended |
-| Offline tests | Pass / Fail (attach count) |
-| Live tests | Pass / Fail / Skipped |
+| Date | 2026-08-17 |
+| Operator | Agent (P0 Live Smoke attempt) + `azuread\dannyisrael` |
+| Environment | Machine `danny` — **Environment Gate Blocked** (see §P0 below). No confirmed isolated DEV mailbox / replica session. |
+| Branch / commit | `development` @ `0ae3c906f8b591003d24869e8ee99ec6d37efe19` |
+| Build config | Release |
+| Offline tests | **Pass** — `SiNet.App.Wpf.Tests` Release, `Category!=LiveSmoke`: **3449** passed, 0 failed |
+| Live tests | **Not Run** — stopped before `SINET_LIVE_SMOKE=1` (Gmail/ACC write risk per [`ENVIRONMENTS.md`](../ENVIRONMENTS.md) §5–6) |
+
+### P0 Live Smoke (Pilot controls) — 2026-08-17
+
+| Step | Result | Notes |
+| --- | --- | --- |
+| 1 Environment gate | **Blocked** | [`ENVIRONMENTS.md`](../ENVIRONMENTS.md): dedicated DEV Gmail mailbox **not provisioned**; DEV Gmail/Drive writes treated as production-impacting. Agent stopped before workflow / LiveSmoke / SystemSettings Pilot enablement. |
+| 2 Offline Release pre-check | **Pass** | Release build 0 errors; offline suite 3449 Pass |
+| 2 LiveSmoke Category | **Not Run** | Would touch vault SQL + AccService + Gmail silent restore against current vault target — not confirmed as isolated replica |
+| 3–8 Pilot / PRP / kill-switch | **Not Run** | Requires approved DEV SQL + place=`SI` + isolated Gmail before any `Pilot.Enabled=true` or CreatePriceQuote |
+| 9 Gmail/ACC N1–N3 | **Not Run** | Same gate |
+| End-state Pilot.Enabled | **N/A** | No replica SystemSettings were modified |
+| Decision | **FIX BEFORE P3** (ops/env) | Provision/confirm isolated DEV/replica (SQL + Gmail + ACC place SI), then re-run P0 from step 1 |
+
+**Not changed:** production SystemSettings; no MSIX publish; no P3 user rollout.
+
+### P0 re-attempt via the automated tier — 2026-08-24
+
+The 2026-08-17 Environment Gate block is **resolved**, and steps 3–8 plus the Gmail half of step 9 move to an automated tier instead of a manual walk:
+
+| Blocker (2026-08-17) | Resolution |
+| --- | --- |
+| No approved DEV SQL target | The DEV machine's database is separate, freely writable and routinely restored from backup (owner confirmation) |
+| No isolated Gmail mailbox | Bounded exception: the office shared mailbox is new and not yet in office use — [`ENVIRONMENTS.md`](../ENVIRONMENTS.md) §5.2.1 |
+| ACC not isolated | ACC steered to disposable projects behind an in-harness target-name guard — [`TEST_STRATEGY.md`](../TEST_STRATEGY.md) §4W.2 |
+
+Steps now owned by `Category=PilotSmoke` (L4W): 3, 4, 5, 6, 7, 8, 11, and the Gmail portion of 9.
+Steps that remain **operator-owned** here: the WPF visual and dismiss steps, ACC recovery, and anything against a production ACC project.
+
+Results for this re-attempt are recorded in [`docs/PILOT_CONTROLS.md`](../PILOT_CONTROLS.md) § "Live evidence (automated tier)" — **latest run 2026-08-24**: SQL/Pilot corridor **Pass** (evidence `p0-pilot-smoke-20260824-154135.md`); Gmail/ACC **Pass** (evidence `p0-pilot-smoke-20260824-154602.md`). Run SQL and Gmail/ACC tiers separately — parallel xUnit can collide on evidence file timestamps. Rollout policy on this page is unchanged.
 
 ---
 
