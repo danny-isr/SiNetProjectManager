@@ -7,6 +7,7 @@ using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
+using SiNet.App.Wpf.Tests.Live;
 using SiNet.Domain.ValueObjects;
 using SiNet.Infrastructure.Sql.Services.Email.Acc;
 using SiNetSQL.Data;
@@ -43,6 +44,26 @@ public sealed class SystemCertificationPrpSourceIngestTests
         Assert.Equal(0, harness.IngestExecutor.CallCount);
         AssertStepPassed(harness.Evidence, "cert.prp.source_ingest");
         Assert.Contains("skipped", GetStepDetail(harness.Evidence, "cert.prp.source_ingest"), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AlreadyIngested_allowlists_inbox_acc_project_on_guard()
+    {
+        var harness = await CreateHarnessAsync(seedInboxId: 10, withAccGuard: true);
+
+        var inbox = await SystemCertificationPrpSourceIngest.TryEnsureFullyIngestedAsync(
+            harness.Provider,
+            harness.DbFactory,
+            harness.Context,
+            proposalDefinitionId: 1,
+            harness.GmailDetails,
+            harness.Evidence,
+            CancellationToken.None);
+
+        Assert.NotNull(inbox);
+        Assert.Contains(
+            harness.AccGuard!.AllowedProjectIds,
+            entry => entry.Contains(AccProjectId, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -135,7 +156,7 @@ public sealed class SystemCertificationPrpSourceIngestTests
             CancellationToken.None);
     }
 
-    private static async Task<Harness> CreateHarnessAsync(int? seedInboxId)
+    private static async Task<Harness> CreateHarnessAsync(int? seedInboxId, bool withAccGuard = false)
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
@@ -167,13 +188,14 @@ public sealed class SystemCertificationPrpSourceIngestTests
         var folderBrowser = new FakeAccFolderBrowser(AccProjectId, AccFolderId, AttachmentName);
         var executionService = new CountingExecutionService();
         var taggingService = new FakeTaggingService(AttachmentName);
+        var accGuard = withAccGuard ? new PilotSmokeAccGuard() : null;
 
         var context = new SystemCertificationHost.SystemCertificationRunContext(
             target,
             OperatorUserId: 1,
             new SystemCertificationEnvironment.GmailLayer(true, null, null, "test@example.com"),
             new SystemCertificationEnvironment.AccLayer(true, null, null, "SI", "SYS-CERT-INBOX"),
-            AccGuard: null);
+            AccGuard: accGuard);
 
         var services = new ServiceCollection();
         services.AddSingleton(dbFactory);
@@ -191,7 +213,8 @@ public sealed class SystemCertificationPrpSourceIngestTests
             CreateGmailDetails(),
             ingestExecutor,
             folderBrowser,
-            executionService);
+            executionService,
+            accGuard);
     }
 
     private static async Task SeedDatabaseAsync(InMemoryDbFactory dbFactory, int? seedInboxId)
@@ -290,7 +313,8 @@ public sealed class SystemCertificationPrpSourceIngestTests
         EmailMessageDetails GmailDetails,
         RecordingIngestExecutor IngestExecutor,
         FakeAccFolderBrowser FolderBrowser,
-        CountingExecutionService ExecutionService);
+        CountingExecutionService ExecutionService,
+        PilotSmokeAccGuard? AccGuard);
 
     private sealed class InMemoryDbFactory(DbContextOptions<SiNetSQLDbContext> options)
         : IDbContextFactory<SiNetSQLDbContext>

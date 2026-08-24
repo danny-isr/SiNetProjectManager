@@ -117,6 +117,8 @@ internal static class SystemCertificationPrpSourceIngest
             return null;
         }
 
+        await AllowInboxAccGuardForInboxAsync(dbFactory, context, inboxId, cancellationToken);
+
         if (!await VerifyAccInboxReadBackAsync(
                 provider,
                 dbFactory,
@@ -296,6 +298,33 @@ internal static class SystemCertificationPrpSourceIngest
             + $"{taggable.Count(a => a.IsTaggable)} taggable, matching {gmailDetails.Attachments.Count} "
             + "Gmail attachment identity.");
         return true;
+    }
+
+    private static async Task AllowInboxAccGuardForInboxAsync(
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        SystemCertificationHost.SystemCertificationRunContext context,
+        int inboxMessageId,
+        CancellationToken cancellationToken)
+    {
+        if (context.AccGuard is null)
+        {
+            return;
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var accProjectId = await db.EmailInboxMessages.AsNoTracking()
+            .Where(m => m.Id == inboxMessageId)
+            .Select(m => m.InboxAccProjectId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(accProjectId))
+        {
+            return;
+        }
+
+        context.AccGuard.Allow(
+            accProjectId,
+            $"[SYS-CERT] inbox id={inboxMessageId} ACC project for production MoveToProject metadata reads");
     }
 
     private static async Task<bool> VerifyAccInboxReadBackAsync(
