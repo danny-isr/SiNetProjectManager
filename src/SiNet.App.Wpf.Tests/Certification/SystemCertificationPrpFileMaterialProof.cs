@@ -317,13 +317,29 @@ internal static class SystemCertificationPrpFileMaterialProof
             return null;
         }
 
-        var attachments = await db.EmailInboxAttachments.AsNoTracking()
+        var rows = await db.EmailInboxAttachments.AsNoTracking()
             .Where(a => a.MessageId == inboxMessageId && a.ProjectFileId != null)
-            .Select(a => new ExpectedAttachment(
+            .Select(a => new
+            {
                 a.Id,
-                !string.IsNullOrWhiteSpace(a.SavedFileName) ? a.SavedFileName! : a.OriginalFileName!))
-            .Where(a => !string.IsNullOrWhiteSpace(a.FileName))
+                a.SavedFileName,
+                a.OriginalFileName,
+            })
             .ToListAsync(cancellationToken);
+
+        var attachments = new List<ExpectedAttachment>(rows.Count);
+        foreach (var row in rows)
+        {
+            var fileName = !string.IsNullOrWhiteSpace(row.SavedFileName)
+                ? row.SavedFileName.Trim()
+                : row.OriginalFileName?.Trim();
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                continue;
+            }
+
+            attachments.Add(new ExpectedAttachment(row.Id, fileName));
+        }
 
         if (attachments.Count == 0)
         {
