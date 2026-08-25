@@ -193,6 +193,7 @@ internal static class SystemCertificationOpnCorridorSupport
         ArgumentNullException.ThrowIfNull(dbFactory);
         ArgumentNullException.ThrowIfNull(inbox);
         ArgumentNullException.ThrowIfNull(evidence);
+        _ = opinionDefinitionId;
 
         if (inbox.InboxMessageId is not int inboxMessageId || inboxMessageId <= 0)
         {
@@ -211,32 +212,31 @@ internal static class SystemCertificationOpnCorridorSupport
                 GmailSource: null),
             cancellationToken);
 
-        if (!result.Succeeded && result.WorkflowInstanceId is not int)
-        {
-            evidence.Fail("cert.opn.create_opinion_project", $"CreateOpinionProject failed: {result.Message}");
-            return 0;
-        }
-
-        var instanceId = result.WorkflowInstanceId
-            ?? await FindActiveOpinionInstanceForInboxAsync(
-                dbFactory,
-                opinionDefinitionId,
-                result.InboxMessageId ?? inboxMessageId,
-                cancellationToken);
-
-        if (instanceId <= 0)
+        // Certification requires a fresh CreateOpinionProject start. Duplicate-guard reuse
+        // (Succeeded=false with an existing WorkflowInstanceId) is FAIL — mid-corridor leftovers
+        // must be cancelled (WorkflowStatus.Cancelled=4), not treated as a soft pass.
+        if (!result.Succeeded)
         {
             evidence.Fail(
                 "cert.opn.create_opinion_project",
-                "CreateOpinionProject did not produce a workflow instance.");
+                $"CreateOpinionProject did not start a new instance: {result.Message}"
+                + (result.WorkflowInstanceId is int reusedId
+                    ? $" (existing instance #{reusedId})."
+                    : string.Empty));
+            return 0;
+        }
+
+        if (result.WorkflowInstanceId is not int instanceId || instanceId <= 0)
+        {
+            evidence.Fail(
+                "cert.opn.create_opinion_project",
+                "CreateOpinionProject succeeded but did not return a workflow instance id.");
             return 0;
         }
 
         evidence.Pass(
             "cert.opn.create_opinion_project",
-            result.Succeeded
-                ? $"{WorkflowCodes.Opinion} instance id={instanceId} ({inbox.SelectionDetail})."
-                : $"{WorkflowCodes.Opinion} instance id={instanceId} reused ({result.Message}).");
+            $"{WorkflowCodes.Opinion} instance id={instanceId} ({inbox.SelectionDetail}).");
         evidence.Created("WorkflowInstance", instanceId.ToString(), WorkflowCodes.Opinion);
         return instanceId;
     }
@@ -429,29 +429,6 @@ internal static class SystemCertificationOpnCorridorSupport
         }
 
         return allowed.Count == 1 ? allowed[0] : null;
-    }
-
-    private static async Task<int> FindActiveOpinionInstanceForInboxAsync(
-        IDbContextFactory<SiNetSQLDbContext> dbFactory,
-        int opinionDefinitionId,
-        int? inboxMessageId,
-        CancellationToken cancellationToken)
-    {
-        if (inboxMessageId is not int inboxId || inboxId <= 0)
-        {
-            return 0;
-        }
-
-        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-        return await db.WorkflowInstances.AsNoTracking()
-            .Where(w => w.WorkflowDefinitionId == opinionDefinitionId
-                        && w.TriggerType == WorkflowTriggerType.Email
-                        && w.TriggerEntityId == inboxId
-                        && w.Status != WorkflowStatus.Completed
-                        && w.Status != WorkflowStatus.Cancelled)
-            .OrderByDescending(w => w.Id)
-            .Select(w => w.Id)
-            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private static string Trim(string? text)

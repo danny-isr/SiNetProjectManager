@@ -182,15 +182,18 @@ internal sealed class SystemCertificationOpnScenario : ISystemCertificationScena
             return;
         }
 
-        await SystemCertificationTransitionAssertions.AssertOpenStateAsync(
-            dbFactory,
-            integrity,
-            evidence,
-            "cert.opn.transition.start",
-            instanceId,
-            OpinionStageCodes.ReceiveMaterial,
-            TaskTypeCodes.FileInitialMaterials,
-            cancellationToken);
+        if (!await SystemCertificationTransitionAssertions.AssertOpenStateAsync(
+                dbFactory,
+                integrity,
+                evidence,
+                "cert.opn.transition.start",
+                instanceId,
+                OpinionStageCodes.ReceiveMaterial,
+                TaskTypeCodes.FileInitialMaterials,
+                cancellationToken))
+        {
+            return;
+        }
 
         var reachedSendOpinion = await SystemCertificationOpnCorridorSupport.WalkCorridorUntilSendOpinionAsync(
             provider,

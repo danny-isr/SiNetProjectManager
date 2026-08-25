@@ -101,8 +101,9 @@ internal static class SystemCertificationTransitionAssertions
 
     /// <summary>
     /// Verifies the expected open state immediately after a workflow start (no prior task to close).
+    /// Returns <see langword="false"/> when the assertion fails so corridors can stop.
     /// </summary>
-    public static async Task AssertOpenStateAsync(
+    public static async Task<bool> AssertOpenStateAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         SystemCertificationIntegrityValidator integrity,
         SystemCertificationEvidence evidence,
@@ -160,6 +161,7 @@ internal static class SystemCertificationTransitionAssertions
         }
 
         Record(evidence, step, failures, details);
+        return failures.Count == 0;
     }
 
     /// <summary>

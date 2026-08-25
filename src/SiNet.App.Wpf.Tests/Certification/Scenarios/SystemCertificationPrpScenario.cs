@@ -159,15 +159,18 @@ internal sealed class SystemCertificationPrpScenario : ISystemCertificationScena
             return;
         }
 
-        await SystemCertificationTransitionAssertions.AssertOpenStateAsync(
-            dbFactory,
-            integrity,
-            evidence,
-            "cert.prp.transition.start",
-            instanceId,
-            ProposalStageCodes.ProjectSetup,
-            TaskTypeCodes.OpenQuoteProject,
-            cancellationToken);
+        if (!await SystemCertificationTransitionAssertions.AssertOpenStateAsync(
+                dbFactory,
+                integrity,
+                evidence,
+                "cert.prp.transition.start",
+                instanceId,
+                ProposalStageCodes.ProjectSetup,
+                TaskTypeCodes.OpenQuoteProject,
+                cancellationToken))
+        {
+            return;
+        }
 
         var projectId = await SystemCertificationPrpCorridorSupport.CreateCertProjectAsync(
             dbFactory, pre, evidence, cancellationToken);
