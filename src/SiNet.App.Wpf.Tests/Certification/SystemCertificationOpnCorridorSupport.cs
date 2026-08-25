@@ -120,7 +120,11 @@ internal static class SystemCertificationOpnCorridorSupport
                 PlaceId: pre.PlaceId,
                 CompanyId: pre.CompanyId,
                 ContactId: pre.ContactId,
-                JobTypeIds: [pre.PlanningJobTypeId]),
+                // Opinion is email-started and not mapped via ProjectTypeWorkflowDefinition.
+                // An empty JobType set keeps ProjectWorkflowPolicyService on open policy
+                // (same as a project with no types), which is required for CreateOpinionProject
+                // IsProjectBound=true starts.
+                JobTypeIds: []),
             cancellationToken);
 
         if (!result.Succeeded || result.ProjectId is not int projectId)
