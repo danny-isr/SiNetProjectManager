@@ -307,23 +307,34 @@ internal static class SystemCertificationOpnCorridorSupport
             }
 
             var navigationContext = await navigation.ResolveAsync(open.TaskId, cancellationToken);
-            if (navigationContext?.CompletionEventCode is not { Length: > 0 } eventCode)
+            string? eventCode;
+            string? resultCode;
+            if (TryResolveOpnCompletion(open.TaskTypeCode, out var opnEvent, out var opnResult))
             {
-                evidence.Fail(
-                    "cert.opn.corridor",
-                    $"Task {open.TaskId} ({open.TaskTypeCode}) has no resolvable CompletionEventCode.");
-                return false;
+                eventCode = opnEvent;
+                resultCode = opnResult;
             }
-
-            var resultCode = ChooseResultCode(open.TaskTypeCode, navigationContext.AllowedResultCodes);
-            if (resultCode is null && navigationContext.AllowedResultCodes.Count > 0)
+            else
             {
-                evidence.Fail(
-                    "cert.opn.corridor",
-                    $"Task {open.TaskId} ({open.TaskTypeCode}) offers ambiguous results ["
-                    + string.Join(", ", navigationContext.AllowedResultCodes)
-                    + "] with no declared happy-path choice.");
-                return false;
+                if (navigationContext?.CompletionEventCode is not { Length: > 0 } resolvedEvent)
+                {
+                    evidence.Fail(
+                        "cert.opn.corridor",
+                        $"Task {open.TaskId} ({open.TaskTypeCode}) has no resolvable CompletionEventCode.");
+                    return false;
+                }
+
+                eventCode = resolvedEvent;
+                resultCode = ChooseResultCode(open.TaskTypeCode, navigationContext.AllowedResultCodes);
+                if (resultCode is null && navigationContext.AllowedResultCodes.Count > 0)
+                {
+                    evidence.Fail(
+                        "cert.opn.corridor",
+                        $"Task {open.TaskId} ({open.TaskTypeCode}) offers ambiguous results ["
+                        + string.Join(", ", navigationContext.AllowedResultCodes)
+                        + "] with no declared happy-path choice.");
+                    return false;
+                }
             }
 
             var outcome = await completion.CompleteAsync(
@@ -347,21 +358,50 @@ internal static class SystemCertificationOpnCorridorSupport
                 return false;
             }
 
-            await SystemCertificationTransitionAssertions.AssertAfterTransitionAsync(
-                dbFactory,
-                integrity,
-                evidence,
-                $"cert.opn.transition.{open.TaskTypeCode}",
-                instanceId,
-                open.TaskId,
-                expectedStage,
-                cancellationToken);
+            if (!await SystemCertificationTransitionAssertions.AssertAfterTransitionAsync(
+                    dbFactory,
+                    integrity,
+                    evidence,
+                    $"cert.opn.transition.{open.TaskTypeCode}",
+                    instanceId,
+                    open.TaskId,
+                    expectedStage,
+                    cancellationToken))
+            {
+                return false;
+            }
         }
 
         evidence.Fail(
             "cert.opn.corridor",
             "Completed 12 tasks without reaching SendOpinion.");
         return false;
+    }
+
+    private static bool TryResolveOpnCompletion(
+        string taskTypeCode,
+        out string eventCode,
+        out string resultCode)
+    {
+        switch (taskTypeCode)
+        {
+            case TaskTypeCodes.AnalyzeOpinionMaterials:
+                eventCode = ReviewCompletionEvents.AnalysisCompleted;
+                resultCode = TaskResultCodes.OpinionAnalysisCompleted;
+                return true;
+            case TaskTypeCodes.PrepareOpinionDraft:
+                eventCode = ReviewCompletionEvents.DraftPrepared;
+                resultCode = TaskResultCodes.OpinionDraftPrepared;
+                return true;
+            case TaskTypeCodes.ReviewOpinionInternal:
+                eventCode = ReviewCompletionEvents.InternalReviewCompleted;
+                resultCode = TaskResultCodes.OpinionApprovedInternally;
+                return true;
+            default:
+                eventCode = string.Empty;
+                resultCode = string.Empty;
+                return false;
+        }
     }
 
     private static string? ChooseResultCode(string taskTypeCode, IReadOnlyList<string> allowed)

@@ -430,15 +430,18 @@ internal static class SystemCertificationPrpCorridorSupport
                 return false;
             }
 
-            await SystemCertificationTransitionAssertions.AssertAfterTransitionAsync(
-                dbFactory,
-                integrity,
-                evidence,
-                $"cert.prp.transition.{open.TaskTypeCode}",
-                instanceId,
-                open.TaskId,
-                expectedStage,
-                cancellationToken);
+            if (!await SystemCertificationTransitionAssertions.AssertAfterTransitionAsync(
+                    dbFactory,
+                    integrity,
+                    evidence,
+                    $"cert.prp.transition.{open.TaskTypeCode}",
+                    instanceId,
+                    open.TaskId,
+                    expectedStage,
+                    cancellationToken))
+            {
+                return false;
+            }
         }
 
         evidence.Fail(

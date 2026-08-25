@@ -206,15 +206,18 @@ internal static class SystemCertificationPrpFileMaterialProof
             return false;
         }
 
-        await SystemCertificationTransitionAssertions.AssertAfterTransitionAsync(
-            dbFactory,
-            integrity,
-            evidence,
-            steps.Transition,
-            instanceId,
-            filingTaskId,
-            expectedStageAfter,
-            cancellationToken);
+        if (!await SystemCertificationTransitionAssertions.AssertAfterTransitionAsync(
+                dbFactory,
+                integrity,
+                evidence,
+                steps.Transition,
+                instanceId,
+                filingTaskId,
+                expectedStageAfter,
+                cancellationToken))
+        {
+            return false;
+        }
 
         return true;
     }

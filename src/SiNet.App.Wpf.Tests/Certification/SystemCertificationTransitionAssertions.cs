@@ -21,7 +21,7 @@ internal static class SystemCertificationTransitionAssertions
     /// After a transition: old task closed, current stage matches, exactly one open driving task,
     /// assignee is active, delta integrity is clean.
     /// </summary>
-    public static async Task AssertAfterTransitionAsync(
+    public static async Task<bool> AssertAfterTransitionAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         SystemCertificationIntegrityValidator integrity,
         SystemCertificationEvidence evidence,
@@ -96,6 +96,7 @@ internal static class SystemCertificationTransitionAssertions
         }
 
         Record(evidence, step, failures, details);
+        return failures.Count == 0;
     }
 
     /// <summary>
