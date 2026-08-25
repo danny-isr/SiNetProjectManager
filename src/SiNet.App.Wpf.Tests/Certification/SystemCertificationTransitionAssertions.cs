@@ -330,6 +330,16 @@ internal static class SystemCertificationTransitionAssertions
             _ => null,
         };
 
+    /// <summary>Expected MAT stage after completing a driving task on the child instance.</summary>
+    internal static string? ExpectedMatStageAfterTask(string completedTaskTypeCode, string currentStageCode) =>
+        (completedTaskTypeCode, currentStageCode) switch
+        {
+            (TaskTypeCodes.FileInitialMaterials, MaterialStageCodes.Receive) => MaterialStageCodes.File,
+            (TaskTypeCodes.FileInitialMaterials, MaterialStageCodes.File) => MaterialStageCodes.Check,
+            (TaskTypeCodes.CheckQuoteMaterialCompleteness, _) => MaterialStageCodes.Complete,
+            _ => null,
+        };
+
     internal static IReadOnlyList<string> PrpHappyPathTaskTypes { get; } =
     [
         TaskTypeCodes.OpenQuoteProject,
@@ -346,5 +356,11 @@ internal static class SystemCertificationTransitionAssertions
         TaskTypeCodes.AnalyzeOpinionMaterials,
         TaskTypeCodes.PrepareOpinionDraft,
         TaskTypeCodes.ReviewOpinionInternal,
+    ];
+
+    internal static IReadOnlyList<string> MatHappyPathTaskTypes { get; } =
+    [
+        TaskTypeCodes.FileInitialMaterials,
+        TaskTypeCodes.CheckQuoteMaterialCompleteness,
     ];
 }

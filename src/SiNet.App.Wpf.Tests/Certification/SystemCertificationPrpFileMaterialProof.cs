@@ -39,6 +39,18 @@ internal static class SystemCertificationPrpFileMaterialProof
             "cert.opn.acc.readback",
             "cert.opn.transition.FileInitialMaterials",
             "cert.opn.gmail.filing.readback");
+
+        public static FilingEvidenceSteps PlnMat { get; } = new(
+            "cert.pln.mat.acc.write",
+            "cert.pln.mat.acc.readback",
+            "cert.pln.mat.transition.FileInitialMaterials",
+            "cert.pln.mat.gmail.filing.readback");
+
+        public static FilingEvidenceSteps Mat { get; } = new(
+            "cert.mat.acc.write",
+            "cert.mat.acc.readback",
+            "cert.mat.transition.FileInitialMaterials",
+            "cert.mat.gmail.filing.readback");
     }
 
     internal sealed record ExpectedAttachment(

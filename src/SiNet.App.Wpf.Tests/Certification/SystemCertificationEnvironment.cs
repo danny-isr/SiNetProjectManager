@@ -57,6 +57,12 @@ internal static class SystemCertificationEnvironment
     /// <summary>Explicit opt-in for OPN CreateOpinionProject live writes after preflight PASS.</summary>
     public const string OpnLiveEnabledEnv = "SINET_SYSTEM_CERT_OPN_LIVE";
 
+    /// <summary>Explicit opt-in for PLN StartAsync + MAT child live writes after preflight PASS.</summary>
+    public const string PlnLiveEnabledEnv = "SINET_SYSTEM_CERT_PLN_LIVE";
+
+    /// <summary>Explicit opt-in for MAT-via-PLN live writes after preflight PASS.</summary>
+    public const string MatLiveEnabledEnv = "SINET_SYSTEM_CERT_MAT_LIVE";
+
     /// <summary>
     /// Required Gmail API message id for PRP CreatePriceQuote. No mailbox scanning fallback.
     /// </summary>
@@ -71,6 +77,17 @@ internal static class SystemCertificationEnvironment
     /// Required Gmail API message id for OPN CreateOpinionProject. No mailbox scanning fallback.
     /// </summary>
     public const string OpnSourceGmailMessageIdEnv = "SINET_SYSTEM_CERT_OPN_SOURCE_GMAIL_MESSAGE_ID";
+
+    /// <summary>
+    /// Required Gmail API message id for PLN StartAsync email trigger / ACC filing identity.
+    /// Not an email-start suggested action — PLN has no CreatePlanning email seam.
+    /// </summary>
+    public const string PlnSourceGmailMessageIdEnv = "SINET_SYSTEM_CERT_PLN_SOURCE_GMAIL_MESSAGE_ID";
+
+    /// <summary>
+    /// Required Gmail API message id for MAT-via-PLN StartAsync email trigger / ACC filing identity.
+    /// </summary>
+    public const string MatSourceGmailMessageIdEnv = "SINET_SYSTEM_CERT_MAT_SOURCE_GMAIL_MESSAGE_ID";
 
     /// <summary>
     /// Optional RFC822 Message-Id for the PRP source email; when set it must match the loaded message.
@@ -132,6 +149,12 @@ internal static class SystemCertificationEnvironment
 
     /// <summary>True when OPN CreateOpinionProject live writes are explicitly enabled.</summary>
     public static bool IsOpnLiveRequested() => IsFlagSet(OpnLiveEnabledEnv);
+
+    /// <summary>True when PLN live writes are explicitly enabled.</summary>
+    public static bool IsPlnLiveRequested() => IsFlagSet(PlnLiveEnabledEnv);
+
+    /// <summary>True when MAT-via-PLN live writes are explicitly enabled.</summary>
+    public static bool IsMatLiveRequested() => IsFlagSet(MatLiveEnabledEnv);
 
     /// <summary>
     /// Resolves the declared SQL target from environment only. The connection string

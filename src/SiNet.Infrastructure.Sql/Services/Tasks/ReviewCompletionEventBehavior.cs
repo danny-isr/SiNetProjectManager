@@ -338,11 +338,15 @@ public static class ReviewCompletionEventBehavior
                 RequestWorkflowAdvance: true),
 
             // WorkOrderReceived — PlanningWorkflow PLN.WorkOrder → ExecutionMaterialCheck.
+            // ClosesAssociatedTask: FollowWorkOrder EmailFiling/EmailThread work targets stay
+            // Pending when cert/UI records the result without completing the link — same
+            // soft-close trap as Opinion/PRP ProjectWork events.
             new(ReviewCompletionEvents.WorkOrderReceived,
                 new[] { TaskTypeCodes.FollowWorkOrder },
                 new[] { TaskResultCodes.WorkOrderReceived },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             // MissingMaterialUpdated — covers both the "sent" and "received"
             // sides of the missing-material loop. Applies to the same task

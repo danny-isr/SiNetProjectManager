@@ -16,12 +16,13 @@ public sealed class OpinionCompletionClosesAssociatedTaskTests
     [InlineData(ReviewCompletionEvents.DraftPrepared)]
     [InlineData(ReviewCompletionEvents.InternalReviewCompleted)]
     [InlineData(ReviewCompletionEvents.DocumentSent)]
-    public void Opinion_project_work_completion_events_close_associated_task(string eventCode)
+    [InlineData(ReviewCompletionEvents.WorkOrderReceived)]
+    public void Project_work_and_work_order_completion_events_close_associated_task(string eventCode)
     {
         var behavior = ReviewCompletionEventBehavior.TryGet(eventCode);
         Assert.NotNull(behavior);
         Assert.True(
             behavior!.ClosesAssociatedTask,
-            $"{eventCode} must set ClosesAssociatedTask so Pending ProjectWork targets do not soft-block close.");
+            $"{eventCode} must set ClosesAssociatedTask so Pending work targets do not soft-block close.");
     }
 }
