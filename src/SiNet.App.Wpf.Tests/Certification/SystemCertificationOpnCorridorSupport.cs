@@ -112,7 +112,7 @@ internal static class SystemCertificationOpnCorridorSupport
         CancellationToken cancellationToken = default)
     {
         var creator = new SqlProjectCreateService(dbFactory);
-        var title = $"{SystemCertificationEnvironment.CertificationTitlePrefix} OPN {DateTime.Now:MMdd-HHmm}";
+        var title = $"{SystemCertificationEnvironment.CertificationTitlePrefix} {DateTime.Now:MMdd-HHmm}";
 
         var result = await creator.CreateAsync(
             new CreateProjectCommand(
@@ -120,11 +120,9 @@ internal static class SystemCertificationOpnCorridorSupport
                 PlaceId: pre.PlaceId,
                 CompanyId: pre.CompanyId,
                 ContactId: pre.ContactId,
-                // Opinion is email-started and not mapped via ProjectTypeWorkflowDefinition.
-                // An empty JobType set keeps ProjectWorkflowPolicyService on open policy
-                // (same as a project with no types), which is required for CreateOpinionProject
-                // IsProjectBound=true starts.
-                JobTypeIds: []),
+                // Create requires ≥1 JobType; Opinion has no ProjectTypeWorkflowDefinition seed
+                // mapping, so we strip the link immediately after create (open policy).
+                JobTypeIds: [pre.PlanningJobTypeId]),
             cancellationToken);
 
         if (!result.Succeeded || result.ProjectId is not int projectId)
@@ -133,9 +131,22 @@ internal static class SystemCertificationOpnCorridorSupport
             return 0;
         }
 
+        await using (var db = await dbFactory.CreateDbContextAsync(cancellationToken))
+        {
+            var typeRows = await db.TypeOfProjectInProjects
+                .Where(t => t.ProjectId == projectId)
+                .ToListAsync(cancellationToken);
+            if (typeRows.Count > 0)
+            {
+                db.TypeOfProjectInProjects.RemoveRange(typeRows);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         evidence.Pass(
             "cert.opn.project",
-            $"id={projectId} title='{result.ProjectTitle}' place='{result.PlaceTitle}'.");
+            $"id={projectId} title='{result.ProjectTitle}' place='{result.PlaceTitle}' "
+            + "(JobTypes cleared after create for Opinion open-policy start).");
         evidence.Created("Project", projectId.ToString(), title);
         return projectId;
     }
