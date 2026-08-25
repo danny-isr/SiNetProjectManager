@@ -41,6 +41,44 @@ internal sealed class WorkflowEngine
         string? initialStageCode = null,
         int? jobTypeId = null)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await StartAsync(
+                db,
+                definitionId,
+                projectId,
+                triggerType,
+                triggerEntityId,
+                userId,
+                notes,
+                ct,
+                isProjectBound,
+                parentWorkflowInstanceId,
+                initialStageCode,
+                jobTypeId)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shared-context overload used by <c>StartSubWorkflow</c> during atomic auto-advance so the
+    /// child insert enlists in the caller's transaction (avoids lock timeout / deadlock against the
+    /// parent row held by the same advance).
+    /// </summary>
+    public async ValueTask<WorkflowInstance> StartAsync(
+        SiNetSQLDbContext db,
+        int definitionId,
+        int projectId,
+        WorkflowTriggerType triggerType,
+        int? triggerEntityId,
+        int userId,
+        string? notes,
+        CancellationToken ct,
+        bool isProjectBound = true,
+        int? parentWorkflowInstanceId = null,
+        string? initialStageCode = null,
+        int? jobTypeId = null)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+
         // ProjectType allow-list applies to top-level starts only. Child instances
         // (StartSubWorkflow / parentWorkflowInstanceId) inherit the parent's project
         // binding; nested hosts such as MaterialIntake are not ProjectTypeWorkflowDefinition entries.
@@ -51,8 +89,6 @@ internal sealed class WorkflowEngine
             throw new InvalidOperationException(
                 $"Workflow definition {definitionId} is not allowed for project {projectId}.");
         }
-
-        await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
 
         if (jobTypeId is int jtId)
         {

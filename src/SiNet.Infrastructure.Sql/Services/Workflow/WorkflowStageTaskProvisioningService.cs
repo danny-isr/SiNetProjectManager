@@ -44,12 +44,27 @@ internal sealed class WorkflowStageTaskProvisioningService
     {
         ArgumentNullException.ThrowIfNull(instance);
 
+        await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await EnsureInitialStageTasksAsync(db, instance, userId, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shared-context overload for atomic StartSubWorkflow — child start + initial MAT tasks must
+    /// enlist in the parent auto-advance transaction.
+    /// </summary>
+    public async ValueTask<(WorkflowInstance Instance, List<ProjectAssignment> Tasks)> EnsureInitialStageTasksAsync(
+        SiNetSQLDbContext db,
+        WorkflowInstance instance,
+        int userId,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(instance);
+
         if (instance.CurrentStageId.HasValue)
         {
-            instance = await AutoAdvancePastStartNodeAsync(instance, userId, ct).ConfigureAwait(false);
+            instance = await AutoAdvancePastStartNodeAsync(db, instance, userId, ct).ConfigureAwait(false);
         }
-
-        await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
 
         WorkflowStageDefinition? currentStage = null;
         if (instance.CurrentStageId.HasValue)
@@ -84,6 +99,7 @@ internal sealed class WorkflowStageTaskProvisioningService
 
                     Trace.TraceInformation($"[Provisioning] Initial stage {currentStage.Code} is SubWorkflow. Auto-starting subworkflow definition {currentStage.SubWorkflowDefinitionId.Value}.");
                     var subInstance = await _engine.StartAsync(
+                        db,
                         currentStage.SubWorkflowDefinitionId.Value,
                         instance.ProjectId,
                         instance.TriggerType,
@@ -93,7 +109,7 @@ internal sealed class WorkflowStageTaskProvisioningService
                         ct,
                         parentWorkflowInstanceId: instance.Id).ConfigureAwait(false);
 
-                    var (_, subTasks) = await EnsureInitialStageTasksAsync(subInstance, userId, ct).ConfigureAwait(false);
+                    var (_, subTasks) = await EnsureInitialStageTasksAsync(db, subInstance, userId, ct).ConfigureAwait(false);
                     tasks.AddRange(subTasks);
                 }
             }
@@ -101,7 +117,7 @@ internal sealed class WorkflowStageTaskProvisioningService
         else
         {
             tasks = instance.CurrentStageId.HasValue
-                ? await CreateStageTasksAsync(instance.Id, instance.CurrentStageId.Value, userId, ct).ConfigureAwait(false)
+                ? await CreateStageTasksAsync(db, instance.Id, instance.CurrentStageId.Value, userId, ct).ConfigureAwait(false)
                 : [];
         }
 
@@ -119,6 +135,20 @@ internal sealed class WorkflowStageTaskProvisioningService
         if (instance.CurrentStageId is null) return instance;
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await AutoAdvancePastStartNodeAsync(db, instance, userId, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shared-context overload used when the caller already holds the ambient transaction.
+    /// </summary>
+    public async ValueTask<WorkflowInstance> AutoAdvancePastStartNodeAsync(
+        SiNetSQLDbContext db,
+        WorkflowInstance instance,
+        int userId,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        if (instance.CurrentStageId is null) return instance;
 
         var stage = await db.WorkflowStageDefinitions
             .AsNoTracking()
@@ -142,7 +172,8 @@ internal sealed class WorkflowStageTaskProvisioningService
         }
 
         Trace.TraceInformation($"[Provisioning] Auto-advancing past Start node → stage {nextRule.ToStageId}.");
-        return await _engine.AdvanceStageAsync(instance.Id, nextRule.ToStageId, userId, "מעבר אוטומטי מנקודת התחלה", ct)
+        return await _engine.AdvanceStageAsync(
+                db, instance.Id, nextRule.ToStageId, userId, "מעבר אוטומטי מנקודת התחלה", ct)
             .ConfigureAwait(false);
     }
 
