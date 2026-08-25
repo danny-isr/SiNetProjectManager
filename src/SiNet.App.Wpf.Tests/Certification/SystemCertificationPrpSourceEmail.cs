@@ -22,26 +22,30 @@ internal static class SystemCertificationPrpSourceEmail
         int proposalDefinitionId,
         SystemCertificationEnvironment.GmailLayer gmail,
         SystemCertificationEvidence evidence,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? gmailMessageIdEnv = null,
+        string sourceEmailStep = "cert.prp.source_email")
     {
+        gmailMessageIdEnv ??= SystemCertificationEnvironment.PrpSourceGmailMessageIdEnv;
+
         if (!gmail.IsEnabled || gmail.Violation is not null)
         {
             evidence.Fail(
-                "cert.prp.source_email",
-                "CreatePriceQuote requires a valid Gmail layer; manual IWorkflowCommandService start is forbidden.");
+                sourceEmailStep,
+                "PRP email start requires a valid Gmail layer; manual IWorkflowCommandService start is forbidden.");
             return null;
         }
 
-        var gmailMessageId = ReadRequiredGmailMessageId(out var envViolation);
+        var gmailMessageId = ReadRequiredGmailMessageId(gmailMessageIdEnv, out var envViolation);
         if (gmailMessageId is null)
         {
-            evidence.Fail("cert.prp.source_email", envViolation!);
+            evidence.Fail(sourceEmailStep, envViolation!);
             return null;
         }
 
         var internetMessageId = ReadOptionalInternetMessageId();
 
-        if (!await VerifyGmailSessionAsync(provider, gmail, evidence, cancellationToken))
+        if (!await VerifyGmailSessionAsync(provider, gmail, evidence, sourceEmailStep, cancellationToken))
         {
             return null;
         }
@@ -51,8 +55,8 @@ internal static class SystemCertificationPrpSourceEmail
         if (details is null)
         {
             evidence.Fail(
-                "cert.prp.source_email",
-                $"Gmail message '{gmailMessageId}' from {SystemCertificationEnvironment.PrpSourceGmailMessageIdEnv} "
+                sourceEmailStep,
+                $"Gmail message '{gmailMessageId}' from {gmailMessageIdEnv} "
                 + "could not be loaded — FAIL BEFORE PRP WRITE.");
             return null;
         }
@@ -60,7 +64,7 @@ internal static class SystemCertificationPrpSourceEmail
         if (!string.Equals(details.MessageId, gmailMessageId, StringComparison.Ordinal))
         {
             evidence.Fail(
-                "cert.prp.source_email",
+                sourceEmailStep,
                 $"Loaded Gmail message id '{details.MessageId}' != explicit env id '{gmailMessageId}'.");
             return null;
         }
@@ -72,7 +76,7 @@ internal static class SystemCertificationPrpSourceEmail
                 StringComparison.OrdinalIgnoreCase))
         {
             evidence.Fail(
-                "cert.prp.source_email",
+                sourceEmailStep,
                 $"{SystemCertificationEnvironment.PrpSourceInternetMessageIdEnv} "
                 + $"'{internetMessageId}' does not match loaded message internet id "
                 + $"'{details.InternetMessageId ?? "<null>"}'.");
@@ -82,7 +86,7 @@ internal static class SystemCertificationPrpSourceEmail
         if (!details.HasAttachments)
         {
             evidence.Fail(
-                "cert.prp.source_email",
+                sourceEmailStep,
                 $"Explicit source message '{gmailMessageId}' has no attachments — FAIL BEFORE PRP WRITE.");
             return null;
         }
@@ -90,7 +94,7 @@ internal static class SystemCertificationPrpSourceEmail
         if (!SubjectLooksLikeCertificationTestData(details.Subject))
         {
             evidence.Fail(
-                "cert.prp.source_email",
+                sourceEmailStep,
                 $"Explicit source subject '{TrimSubject(details.Subject)}' must include "
                 + $"'{SystemCertificationEnvironment.CertificationTitlePrefix}' test-data marker — "
                 + "FAIL BEFORE PRP WRITE.");
@@ -100,14 +104,14 @@ internal static class SystemCertificationPrpSourceEmail
         if (string.IsNullOrWhiteSpace(details.InternetMessageId))
         {
             evidence.Fail(
-                "cert.prp.source_email",
+                sourceEmailStep,
                 $"Explicit source message '{gmailMessageId}' has no InternetMessageId — "
-                + "production ingest and CreatePriceQuote are forbidden.");
+                + "production ingest and PRP email start are forbidden.");
             return null;
         }
 
         evidence.Pass(
-            "cert.prp.source_email",
+            sourceEmailStep,
             $"explicit gmail={gmailMessageId} subject='{TrimSubject(details.Subject)}' "
             + $"attachments={details.Attachments.Count}");
 
@@ -121,14 +125,13 @@ internal static class SystemCertificationPrpSourceEmail
             cancellationToken);
     }
 
-    private static string? ReadRequiredGmailMessageId(out string? violation)
+    private static string? ReadRequiredGmailMessageId(string gmailMessageIdEnv, out string? violation)
     {
-        var gmailMessageId = Environment.GetEnvironmentVariable(
-            SystemCertificationEnvironment.PrpSourceGmailMessageIdEnv);
+        var gmailMessageId = Environment.GetEnvironmentVariable(gmailMessageIdEnv);
         if (string.IsNullOrWhiteSpace(gmailMessageId))
         {
             violation =
-                $"{SystemCertificationEnvironment.PrpSourceGmailMessageIdEnv} is required for PRP live — "
+                $"{gmailMessageIdEnv} is required for PRP live — "
                 + "no AllMail + AttachmentsOnly mailbox scanning fallback.";
             return null;
         }
@@ -148,6 +151,7 @@ internal static class SystemCertificationPrpSourceEmail
         IServiceProvider provider,
         SystemCertificationEnvironment.GmailLayer gmail,
         SystemCertificationEvidence evidence,
+        string sourceEmailStep,
         CancellationToken cancellationToken)
     {
         var auth = provider.GetRequiredService<IConnectorAuthService>();
@@ -155,8 +159,8 @@ internal static class SystemCertificationPrpSourceEmail
         if (!restored)
         {
             evidence.Fail(
-                "cert.prp.source_email",
-                "Gmail token could not be restored silently — CreatePriceQuote cannot run.");
+                sourceEmailStep,
+                "Gmail token could not be restored silently — email start cannot run.");
             return false;
         }
 
@@ -165,7 +169,7 @@ internal static class SystemCertificationPrpSourceEmail
         if (!string.Equals(connected?.Trim(), gmail.ExpectedAccount, StringComparison.OrdinalIgnoreCase))
         {
             evidence.Fail(
-                "cert.prp.source_email",
+                sourceEmailStep,
                 $"Restored Gmail session is '{connected ?? "<unknown>"}' but expected '{gmail.ExpectedAccount}'.");
             return false;
         }

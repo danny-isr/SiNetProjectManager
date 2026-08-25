@@ -205,6 +205,123 @@ internal static class SystemCertificationPrpCorridorSupport
         return instanceId;
     }
 
+    internal static async Task<int> ExecuteRejectPriceQuoteAsync(
+        IServiceProvider provider,
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        CorridorInbox inbox,
+        int proposalDefinitionId,
+        int operatorUserId,
+        SystemCertificationEvidence evidence,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(dbFactory);
+        ArgumentNullException.ThrowIfNull(inbox);
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        if (inbox.InboxMessageId is not int inboxMessageId || inboxMessageId <= 0)
+        {
+            evidence.Fail(
+                "cert.prp.reject.execute",
+                "RejectPriceQuote requires a fully ingested EmailInboxMessage for certification proof.");
+            return 0;
+        }
+
+        var execution = provider.GetRequiredService<IEmailSuggestedActionExecutionService>();
+        var result = await execution.ExecuteAsync(
+            new EmailSuggestedActionExecutionCommand(
+                EmailSuggestedActionCodes.RejectPriceQuote,
+                inboxMessageId,
+                operatorUserId,
+                GmailSource: null),
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            evidence.Fail("cert.prp.reject.execute", $"RejectPriceQuote failed: {result.Message}");
+            return 0;
+        }
+
+        var instanceId = result.WorkflowInstanceId
+            ?? await FindProposalInstanceForInboxAsync(
+                dbFactory,
+                proposalDefinitionId,
+                result.InboxMessageId ?? inboxMessageId,
+                cancellationToken);
+
+        if (instanceId <= 0)
+        {
+            evidence.Fail("cert.prp.reject.execute", "RejectPriceQuote did not produce a workflow instance.");
+            return 0;
+        }
+
+        evidence.Pass(
+            "cert.prp.reject.execute",
+            $"{WorkflowCodes.Proposal} instance id={instanceId} via RejectPriceQuote "
+            + $"({inbox.SelectionDetail}). Message: {result.Message}");
+        evidence.Created("WorkflowInstance", instanceId.ToString(), $"{WorkflowCodes.Proposal}/RejectPriceQuote");
+        evidence.Created("EmailInboxMessage", inboxMessageId.ToString(), "RejectPriceQuote source inbox row");
+        return instanceId;
+    }
+
+    internal static async Task<bool> AssertRejectTerminalAsync(
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        SystemCertificationEvidence evidence,
+        int instanceId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dbFactory);
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        var stage = await SystemCertificationTransitionAssertions.LoadInstanceStageAsync(
+            dbFactory, instanceId, cancellationToken);
+        if (stage is null)
+        {
+            evidence.Fail("cert.prp.reject.terminal_stage", $"WorkflowInstance {instanceId} not found after RejectPriceQuote.");
+            return false;
+        }
+
+        if (!string.Equals(stage.StageCode, ProposalStageCodes.Rejected, StringComparison.Ordinal))
+        {
+            evidence.Fail(
+                "cert.prp.reject.terminal_stage",
+                $"Expected stage {ProposalStageCodes.Rejected} after RejectPriceQuote; got '{stage.StageCode ?? "<null>"}'.");
+            return false;
+        }
+
+        evidence.Pass(
+            "cert.prp.reject.terminal_stage",
+            $"Instance {instanceId} is at {ProposalStageCodes.Rejected}.");
+
+        if (stage.Status != WorkflowStatus.Completed)
+        {
+            evidence.Fail(
+                "cert.prp.reject.terminal_status",
+                $"Expected WorkflowStatus.Completed on final reject stage; got {stage.Status}.");
+            return false;
+        }
+
+        evidence.Pass(
+            "cert.prp.reject.terminal_status",
+            $"Instance {instanceId} status is Completed (final Rejected stage).");
+
+        var open = await SystemCertificationTransitionAssertions.FindOpenDrivingTasksAsync(
+            dbFactory, instanceId, cancellationToken);
+        if (open.Count > 0)
+        {
+            evidence.Fail(
+                "cert.prp.reject.no_open_tasks",
+                $"Rejected instance {instanceId} still has open driving task(s): "
+                + string.Join(", ", open.Select(t => $"{t.TaskId}/{t.TaskTypeCode}")));
+            return false;
+        }
+
+        evidence.Pass(
+            "cert.prp.reject.no_open_tasks",
+            $"Rejected instance {instanceId} has zero open driving tasks.");
+        return true;
+    }
+
     internal static async Task<int> CreateCertProjectAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         Preconditions pre,
@@ -485,6 +602,28 @@ internal static class SystemCertificationPrpCorridorSupport
                         && w.TriggerEntityId == inboxId
                         && w.Status != WorkflowStatus.Completed
                         && w.Status != WorkflowStatus.Cancelled)
+            .OrderByDescending(w => w.Id)
+            .Select(w => w.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>Any Proposal instance for the inbox (including Completed after reject).</summary>
+    private static async Task<int> FindProposalInstanceForInboxAsync(
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        int proposalDefinitionId,
+        int? inboxMessageId,
+        CancellationToken cancellationToken)
+    {
+        if (inboxMessageId is not int inboxId || inboxId <= 0)
+        {
+            return 0;
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowInstances.AsNoTracking()
+            .Where(w => w.WorkflowDefinitionId == proposalDefinitionId
+                        && w.TriggerType == WorkflowTriggerType.Email
+                        && w.TriggerEntityId == inboxId)
             .OrderByDescending(w => w.Id)
             .Select(w => w.Id)
             .FirstOrDefaultAsync(cancellationToken);

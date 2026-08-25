@@ -243,6 +243,23 @@ internal static class SystemCertificationTransitionAssertions
         evidence.Pass(step, string.Join("; ", details));
     }
 
+    /// <summary>Loads stage/status for an instance; returns null when the row is missing.</summary>
+    internal static async Task<InstanceStage?> LoadInstanceStageAsync(
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        int instanceId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var instance = await db.WorkflowInstances
+            .AsNoTracking()
+            .Include(i => i.CurrentStage)
+            .FirstOrDefaultAsync(i => i.Id == instanceId, cancellationToken);
+
+        return instance is null
+            ? null
+            : new InstanceStage(instanceId, instance.CurrentStage?.Code, instance.Status);
+    }
+
     private static async Task<InstanceStage> ReadInstanceStageAsync(
         SiNetSQLDbContext db,
         int instanceId,
