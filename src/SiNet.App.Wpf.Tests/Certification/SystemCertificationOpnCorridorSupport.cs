@@ -349,6 +349,17 @@ internal static class SystemCertificationOpnCorridorSupport
                 return false;
             }
 
+            // Soft-success trap: CompleteAsync can record a result with Success=true while
+            // leaving the task open (e.g. work-targets-pending without ClosesAssociatedTask).
+            if (!outcome.TaskClosed)
+            {
+                evidence.Fail(
+                    "cert.opn.corridor",
+                    $"Task {open.TaskId} ({open.TaskTypeCode}) reported Success without TaskClosed "
+                    + $"(result={outcome.RecordedTaskResultCode ?? "(none)"}).");
+                return false;
+            }
+
             var expectedStage = SystemCertificationTransitionAssertions.ExpectedOpnStageAfterTask(open.TaskTypeCode);
             if (expectedStage is null)
             {

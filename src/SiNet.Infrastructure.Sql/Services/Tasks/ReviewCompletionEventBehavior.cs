@@ -356,11 +356,15 @@ public static class ReviewCompletionEventBehavior
             // AnalysisCompleted — Opinion AnalyzeDocuments closure. Dual outcome:
             // OpinionAnalysisCompleted → PrepareDraft; MaterialMissing →
             // RequestMissingMaterial (status handled by seed transition actions).
+            // ClosesAssociatedTask: ProjectWork Related target stays Pending when the
+            // cert/UI path records a result without completing the link — same soft-close
+            // trap as QuoteCalculationCompleted (taskClosed=false / work-targets-pending).
             new(ReviewCompletionEvents.AnalysisCompleted,
                 new[] { TaskTypeCodes.AnalyzeOpinionMaterials },
                 new[] { TaskResultCodes.OpinionAnalysisCompleted, TaskResultCodes.MaterialMissing },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             // DraftPrepared — Opinion draft authoring / update closure. Both
             // PrepareOpinionDraft and UpdateOpinionDraft record the same
@@ -369,14 +373,16 @@ public static class ReviewCompletionEventBehavior
                 new[] { TaskTypeCodes.PrepareOpinionDraft, TaskTypeCodes.UpdateOpinionDraft },
                 new[] { TaskResultCodes.OpinionDraftPrepared },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             // InternalReviewCompleted — Opinion internal review dual outcome.
             new(ReviewCompletionEvents.InternalReviewCompleted,
                 new[] { TaskTypeCodes.ReviewOpinionInternal },
                 new[] { TaskResultCodes.OpinionApprovedInternally, TaskResultCodes.OpinionRequiresRevision },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             // DocumentSent — Opinion SendOpinion closure. Project-status to
             // Closed is set by the seed transition action.
@@ -384,7 +390,8 @@ public static class ReviewCompletionEventBehavior
                 new[] { TaskTypeCodes.SendOpinion },
                 new[] { TaskResultCodes.OpinionSent },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             // ── Proposal (PRP.*) quote task completion events ───────────────
             // Calculation → Preparation → InternalApproval → SentFollowUp →
