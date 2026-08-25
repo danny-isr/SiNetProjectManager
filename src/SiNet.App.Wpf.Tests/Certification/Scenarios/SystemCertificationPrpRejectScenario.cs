@@ -37,6 +37,7 @@ internal sealed class SystemCertificationPrpRejectScenario : ISystemCertificatio
             ("cert.prp.source_ingest", "Production ACC inbox ingest before RejectPriceQuote"),
             ("cert.prp.source_ingest_sql_readback", "SQL inbox row and attachments match source Gmail"),
             ("cert.prp.source_ingest_acc_readback", "ACC Inbox folder read-back proves ingested files"),
+            ("cert.prp.inbox", "Fully ingested inbox row resolved for RejectPriceQuote"),
             ("cert.prp.gmail_identity", "Gmail silent restore matches declared mailbox"),
             ("cert.prp.reject.execute", "Start PRP reject through IEmailSuggestedActionExecutionService"),
             ("cert.prp.reject.terminal_stage", "Terminal stage PRP.Rejected"),
