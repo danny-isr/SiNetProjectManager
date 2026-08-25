@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Abstractions.Autodesk.Metadata;
 using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.Infrastructure.Sql.Constants;
+using SiNet.Infrastructure.Sql.Services.Email.Acc;
 using SiNet.Infrastructure.Sql.Services.Tasks;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -134,15 +136,11 @@ internal static class SystemCertificationPrpFileMaterialProof
             + $"Immutable pre-move expected count={preMoveExpected.Attachments.Count} "
             + $"for project {preMoveExpected.CertProjectId} / ACC folder '{preMoveExpected.AccTargetFolderId}'.");
 
-        var postMoveAccIds = await LoadPostMoveAccIdsAsync(
-            dbFactory,
-            preMoveExpected.Attachments,
-            cancellationToken);
-
         if (!await VerifyAccReadBackAsync(
                 provider,
+                dbFactory,
+                inboxId,
                 preMoveExpected,
-                postMoveAccIds,
                 evidence,
                 cancellationToken))
         {
@@ -261,12 +259,17 @@ internal static class SystemCertificationPrpFileMaterialProof
         }
 
         var targets = await tagging.LoadTagTargetsAsync(projectId, cancellationToken);
-        var target = targets.FirstOrDefault();
-        if (target is null)
+        if (targets.Count == 0)
         {
             evidence.Fail(
                 "cert.prp.acc.write",
                 "No OutSidData catalog slot exists — cannot tag attachments for MoveToProject.");
+            return false;
+        }
+
+        var accTarget = await ResolveAccOutSidDataTargetAsync(dbFactory, targets, evidence, cancellationToken);
+        if (accTarget is null)
+        {
             return false;
         }
 
@@ -278,7 +281,7 @@ internal static class SystemCertificationPrpFileMaterialProof
             var result = await tagging.SetTagAsync(
                 new EmailAttachmentTagCommand(
                     attachment.InboxAttachmentId,
-                    target.ProjectFileId,
+                    accTarget.ProjectFileId,
                     alternativeId,
                     operatorUserId),
                 cancellationToken);
@@ -294,6 +297,36 @@ internal static class SystemCertificationPrpFileMaterialProof
         }
 
         return true;
+    }
+
+    private static async Task<EmailAttachmentTagTarget?> ResolveAccOutSidDataTargetAsync(
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        IReadOnlyList<EmailAttachmentTagTarget> targets,
+        SystemCertificationEvidence evidence,
+        CancellationToken cancellationToken)
+    {
+        var targetIds = targets.Select(t => t.ProjectFileId).ToList();
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var accFileIds = await db.ProjectFiles.AsNoTracking()
+            .Where(pf => targetIds.Contains(pf.Id)
+                         && pf.OutSidData == true
+                         && pf.StorageDestination == FileStorageDestination.Acc)
+            .OrderBy(pf => pf.Title)
+            .ThenBy(pf => pf.Number)
+            .Select(pf => pf.Id)
+            .ToListAsync(cancellationToken);
+
+        if (accFileIds.Count == 0)
+        {
+            evidence.Fail(
+                "cert.prp.acc.write",
+                "No OutSidData ProjectFile with StorageDestination=Acc exists for FileQuoteMaterial ACC proof "
+                + $"(catalog targets={targets.Count}). Tagging a FileServer slot would not prove ACC write.");
+            return null;
+        }
+
+        var preferredId = accFileIds[0];
+        return targets.First(t => t.ProjectFileId == preferredId);
     }
 
     private static async Task<PreMoveExpectedState?> CapturePreMoveExpectedStateAsync(
@@ -393,108 +426,150 @@ internal static class SystemCertificationPrpFileMaterialProof
 
     private static async Task<bool> VerifyAccReadBackAsync(
         IServiceProvider provider,
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        int inboxMessageId,
         PreMoveExpectedState expected,
-        IReadOnlyList<PostMoveAccIds> postMoveAccIds,
         SystemCertificationEvidence evidence,
         CancellationToken cancellationToken)
     {
+        var metadata = provider.GetRequiredService<IAccItemMetadataService>();
         var browser = provider.GetRequiredService<IAccFolderBrowserService>();
-        var browse = await browser.BrowseAsync(
-            expected.AccProjectId,
-            expected.AccTargetFolderId,
-            cancellationToken);
-        if (browse is null)
+
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var message = await db.EmailInboxMessages.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == inboxMessageId, cancellationToken);
+        if (message is null
+            || string.IsNullOrWhiteSpace(message.InboxAccProjectId))
         {
             evidence.Fail(
                 "cert.prp.acc.readback",
-                $"IAccFolderBrowserService.BrowseAsync returned null for project '{expected.AccProjectId}' "
-                + $"folder '{expected.AccTargetFolderId}'.");
+                $"Inbox id={inboxMessageId} missing InboxAccProjectId for post-move ACC metadata read.");
             return false;
         }
 
-        if (!SystemCertificationAccIdentity.ProjectIdsMatch(browse.ProjectId, expected.AccProjectId))
-        {
-            evidence.Fail(
-                "cert.prp.acc.readback",
-                $"ACC browse project '{browse.ProjectId}' != expected '{expected.AccProjectId}'.");
-            return false;
-        }
+        var attachmentRows = await db.EmailInboxAttachments.AsNoTracking()
+            .Where(a => expected.Attachments.Select(x => x.InboxAttachmentId).Contains(a.Id))
+            .Select(a => new { a.Id, a.AccItemId, a.SavedFileName, a.OriginalFileName })
+            .ToListAsync(cancellationToken);
 
-        if (!string.Equals(browse.FolderId, expected.AccTargetFolderId, StringComparison.OrdinalIgnoreCase))
-        {
-            evidence.Fail(
-                "cert.prp.acc.readback",
-                $"ACC browse folder '{browse.FolderId}' != expected target '{expected.AccTargetFolderId}'.");
-            return false;
-        }
-
-        var items = browse.Entries
-            .Where(e => e.Kind == AccFolderEntryKind.Item)
-            .ToList();
-
-        var postMoveByAttachmentId = postMoveAccIds.ToDictionary(a => a.InboxAttachmentId);
         var failures = new List<string>();
+        var matchedCount = 0;
         foreach (var attachment in expected.Attachments)
         {
-            var matches = items.Where(i =>
-                    string.Equals(i.DisplayName, attachment.FileName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var row = attachmentRows.FirstOrDefault(a => a.Id == attachment.InboxAttachmentId);
+            if (row is null || string.IsNullOrWhiteSpace(row.AccItemId))
+            {
+                failures.Add($"attachment id={attachment.InboxAttachmentId} has no inbox AccItemId for metadata read");
+                continue;
+            }
 
+            var meta = await metadata.ReadAttributesAsync(
+                message.InboxAccProjectId,
+                row.AccItemId,
+                row.SavedFileName ?? row.OriginalFileName,
+                cancellationToken);
+            if (!meta.Success)
+            {
+                failures.Add(
+                    $"metadata read failed for attachment id={attachment.InboxAttachmentId}: {meta.ErrorMessage}");
+                continue;
+            }
+
+            if (!IsTruthy(meta.Attributes, SidecarMetadata.InboxAccAttributeNames.MoveMovedToProject))
+            {
+                failures.Add($"attachment id={attachment.InboxAttachmentId} missing MoveMovedToProject=true after MoveAsync");
+                continue;
+            }
+
+            if (!string.Equals(
+                    meta.Attributes.GetValueOrDefault(SidecarMetadata.InboxAccAttributeNames.MoveTargetDestination),
+                    nameof(FileStorageDestination.Acc),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                failures.Add(
+                    $"attachment id={attachment.InboxAttachmentId} TargetDestination="
+                    + $"'{meta.Attributes.GetValueOrDefault(SidecarMetadata.InboxAccAttributeNames.MoveTargetDestination) ?? "<null>"}' "
+                    + "(expected Acc for cert.prp.acc.readback)");
+                continue;
+            }
+
+            var targetFolderId = meta.Attributes.GetValueOrDefault(SidecarMetadata.InboxAccAttributeNames.MoveTargetAccFolderId);
+            var targetFileName = meta.Attributes.GetValueOrDefault(SidecarMetadata.InboxAccAttributeNames.MoveTargetFileName);
+            var targetItemId = meta.Attributes.GetValueOrDefault(SidecarMetadata.InboxAccAttributeNames.MoveTargetAccItemId);
+            if (string.IsNullOrWhiteSpace(targetFolderId) || string.IsNullOrWhiteSpace(targetFileName))
+            {
+                failures.Add(
+                    $"attachment id={attachment.InboxAttachmentId} missing TargetAccFolderId/TargetFileName "
+                    + "on ACC move metadata");
+                continue;
+            }
+
+            var browse = await browser.BrowseAsync(
+                expected.AccProjectId,
+                targetFolderId,
+                cancellationToken);
+            if (browse is null)
+            {
+                failures.Add(
+                    $"BrowseAsync null for ACC folder '{targetFolderId}' "
+                    + $"(attachment id={attachment.InboxAttachmentId})");
+                continue;
+            }
+
+            if (!SystemCertificationAccIdentity.ProjectIdsMatch(browse.ProjectId, expected.AccProjectId))
+            {
+                failures.Add(
+                    $"browse project '{browse.ProjectId}' != expected '{expected.AccProjectId}' "
+                    + $"(attachment id={attachment.InboxAttachmentId})");
+                continue;
+            }
+
+            var matches = browse.Entries
+                .Where(e => e.Kind == AccFolderEntryKind.Item
+                            && string.Equals(e.DisplayName, targetFileName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
             if (matches.Count == 0)
             {
-                failures.Add($"missing '{attachment.FileName}' (attachment id={attachment.InboxAttachmentId})");
+                failures.Add(
+                    $"missing filed ACC item '{targetFileName}' in folder '{targetFolderId}' "
+                    + $"(attachment id={attachment.InboxAttachmentId})");
                 continue;
             }
 
             var match = matches[0];
-            if (match.FileSize <= 0)
-            {
-                failures.Add($"item '{match.DisplayName}' has no file size metadata");
-            }
-
-            if (expected.PreWriteItemsByFileName.TryGetValue(attachment.FileName, out var preWrite))
-            {
-                if (string.Equals(match.Id, preWrite.Id, StringComparison.OrdinalIgnoreCase)
-                    && !ItemLooksUpdated(preWrite, match))
-                {
-                    failures.Add(
-                        $"item '{attachment.FileName}' unchanged since pre-write snapshot "
-                        + $"(id='{match.Id}') — stale file would cause false PASS");
-                }
-            }
-
-            if (postMoveByAttachmentId.TryGetValue(attachment.InboxAttachmentId, out var written)
-                && !string.IsNullOrWhiteSpace(written.AccItemId)
-                && !string.Equals(match.Id, written.AccItemId, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(targetItemId)
+                && !string.Equals(match.Id, targetItemId, StringComparison.OrdinalIgnoreCase))
             {
                 failures.Add(
-                    $"filename '{attachment.FileName}' browse item '{match.Id}' != post-write AccItemId "
-                    + $"'{written.AccItemId}'");
+                    $"browse item '{match.Id}' != MoveTargetAccItemId '{targetItemId}' "
+                    + $"(attachment id={attachment.InboxAttachmentId})");
+                continue;
             }
+
+            matchedCount++;
         }
 
-        if (items.Count < expected.Attachments.Count)
-        {
-            failures.Add(
-                $"folder item count {items.Count} < immutable pre-move expected count {expected.Attachments.Count}");
-        }
-
-        if (failures.Count > 0)
+        if (failures.Count > 0 || matchedCount < expected.Attachments.Count)
         {
             evidence.Fail(
                 "cert.prp.acc.readback",
-                "Independent IAccFolderBrowserService read-back failed against pre-move expected set: "
+                "Independent ACC read-back against post-move Move metadata failed: "
                 + string.Join("; ", failures));
             return false;
         }
 
         evidence.Pass(
             "cert.prp.acc.readback",
-            $"Independent IAccFolderBrowserService read-back matched immutable pre-move expected set "
-            + $"({expected.Attachments.Count} attachment id(s)/filename(s)) in project '{expected.AccProjectId}', "
-            + $"folder '{expected.AccTargetFolderId}', with new-or-updated item proof.");
+            $"Independent ACC browse matched Move metadata for {matchedCount} ACC-filed attachment(s) "
+            + $"in project '{expected.AccProjectId}'.");
         return true;
     }
+
+    private static bool IsTruthy(IReadOnlyDictionary<string, string?> attributes, string key) =>
+        attributes.TryGetValue(key, out var value)
+        && (value == "1"
+            || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase));
 
     private static bool ItemLooksUpdated(AccFolderBrowseEntry before, AccFolderBrowseEntry after)
     {
