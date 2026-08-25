@@ -22,6 +22,25 @@ namespace SiNet.App.Wpf.Tests.Certification;
 /// </summary>
 internal static class SystemCertificationPrpFileMaterialProof
 {
+    internal sealed record FilingEvidenceSteps(
+        string AccWrite,
+        string AccReadback,
+        string Transition,
+        string GmailFilingReadback)
+    {
+        public static FilingEvidenceSteps Prp { get; } = new(
+            "cert.prp.acc.write",
+            "cert.prp.acc.readback",
+            "cert.prp.transition.FileQuoteMaterial",
+            "cert.prp.gmail.filing.readback");
+
+        public static FilingEvidenceSteps Opn { get; } = new(
+            "cert.opn.acc.write",
+            "cert.opn.acc.readback",
+            "cert.opn.transition.FileInitialMaterials",
+            "cert.opn.gmail.filing.readback");
+    }
+
     internal sealed record ExpectedAttachment(
         int InboxAttachmentId,
         string FileName);
@@ -39,7 +58,7 @@ internal static class SystemCertificationPrpFileMaterialProof
         string? AccVersionId);
 
     /// <summary>
-    /// Runs acc.write → acc.readback → gmail filing readback/N/A → transition.FileQuoteMaterial.
+    /// Runs acc.write → acc.readback → gmail filing readback/N/A → filing-task transition.
     /// Returns false when the task must stay open and the corridor must stop.
     /// </summary>
     internal static async Task<bool> TryProveAndCompleteAsync(
@@ -48,11 +67,13 @@ internal static class SystemCertificationPrpFileMaterialProof
         SystemCertificationIntegrityValidator integrity,
         SystemCertificationHost.SystemCertificationRunContext context,
         SystemCertificationEvidence evidence,
-        int fileQuoteTaskId,
+        int filingTaskId,
         int certProjectId,
         int instanceId,
         int operatorUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        FilingEvidenceSteps? steps = null,
+        string? expectedStageAfter = null)
     {
         ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(dbFactory);
@@ -60,33 +81,36 @@ internal static class SystemCertificationPrpFileMaterialProof
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(evidence);
 
+        steps ??= FilingEvidenceSteps.Prp;
+        expectedStageAfter ??= ProposalStageCodes.MaterialCheck;
+
         if (!context.Acc.IsEnabled || context.Acc.Violation is not null)
         {
             evidence.Fail(
-                "cert.prp.acc.write",
-                "FileQuoteMaterial requires a valid ACC layer; direct ReviewMaterialFiled is forbidden.");
+                steps.AccWrite,
+                "Filing task requires a valid ACC layer; direct ReviewMaterialFiled is forbidden.");
             return false;
         }
 
         var inboxMessageId = await ResolveLinkedInboxMessageIdAsync(
-            dbFactory, fileQuoteTaskId, cancellationToken);
+            dbFactory, filingTaskId, cancellationToken);
         if (inboxMessageId is not int inboxId)
         {
             evidence.Fail(
-                "cert.prp.acc.write",
-                $"FileQuoteMaterial task {fileQuoteTaskId} has no EmailInboxMessage work-target link.");
+                steps.AccWrite,
+                $"Filing task {filingTaskId} has no EmailInboxMessage work-target link.");
             return false;
         }
 
         var accProjectId = await EnsureProjectMappingAsync(
-            provider, dbFactory, context, certProjectId, evidence, cancellationToken);
+            provider, dbFactory, context, certProjectId, evidence, cancellationToken, steps);
         if (accProjectId is null)
         {
             return false;
         }
 
         if (!await TagInboxAttachmentsAsync(
-                provider, dbFactory, inboxId, certProjectId, operatorUserId, evidence, cancellationToken))
+                provider, dbFactory, inboxId, certProjectId, operatorUserId, evidence, cancellationToken, steps))
         {
             return false;
         }
@@ -98,7 +122,8 @@ internal static class SystemCertificationPrpFileMaterialProof
             certProjectId,
             inboxId,
             evidence,
-            cancellationToken);
+            cancellationToken,
+            steps);
         if (preMoveExpected is null)
         {
             return false;
@@ -107,7 +132,7 @@ internal static class SystemCertificationPrpFileMaterialProof
         var move = provider.GetRequiredService<IEmailMoveToProjectService>();
         if (!move.IsAvailable)
         {
-            evidence.Fail("cert.prp.acc.write", "IEmailMoveToProjectService reports IsAvailable=false.");
+            evidence.Fail(steps.AccWrite, "IEmailMoveToProjectService reports IsAvailable=false.");
             return false;
         }
 
@@ -122,14 +147,14 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (!writeResult.Succeeded)
         {
             evidence.Fail(
-                "cert.prp.acc.write",
+                steps.AccWrite,
                 $"IEmailMoveToProjectService.MoveAsync failed: {writeResult.Message}. "
                 + "Task remains open; workflow must not advance.");
             return false;
         }
 
         evidence.Pass(
-            "cert.prp.acc.write",
+            steps.AccWrite,
             $"Production move via IEmailMoveToProjectService → NativeEmailMoveToProjectExecutor: "
             + $"moved={writeResult.MovedCount} alreadySameSource={writeResult.AlreadySameSourceCount} "
             + $"total={writeResult.TotalCount} failed={writeResult.FailedCount}. "
@@ -142,30 +167,31 @@ internal static class SystemCertificationPrpFileMaterialProof
                 inboxId,
                 preMoveExpected,
                 evidence,
-                cancellationToken))
+                cancellationToken,
+                steps))
         {
             return false;
         }
 
-        if (!await VerifyGmailFilingReadBackAsync(provider, evidence, cancellationToken))
+        if (!await VerifyGmailFilingReadBackAsync(provider, evidence, cancellationToken, steps))
         {
             return false;
         }
 
         var completion = provider.GetRequiredService<ITaskCompletionService>();
         var taskLinkIds = await ResolveCompletedTaskLinkIdsAsync(
-            dbFactory, fileQuoteTaskId, inboxId, cancellationToken);
+            dbFactory, filingTaskId, inboxId, cancellationToken);
         if (taskLinkIds.Count == 0)
         {
             evidence.Fail(
-                "cert.prp.transition.FileQuoteMaterial",
+                steps.Transition,
                 $"No EmailInboxMessage work-target TaskLink found for inbox {inboxId}.");
             return false;
         }
 
         var outcome = await completion.CompleteAsync(
             new CompleteTaskCommand(
-                fileQuoteTaskId,
+                filingTaskId,
                 ReviewCompletionEvents.ReviewMaterialFiled,
                 TaskResultCode: null,
                 taskLinkIds,
@@ -175,7 +201,7 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (!outcome.Success)
         {
             evidence.Fail(
-                "cert.prp.transition.FileQuoteMaterial",
+                steps.Transition,
                 $"ReviewMaterialFiled refused after ACC read-back: {Trim(outcome.ErrorMessage)}.");
             return false;
         }
@@ -184,10 +210,10 @@ internal static class SystemCertificationPrpFileMaterialProof
             dbFactory,
             integrity,
             evidence,
-            "cert.prp.transition.FileQuoteMaterial",
+            steps.Transition,
             instanceId,
-            fileQuoteTaskId,
-            ProposalStageCodes.MaterialCheck,
+            filingTaskId,
+            expectedStageAfter,
             cancellationToken);
 
         return true;
@@ -214,7 +240,8 @@ internal static class SystemCertificationPrpFileMaterialProof
         SystemCertificationHost.SystemCertificationRunContext context,
         int projectId,
         SystemCertificationEvidence evidence,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        FilingEvidenceSteps steps)
     {
         var provisioner = provider.GetRequiredService<IProjectAccMappingProvisioner>();
         await provisioner.EnsureMappingAsync(projectId, cancellationToken);
@@ -226,14 +253,14 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (mapping is null || string.IsNullOrWhiteSpace(mapping.AccProjectId))
         {
             evidence.Fail(
-                "cert.prp.acc.write",
+                steps.AccWrite,
                 $"Project {projectId} has no ACC mapping after IProjectAccMappingProvisioner.EnsureMappingAsync.");
             return null;
         }
 
         context.AccGuard?.Allow(
             mapping.AccProjectId,
-            $"[SYS-CERT] project {projectId} ACC mapping before FileQuoteMaterial move");
+            $"[SYS-CERT] project {projectId} ACC mapping before filing move");
 
         return mapping.AccProjectId;
     }
@@ -245,7 +272,8 @@ internal static class SystemCertificationPrpFileMaterialProof
         int projectId,
         int operatorUserId,
         SystemCertificationEvidence evidence,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        FilingEvidenceSteps steps)
     {
         var tagging = provider.GetRequiredService<IEmailAttachmentTaggingService>();
         var attachments = await tagging.LoadInboxAttachmentsAsync(inboxMessageId, cancellationToken);
@@ -253,7 +281,7 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (taggable.Count == 0)
         {
             evidence.Fail(
-                "cert.prp.acc.write",
+                steps.AccWrite,
                 "No taggable inbox attachments exist for MoveToProject through the production tagging service.");
             return false;
         }
@@ -262,12 +290,12 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (targets.Count == 0)
         {
             evidence.Fail(
-                "cert.prp.acc.write",
+                steps.AccWrite,
                 "No OutSidData catalog slot exists — cannot tag attachments for MoveToProject.");
             return false;
         }
 
-        var accTarget = await ResolveAccOutSidDataTargetAsync(dbFactory, targets, evidence, cancellationToken);
+        var accTarget = await ResolveAccOutSidDataTargetAsync(dbFactory, targets, evidence, cancellationToken, steps);
         if (accTarget is null)
         {
             return false;
@@ -289,7 +317,7 @@ internal static class SystemCertificationPrpFileMaterialProof
             if (!result.Succeeded)
             {
                 evidence.Fail(
-                    "cert.prp.acc.write",
+                    steps.AccWrite,
                     $"IEmailAttachmentTaggingService.SetTagAsync failed for attachment "
                     + $"{attachment.InboxAttachmentId}: {result.ErrorMessage}");
                 return false;
@@ -303,7 +331,8 @@ internal static class SystemCertificationPrpFileMaterialProof
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         IReadOnlyList<EmailAttachmentTagTarget> targets,
         SystemCertificationEvidence evidence,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        FilingEvidenceSteps steps)
     {
         var targetIds = targets.Select(t => t.ProjectFileId).ToList();
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
@@ -319,8 +348,8 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (accFileIds.Count == 0)
         {
             evidence.Fail(
-                "cert.prp.acc.write",
-                "No OutSidData ProjectFile with StorageDestination=Acc exists for FileQuoteMaterial ACC proof "
+                steps.AccWrite,
+                "No OutSidData ProjectFile with StorageDestination=Acc exists for ACC filing proof "
                 + $"(catalog targets={targets.Count}). Tagging a FileServer slot would not prove ACC write.");
             return null;
         }
@@ -336,7 +365,8 @@ internal static class SystemCertificationPrpFileMaterialProof
         int certProjectId,
         int inboxMessageId,
         SystemCertificationEvidence evidence,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        FilingEvidenceSteps steps)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         var mapping = await db.ProjectAccMappings.AsNoTracking()
@@ -345,7 +375,7 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (mapping is null || string.IsNullOrWhiteSpace(mapping.AccTargetFolderId))
         {
             evidence.Fail(
-                "cert.prp.acc.write",
+                steps.AccWrite,
                 $"Project {certProjectId} mapping has no AccTargetFolderId before MoveAsync.");
             return null;
         }
@@ -377,7 +407,7 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (attachments.Count == 0)
         {
             evidence.Fail(
-                "cert.prp.acc.write",
+                steps.AccWrite,
                 "No tagged inbox attachments with filenames exist before MoveAsync — cannot define expected ACC set.");
             return null;
         }
@@ -387,7 +417,7 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (browse is null)
         {
             evidence.Fail(
-                "cert.prp.acc.write",
+                steps.AccWrite,
                 $"Pre-write IAccFolderBrowserService.BrowseAsync returned null for project '{accProjectId}' "
                 + $"folder '{mapping.AccTargetFolderId}'.");
             return null;
@@ -399,7 +429,7 @@ internal static class SystemCertificationPrpFileMaterialProof
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         evidence.Pass(
-            "cert.prp.acc.write",
+            steps.AccWrite,
             $"Captured immutable pre-move expected set: {attachments.Count} attachment id(s), "
             + $"{preWriteItems.Count} pre-existing ACC item(s) in folder '{mapping.AccTargetFolderId}'.");
 
@@ -430,7 +460,8 @@ internal static class SystemCertificationPrpFileMaterialProof
         int inboxMessageId,
         PreMoveExpectedState expected,
         SystemCertificationEvidence evidence,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        FilingEvidenceSteps steps)
     {
         var metadata = provider.GetRequiredService<IAccItemMetadataService>();
         var browser = provider.GetRequiredService<IAccFolderBrowserService>();
@@ -442,7 +473,7 @@ internal static class SystemCertificationPrpFileMaterialProof
             || string.IsNullOrWhiteSpace(message.InboxAccProjectId))
         {
             evidence.Fail(
-                "cert.prp.acc.readback",
+                steps.AccReadback,
                 $"Inbox id={inboxMessageId} missing InboxAccProjectId for post-move ACC metadata read.");
             return false;
         }
@@ -552,14 +583,14 @@ internal static class SystemCertificationPrpFileMaterialProof
         if (failures.Count > 0 || matchedCount < expected.Attachments.Count)
         {
             evidence.Fail(
-                "cert.prp.acc.readback",
+                steps.AccReadback,
                 "Independent ACC read-back against post-move Move metadata failed: "
                 + string.Join("; ", failures));
             return false;
         }
 
         evidence.Pass(
-            "cert.prp.acc.readback",
+            steps.AccReadback,
             $"Independent ACC browse matched Move metadata for {matchedCount} ACC-filed attachment(s) "
             + $"in project '{expected.AccProjectId}'.");
         return true;
@@ -598,13 +629,14 @@ internal static class SystemCertificationPrpFileMaterialProof
     private static Task<bool> VerifyGmailFilingReadBackAsync(
         IServiceProvider provider,
         SystemCertificationEvidence evidence,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        FilingEvidenceSteps steps)
     {
         _ = provider;
         _ = cancellationToken;
 
         evidence.NotApplicable(
-            "cert.prp.gmail.filing.readback",
+            steps.GmailFilingReadback,
             "IEmailMoveToProjectService / NativeEmailMoveToProjectExecutor moves tagged attachments to the "
             + "project ACC folder only; it does not call IEmailFilingService or mutate Gmail labels.");
         return Task.FromResult(true);

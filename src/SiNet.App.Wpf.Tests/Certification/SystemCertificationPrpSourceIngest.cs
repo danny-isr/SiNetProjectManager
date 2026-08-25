@@ -55,8 +55,8 @@ internal static class SystemCertificationPrpSourceIngest
         {
             evidence.Fail(
                 "cert.prp.source_ingest",
-                $"Explicit source inbox id={existing} already has an active Proposal instance — "
-                + "FAIL BEFORE WORKFLOW START.");
+                $"Explicit source inbox id={existing} already has an active workflow instance "
+                + $"(definition id={proposalDefinitionId}) — FAIL BEFORE WORKFLOW START.");
             return null;
         }
 

@@ -316,6 +316,17 @@ internal static class SystemCertificationTransitionAssertions
             _ => null,
         };
 
+    /// <summary>Expected OPN stage after completing a driving task through the happy path.</summary>
+    internal static string? ExpectedOpnStageAfterTask(string completedTaskTypeCode) =>
+        completedTaskTypeCode switch
+        {
+            TaskTypeCodes.FileInitialMaterials => OpinionStageCodes.AnalyzeDocuments,
+            TaskTypeCodes.AnalyzeOpinionMaterials => OpinionStageCodes.PrepareDraft,
+            TaskTypeCodes.PrepareOpinionDraft => OpinionStageCodes.InternalReview,
+            TaskTypeCodes.ReviewOpinionInternal => OpinionStageCodes.SendOpinion,
+            _ => null,
+        };
+
     internal static IReadOnlyList<string> PrpHappyPathTaskTypes { get; } =
     [
         TaskTypeCodes.OpenQuoteProject,
@@ -324,5 +335,13 @@ internal static class SystemCertificationTransitionAssertions
         TaskTypeCodes.PrepareQuoteCalculation,
         TaskTypeCodes.PrepareQuoteDocument,
         TaskTypeCodes.ApproveQuoteInternal,
+    ];
+
+    internal static IReadOnlyList<string> OpnHappyPathTaskTypes { get; } =
+    [
+        TaskTypeCodes.FileInitialMaterials,
+        TaskTypeCodes.AnalyzeOpinionMaterials,
+        TaskTypeCodes.PrepareOpinionDraft,
+        TaskTypeCodes.ReviewOpinionInternal,
     ];
 }

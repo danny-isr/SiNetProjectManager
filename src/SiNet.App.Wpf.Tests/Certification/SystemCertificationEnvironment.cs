@@ -54,6 +54,9 @@ internal static class SystemCertificationEnvironment
     /// <summary>Explicit opt-in for PRP RejectPriceQuote live writes after preflight PASS.</summary>
     public const string PrpRejectLiveEnabledEnv = "SINET_SYSTEM_CERT_PRP_REJECT_LIVE";
 
+    /// <summary>Explicit opt-in for OPN CreateOpinionProject live writes after preflight PASS.</summary>
+    public const string OpnLiveEnabledEnv = "SINET_SYSTEM_CERT_OPN_LIVE";
+
     /// <summary>
     /// Required Gmail API message id for PRP CreatePriceQuote. No mailbox scanning fallback.
     /// </summary>
@@ -63,6 +66,11 @@ internal static class SystemCertificationEnvironment
     /// Required Gmail API message id for PRP RejectPriceQuote. No mailbox scanning fallback.
     /// </summary>
     public const string PrpRejectSourceGmailMessageIdEnv = "SINET_SYSTEM_CERT_PRP_REJECT_SOURCE_GMAIL_MESSAGE_ID";
+
+    /// <summary>
+    /// Required Gmail API message id for OPN CreateOpinionProject. No mailbox scanning fallback.
+    /// </summary>
+    public const string OpnSourceGmailMessageIdEnv = "SINET_SYSTEM_CERT_OPN_SOURCE_GMAIL_MESSAGE_ID";
 
     /// <summary>
     /// Optional RFC822 Message-Id for the PRP source email; when set it must match the loaded message.
@@ -121,6 +129,9 @@ internal static class SystemCertificationEnvironment
 
     /// <summary>True when PRP RejectPriceQuote live writes are explicitly enabled.</summary>
     public static bool IsPrpRejectLiveRequested() => IsFlagSet(PrpRejectLiveEnabledEnv);
+
+    /// <summary>True when OPN CreateOpinionProject live writes are explicitly enabled.</summary>
+    public static bool IsOpnLiveRequested() => IsFlagSet(OpnLiveEnabledEnv);
 
     /// <summary>
     /// Resolves the declared SQL target from environment only. The connection string
