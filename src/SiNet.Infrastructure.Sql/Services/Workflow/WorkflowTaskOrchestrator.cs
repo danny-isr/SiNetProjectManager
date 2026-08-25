@@ -146,7 +146,37 @@ internal sealed class WorkflowTaskOrchestrator(
             return;
         }
 
-        await ExecuteTransitionAsync(best.Rule, parentId, userId, ct).ConfigureAwait(false);
+        var result = await ExecuteTransitionAsync(best.Rule, parentId, userId, ct).ConfigureAwait(false);
+        if (result.Action == StageCompletionAction.AutoAdvanceFailed)
+        {
+            throw new InvalidOperationException(
+                $"Parent workflow {parentId} auto-advance after sub-workflow {childInstance.Id} failed (rule {best.Rule.Id} → stage {best.Rule.ToStageId}).");
+        }
+    }
+
+    /// <summary>
+    /// After a child instance reaches <see cref="WorkflowStatus.Completed"/> and the ambient
+    /// task-close transaction has committed, advance the parent on SubWorkflowCompleted.
+    /// </summary>
+    public async ValueTask NotifyParentOfCompletedChildAsync(
+        int childInstanceId,
+        int userId,
+        CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        var child = await db.WorkflowInstances
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == childInstanceId, ct)
+            .ConfigureAwait(false);
+
+        if (child is null)
+            throw new InvalidOperationException($"Workflow instance {childInstanceId} not found.");
+
+        if (child.Status != WorkflowStatus.Completed || child.ParentWorkflowInstanceId is null)
+            return;
+
+        await NotifyParentOfSubWorkflowCompletionAsync(child, succeeded: true, userId, ct)
+            .ConfigureAwait(false);
     }
 
     // ── Task creation from stage templates ─────────────────────────────────
@@ -599,8 +629,8 @@ internal sealed class WorkflowTaskOrchestrator(
     /// Shared-context transition execution. Runs the rule's actions (threading the ambient
     /// <paramref name="db"/> into DB-writing handlers), advances the stage, and provisions the new
     /// stage's tasks — all on <paramref name="db"/>. Throws on any action/advance failure so the
-    /// caller's transaction rolls back (atomic). Parent notification for a completed sub-workflow runs
-    /// on its own context (a separate instance's advance).
+    /// caller's transaction rolls back (atomic). Parent SubWorkflowCompleted notification is
+    /// deferred until after the caller commits (see SqlTaskCompletionService post-commit hook).
     /// </summary>
     private async ValueTask<StageCompletionResult> ExecuteTransitionSharedAsync(
         SiNetSQLDbContext db,
@@ -632,10 +662,11 @@ internal sealed class WorkflowTaskOrchestrator(
                 .ConfigureAwait(false);
         }
 
-        if (instance.Status == WorkflowStatus.Completed && instance.ParentWorkflowInstanceId.HasValue)
-        {
-            await NotifyParentOfSubWorkflowCompletionAsync(instance, succeeded: true, userId, ct).ConfigureAwait(false);
-        }
+        // Do NOT notify the parent here. This method runs inside the caller's ambient
+        // transaction (task-close + child advance). Parent SubWorkflowCompleted advance opens
+        // its own contexts and will lock-timeout against ProjectAssignment rows held by this
+        // transaction. SqlTaskCompletionService invokes
+        // <see cref="NotifyParentOfCompletedChildAsync"/> after Commit.
 
         Trace.TraceInformation($"[Orchestrator] (atomic) Auto-advanced workflow {instanceId} to stage {rule.ToStageId}.");
         // TEMP WF-DEBUG

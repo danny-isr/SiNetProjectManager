@@ -80,6 +80,16 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
         return _orchestrator.CheckAndAutoAdvanceSharedAsync(db, command.TaskId, command.UserId, ct);
     }
 
+    /// <summary>
+    /// Post-commit hook: when a shared auto-advance completed a child instance, advance the parent
+    /// on <c>SubWorkflowCompleted</c> outside the child's transaction.
+    /// </summary>
+    public ValueTask NotifyParentOfCompletedChildAsync(
+        int childInstanceId,
+        int userId,
+        CancellationToken ct)
+        => _orchestrator.NotifyParentOfCompletedChildAsync(childInstanceId, userId, ct);
+
     public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceStalledAsync(StalledWorkflowCommand command, CancellationToken ct) =>
         _orchestrator.CheckAndAutoAdvanceStalledWorkflowAsync(command.InstanceId, command.UserId, ct);
 

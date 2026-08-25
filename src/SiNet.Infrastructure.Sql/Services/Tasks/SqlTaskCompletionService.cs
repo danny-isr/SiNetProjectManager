@@ -320,6 +320,25 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                 if (sharedTx is not null)
                     await sharedTx.CommitAsync(ct).ConfigureAwait(false);
 
+                // Child SubWorkflowCompleted → parent must run AFTER commit: parent advance opens
+                // separate DbContexts and otherwise lock-timeouts against ProjectAssignment rows
+                // still held by this transaction (PLN host after MAT terminal).
+                try
+                {
+                    await TryNotifyParentAfterSharedChildCompleteAsync(
+                            nativeCommands, stageAdvanceResult, command.UserId, ct)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Trace.TraceError(
+                        "[SqlTaskCompletionService] post-commit parent notify failed for task {0}: {1}",
+                        command.TaskId,
+                        ex);
+                    return TaskCompletionResultDto.Failure(
+                        $"Workflow parent auto-advance failed after task {command.TaskId}: {ex.Message}");
+                }
+
                 await TryStartPostApprovalContinuationsAsync(
                         taskResultCode, task.ProjectId, command.UserId, ct)
                     .ConfigureAwait(false);
@@ -389,6 +408,23 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             NewProjectStatusCode = newProjectStatusCode,
             StageAdvanceResult = fallbackAdvanceResult,
         };
+    }
+
+    private async ValueTask TryNotifyParentAfterSharedChildCompleteAsync(
+        NativeWorkflowCommandService nativeCommands,
+        StageCompletionResultDto? stageAdvanceResult,
+        int userId,
+        CancellationToken ct)
+    {
+        if (stageAdvanceResult?.AdvancedInstance is null)
+            return;
+
+        if (stageAdvanceResult.AdvancedInstance.Status != SiNet.Domain.Workflow.WorkflowStatus.Completed)
+            return;
+
+        await nativeCommands
+            .NotifyParentOfCompletedChildAsync(stageAdvanceResult.AdvancedInstance.Id, userId, ct)
+            .ConfigureAwait(false);
     }
 
     private async Task TryStartPostApprovalContinuationsAsync(
