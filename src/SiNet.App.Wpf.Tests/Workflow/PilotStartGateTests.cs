@@ -138,12 +138,35 @@ public sealed class PilotStartGateTests
         {
             db.Projects.Add(new Project { Id = 100, Title = "P" });
             db.Siusers.Add(new Siuser { Id = UserId, Name = "U", IsActive = true });
+            db.JobTypes.Add(new JobType { Id = 17, Title = "PlanningJT" });
+            // Closed ProjectType policy maps only Planning — MaterialIntake is intentionally unmapped
+            // (sub-workflow host), matching production PLN→MAT StartSubWorkflow.
+            db.TypeOfProjectInProjects.Add(new TypeOfProjectInProject
+            {
+                ProjectId = 100,
+                ProjectTypeId = 17,
+            });
+            db.WorkflowDefinitions.Add(new WorkflowDefinition
+            {
+                Id = 9,
+                Code = WorkflowCodes.PlanningWorkflow,
+                Name = "PLN",
+                IsActive = true,
+            });
             db.WorkflowDefinitions.Add(new WorkflowDefinition
             {
                 Id = 10,
                 Code = WorkflowCodes.MaterialIntake,
                 Name = "MAT",
                 IsActive = true,
+            });
+            db.ProjectTypeWorkflowDefinitions.Add(new ProjectTypeWorkflowDefinition
+            {
+                ProjectTypeId = 17,
+                WorkflowDefinitionId = 9,
+                IsDefault = true,
+                IsEnabled = true,
+                SortOrder = 1,
             });
             db.WorkflowStageDefinitions.Add(new WorkflowStageDefinition
             {
@@ -160,7 +183,7 @@ public sealed class PilotStartGateTests
             {
                 Id = 50,
                 ProjectId = 100,
-                WorkflowDefinitionId = 10,
+                WorkflowDefinitionId = 9,
                 Status = WorkflowStatus.Active,
                 CreatedByUserId = UserId,
                 CreatedAtUtc = DateTime.UtcNow,
@@ -175,6 +198,19 @@ public sealed class PilotStartGateTests
         await using var provider = services.BuildServiceProvider();
 
         var engine = provider.GetRequiredService<WorkflowEngine>();
+
+        var rootMatDenied = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            engine.StartAsync(
+                definitionId: 10,
+                projectId: 100,
+                triggerType: WorkflowTriggerType.System,
+                triggerEntityId: null,
+                userId: UserId,
+                notes: "root-mat",
+                ct: CancellationToken.None,
+                isProjectBound: true).AsTask());
+        Assert.Contains("not allowed for project", rootMatDenied.Message, StringComparison.Ordinal);
+
         var child = await engine.StartAsync(
             definitionId: 10,
             projectId: 100,

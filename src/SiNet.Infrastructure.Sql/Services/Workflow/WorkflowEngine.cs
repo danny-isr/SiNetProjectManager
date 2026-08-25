@@ -41,7 +41,11 @@ internal sealed class WorkflowEngine
         string? initialStageCode = null,
         int? jobTypeId = null)
     {
+        // ProjectType allow-list applies to top-level starts only. Child instances
+        // (StartSubWorkflow / parentWorkflowInstanceId) inherit the parent's project
+        // binding; nested hosts such as MaterialIntake are not ProjectTypeWorkflowDefinition entries.
         if (isProjectBound &&
+            parentWorkflowInstanceId is null &&
             !await _policyService.IsWorkflowAllowedAsync(projectId, definitionId, ct).ConfigureAwait(false))
         {
             throw new InvalidOperationException(
