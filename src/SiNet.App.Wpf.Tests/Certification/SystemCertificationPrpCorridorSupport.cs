@@ -329,7 +329,7 @@ internal static class SystemCertificationPrpCorridorSupport
         CancellationToken cancellationToken = default)
     {
         var creator = new SqlProjectCreateService(dbFactory);
-        var title = $"{SystemCertificationEnvironment.CertificationTitlePrefix} {DateTime.Now:MMdd-HHmmss-fff}";
+        var title = $"{SystemCertificationEnvironment.CertificationTitlePrefix} {DateTime.Now:yyMMdd-HHmmss}";
 
         var result = await creator.CreateAsync(
             new CreateProjectCommand(
