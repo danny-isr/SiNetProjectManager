@@ -331,6 +331,7 @@ internal static class SystemCertificationRevCorridorSupport
             integrity,
             evidence,
             parentInstanceId,
+            certProjectId,
             operatorUserId,
             cancellationToken);
         return (walked, matInstanceId);
@@ -458,10 +459,12 @@ internal static class SystemCertificationRevCorridorSupport
         SystemCertificationIntegrityValidator integrity,
         SystemCertificationEvidence evidence,
         int instanceId,
+        int certProjectId,
         int operatorUserId,
         CancellationToken cancellationToken)
     {
         var completion = provider.GetRequiredService<ITaskCompletionService>();
+        var sharedReportId = 0;
 
         foreach (var taskType in SystemCertificationTransitionAssertions.RevHappyPathTaskTypes)
         {
@@ -495,12 +498,22 @@ internal static class SystemCertificationRevCorridorSupport
                     return false;
                 }
 
+                (sharedReportId, var closeLinkIds) = await SystemCertificationRevInspectionProof
+                    .ResolveCompletedWorkTargetLinkIdsAsync(
+                        dbFactory,
+                        open.TaskId,
+                        taskType,
+                        certProjectId,
+                        operatorUserId,
+                        sharedReportId,
+                        cancellationToken);
+
                 var closeOutcome = await completion.CompleteAsync(
                     new CompleteTaskCommand(
                         open.TaskId,
                         closePair.EventCode,
                         closePair.ResultCode,
-                        null,
+                        closeLinkIds.Count > 0 ? closeLinkIds : null,
                         operatorUserId),
                     cancellationToken);
 
@@ -548,12 +561,22 @@ internal static class SystemCertificationRevCorridorSupport
                 return false;
             }
 
+            (sharedReportId, var completedLinkIds) = await SystemCertificationRevInspectionProof
+                .ResolveCompletedWorkTargetLinkIdsAsync(
+                    dbFactory,
+                    open.TaskId,
+                    taskType,
+                    certProjectId,
+                    operatorUserId,
+                    sharedReportId,
+                    cancellationToken);
+
             var outcome = await completion.CompleteAsync(
                 new CompleteTaskCommand(
                     open.TaskId,
                     pair.EventCode,
                     pair.ResultCode,
-                    null,
+                    completedLinkIds.Count > 0 ? completedLinkIds : null,
                     operatorUserId),
                 cancellationToken);
 
