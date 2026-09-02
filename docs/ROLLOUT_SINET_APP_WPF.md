@@ -36,7 +36,7 @@
 
 - [ ] MasterPlan API key rotated + old key revoked ([`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md))
 - [ ] DB backup + restore drill + AUTO_CLOSE/RCSI ([`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md))
-- [ ] CI green on push/PR
+- [ ] Local full `SiNet.sln` gate green on DEV (siblings, Debug+Release, tests, secret-scan) — **not** GitHub Actions
 - [ ] Signed MSIX published to `\\SI-WIN-2K19\AppFolder\AppNet\SiNet.App.Wpf\`
 
 ### Phase 1 -- Pilot (1-2 users)

@@ -5,14 +5,16 @@
 > **Pilot envelope:** [`NEW_SYSTEM_PRODUCTION_READINESS.md`](./NEW_SYSTEM_PRODUCTION_READINESS.md)  
 > **Manual checklist (operator-only):** [`manual-tests/STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md)
 
-This document defines the **test layers** for the limited standalone pilot: what runs in CI,
-what can be run locally with secrets, and what always stays manual.
+This document defines the **test layers** for the limited standalone pilot: what runs in the
+**local DEV automated gate** (Cursor / operator shell), what can be run with secrets, and what always stays manual.
+
+> **Documentation drift:** older drafts treated GitHub Actions as the authoritative automated layer. **Current SoT:** automated validation is local on the DEV workstation; `.github/workflows/ci.yml` is dormant/historical and not a release gate.
 
 ---
 
 ## 1. Layers
 
-| Layer | Where | Runs in CI | Needs secrets / network |
+| Layer | Where | Local DEV gate | Needs secrets / network |
 | --- | --- | --- | --- |
 | **L1** Unit / ViewModel + stubs | `src/SiNet.App.Wpf.Tests`, Google.Tests, LegacyBridge.Tests | Yes | No |
 | **L2** Boundary / source guards | `src/SiNet.App.Wpf.Tests/Boundary`, `Shell`, docs asserts | Yes | No |
@@ -22,16 +24,16 @@ what can be run locally with secrets, and what always stays manual.
 | **L5** Manual operator checklist | `manual-tests/STANDALONE_PILOT_SMOKE.md` | No | Yes + human UI |
 
 ```text
-L1 Unit/VM → L2 Boundary → L3 Composition (CI) → L4 Live read (optional) → L4W Pilot write (DEV only) → L5 Manual
+L1 Unit/VM → L2 Boundary → L3 Composition (local gate) → L4 Live read (optional) → L4W Pilot write (DEV only) → L5 Manual
 ```
 
 **L4 vs L4W:** L4 only observes (connect, health, silent token restore). L4W creates projects, workflow instances, tasks, Gmail labels and ACC folders/items. They are separate categories so `Category=LiveSmoke` can never trigger writes.
 
 ---
 
-## 2. CI gate (official)
+## 2. Local DEV automated gate (authoritative)
 
-Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) on `SiNet.sln`:
+Same recipe as the dormant `.github/workflows/ci.yml` file, executed locally:
 
 ```powershell
 pwsh ./build/fetch-siblings.ps1
@@ -40,18 +42,19 @@ dotnet build SiNet.sln --configuration Debug --no-restore
 dotnet build SiNet.sln --configuration Release --no-restore
 dotnet test src/SiNet.App.Wpf.Tests/SiNet.App.Wpf.Tests.csproj --configuration Release --no-build
 dotnet test src/SiNet.Infrastructure.Google.Tests/SiNet.Infrastructure.Google.Tests.csproj --configuration Release --no-build
+dotnet test MasterPlan.SyncEngine.Tests/MasterPlan.SyncEngine.Tests.csproj --configuration Release --no-build
 dotnet test src/SiNet.LegacyBridge.Tests/SiNet.LegacyBridge.Tests.csproj --configuration Release --no-build
 pwsh ./build/secret-scan.ps1
 ```
 
-Local agent gate (host + primary tests):
+Narrow local agent gate (host + primary tests):
 
 ```powershell
-dotnet build SiNetProjectManagerV2\SiNetProjectManagerV2.csproj
+dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
 dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj
 ```
 
-Live tests (`Category=LiveSmoke`) are **skipped** unless `SINET_LIVE_SMOKE=1` — they do not fail CI.
+Live tests (`Category=LiveSmoke`) are **skipped** unless `SINET_LIVE_SMOKE=1` — they do not fail the local offline gate.
 
 ---
 

@@ -61,12 +61,14 @@ pwsh .\build\fetch-siblings.ps1 -ValidateOnly
 
 ### Private repositories
 
-Authentication comes from the `SIBLING_REPOS_TOKEN` environment variable only. The token is passed
-to git per invocation as an HTTP auth header and is never written to `.git/config`, a remote URL, or
-any file. In CI it is supplied from `secrets.SIBLING_REPOS_TOKEN`. If the variable is unset the
-script falls back to anonymous access, which only works while the repositories are public.
+Authentication for `fetch-siblings.ps1` comes from the `SIBLING_REPOS_TOKEN` environment variable when set.
+The token is passed to git per invocation as an HTTP auth header and is never written to `.git/config`, a remote URL, or any file.
+On the DEV workstation, authenticated local git credentials are normally sufficient — **do not** create a GitHub Actions secret for siblings as part of the current release-candidate process.
+
+> **Documentation drift:** older text said CI supplies `secrets.SIBLING_REPOS_TOKEN`. GitHub Actions is **not** an active validation/release gate; that secret is not required for local Cursor validation.
 
 ```powershell
+# Optional — only if local git cannot read private siblings:
 $env:SIBLING_REPOS_TOKEN = '<personal-access-token>'
 pwsh .\build\fetch-siblings.ps1
 ```

@@ -33,7 +33,8 @@ Define a single release protocol so both machines agree:
 - **DEV** builds and tests; it does not overwrite the production share.
 - Near-term work on PROD is limited to **small fixes and small feature updates** while the pilot runs; larger work stays on DEV until it is ready to merge and ship.
 
-There is **no** GitHub Actions release/publish workflow today. CI (`SiNet.sln`) only builds, tests, and secret-scans. Shipping is **manual** from PROD.
+There is **no** GitHub Actions release/publish workflow today. Shipping is **manual** from PROD.
+**Automated validation** for development / certification / release-candidate readiness is operator/agent-run **locally on the DEV workstation** (Cursor). `.github/workflows/ci.yml` is dormant historical configuration and is **not** an active release gate.
 
 ---
 
@@ -96,9 +97,11 @@ git push origin development
 
 **`SiWorkNet10` — deprecated, retained.** It was the single active branch until 03.08.2026 and is the common ancestor of both new branches. Status: **no longer the working branch on either machine**; kept because CI history, older documentation and existing references point at it. It may still be pushed to by an automation or a stale checkout, so do not treat it as authoritative. Do not delete it before confirming nothing (CI runs, automations, the DEV checkout) still targets it.
 
-### 3.3 CI
+### 3.3 Automated validation (local DEV — authoritative)
 
-CI (`.github/workflows/ci.yml`) runs on pushes to `main`, `master`, `release`, `development` and `SiWorkNet10`, and on every pull request. It must be green on `release` before a publish.
+**Current SoT:** run the full `SiNet.sln` gate locally on DEV (siblings → Debug build → Release build → App.Wpf / Google / MasterPlan.SyncEngine / LegacyBridge tests → secret-scan). See [`AGENTS.md`](../AGENTS.md).
+
+> **Documentation drift (historical):** older text stated that GitHub Actions (`.github/workflows/ci.yml`) “must be green on `release` before a publish.” That workflow is **not** an active gate — it was an experimental/historical attempt and may remain disabled. Do not treat GHA run status as product/test failure.
 
 ---
 
@@ -156,7 +159,7 @@ Do **not** publish if build, tests, or secret-scan fail.
 | --- | --- | --- |
 | DB backup + restore drill | [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md) | Must not remain “Manual Pending” before wide rollout |
 | MasterPlan API key rotation | [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) | Same |
-| CI green on the integration branch | GitHub Actions `CI` | Required every ship |
+| Local full `SiNet.sln` gate on DEV | Cursor / local shell (siblings, Debug+Release, four test projects, secret-scan) | Required every ship — **not** GitHub Actions |
 | Smoke on a clean / pilot machine | [`manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md`](./manual-tests/SMOKE_CUTOVER_SINET_APP_WPF.md) | Required for first install and after risky changes |
 
 ### 5.4 Publish

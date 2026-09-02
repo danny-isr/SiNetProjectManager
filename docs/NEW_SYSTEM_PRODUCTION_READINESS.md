@@ -34,7 +34,7 @@
 | Layer | Meaning | Example |
 | --- | --- | --- |
 | Repo tip | What `origin/release` / `origin/development` contain | Core Workflow Live Certification baseline `080318610bb06facf92896df41c47d3d70cd2f39` on `development` (2026-09-02) |
-| Automated tests | What CI / local `dotnet test` proved on a given commit | Offline suite Pass @ `0803186`; GitHub CI green still gated on `SIBLING_REPOS_TOKEN` |
+| Automated tests | Operator/agent-run locally on the DEV workstation (`dotnet build` / `dotnet test` / secret-scan) | Offline suite Pass @ `0803186` — **not** GitHub Actions |
 | Core Workflow Live Certification | Production-seam LIVE proof of 7 workflows on one SHA | **Certified 7/7** @ `0803186` — **not** FULL SYSTEM CERTIFIED |
 | Interactive smoke | Operator checklist on a machine | §9 -- **Not Run** unless signed |
 | Ops install | What pilot PCs actually run from UNC | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) -- **Needs Review** |
@@ -265,7 +265,7 @@ Live layer (`Category=LiveSmoke`) was **Not Run** here (no AccService/DB session
 | **Operator checklist** | [`manual-tests/STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md) (+ workflow gate) |
 | **Rollout** | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) |
 | **Pilot after Pass** | 1–2 internal users while external legacy system stays available |
-| **Release gates still open** | GitHub CI green (`SIBLING_REPOS_TOKEN`); interactive smoke Pass; DB backup/restore drill; MasterPlan API key rotation; outbound Gmail policy |
+| **Release gates still open** | Local full `SiNet.sln` Debug+Release build/tests + secret-scan on DEV; interactive smoke Pass; DB backup/restore drill; MasterPlan API key rotation; outbound Gmail policy. **GitHub Actions is not an active release gate.** |
 
 ### 9.1 Operator focus (standalone)
 

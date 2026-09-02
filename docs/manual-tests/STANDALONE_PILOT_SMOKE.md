@@ -12,7 +12,7 @@
 
 **Legend:** `Pass` | `Fail` | `Blocked` | `N/A` | **Not Run** (default)
 
-Run offline automation first (CI / local). Then optional Live (`SINET_LIVE_SMOKE=1`). This checklist is **only** what still needs a human.
+Run offline automation first (local DEV gate via Cursor). Then optional Live (`SINET_LIVE_SMOKE=1`). This checklist is **only** what still needs a human.
 
 **Do not mark this checklist Pass because automated certification is green.** Interactive UI soak is a separate evidence layer.
 

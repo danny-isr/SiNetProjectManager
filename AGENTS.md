@@ -1,8 +1,8 @@
 # SiNet Project Manager -- Agent Instructions
 
 > **Status:** Active
-> **Updated:** 07.08.2026
-> **Scope:** Repo-wide entry for Cursor / AI agents (environments, build gate, key docs). Domain behavior lives in `docs/`.
+> **Updated:** 02.09.2026
+> **Scope:** Repo-wide entry for Cursor / AI agents (environments, local build gate, key docs). Domain behavior lives in `docs/`.
 
 This file is the **entry point for Cursor / AI agents** working in this repository.
 
@@ -38,12 +38,14 @@ If it is unclear which machine/DB the session is on, **ask the operator** before
 
 **Rule of thumb:** put **repeatable** constraints in `.cursor/rules/`. Put **domain behavior** in `docs/`. Put **one slice** details in the chat (or a migration doc section).
 
-## Build contract (CI vs local)
+## Build contract (local DEV validation)
+
+**Authoritative automated validation** is operator/agent-run **locally on the DEV workstation** through Cursor (or an equivalent local shell). **GitHub Actions is not an active release gate** — `.github/workflows/ci.yml` is retained as dormant/historical configuration only (may stay disabled).
 
 | Solution | Role | Notes |
 | --- | --- | --- |
-| **`SiNet.sln`** | **Official CI solution** | GitHub Actions (`.github/workflows/ci.yml`) fetches the pinned sibling repositories, restores, builds Debug + Release, runs all three test projects under `src/`, and secret-scans every tracked text file. |
-| **`SiNetProjectManager.sln`** | Hybrid legacy + new stack | Same sibling pins, plus the legacy projects. **Not** the CI gate. |
+| **`SiNet.sln`** | **Official local solution gate** | Fetch pinned siblings, restore, build Debug + Release, run the test projects below, secret-scan. Same recipe historically lived in `.github/workflows/ci.yml` — that workflow is **not** current SoT. |
+| **`SiNetProjectManager.sln`** | Hybrid legacy + new stack | Same sibling pins, plus the legacy projects. **Not** the primary gate. |
 
 **Neither solution is self-contained.** Both reach `SiNetSQL`, `SiOffice.AutodeskConnector` and
 `SiOffice.GoogleConnector`, which are checked out next to this repository at commits pinned in
@@ -58,11 +60,18 @@ dotnet build src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
 dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj
 ```
 
-Full CI-equivalent check locally:
+Full local release-candidate check (authoritative automated gate):
 
 ```powershell
-dotnet build SiNet.sln --configuration Release
-dotnet test SiNet.sln --configuration Release --no-build
+pwsh .\build\fetch-siblings.ps1
+dotnet restore SiNet.sln
+dotnet build SiNet.sln --configuration Debug --no-restore
+dotnet build SiNet.sln --configuration Release --no-restore
+dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj --configuration Release --no-build
+dotnet test src\SiNet.Infrastructure.Google.Tests\SiNet.Infrastructure.Google.Tests.csproj --configuration Release --no-build
+dotnet test MasterPlan.SyncEngine.Tests\MasterPlan.SyncEngine.Tests.csproj --configuration Release --no-build
+dotnet test src\SiNet.LegacyBridge.Tests\SiNet.LegacyBridge.Tests.csproj --configuration Release --no-build
+pwsh .\build\secret-scan.ps1
 ```
 
 **Do not** treat historical **955/955** test counts (2026-07-05 snapshot in `docs/NEW_SYSTEM_PRODUCTION_READINESS.md`) as evidence for current HEAD — run tests on the branch you are changing.
