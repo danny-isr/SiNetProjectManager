@@ -268,7 +268,11 @@ internal static class SystemCertificationOutCorridorSupport
                             step,
                             $"closed task {open.TaskId}; stage {OutsourcingStageCodes.Complete}; "
                             + "workflow Completed; zero open tasks; delta clean.");
-                        await AssertTerminalCompletedAsync(dbFactory, evidence, instanceId, cancellationToken);
+                        if (!await AssertTerminalCompletedAsync(dbFactory, evidence, instanceId, cancellationToken))
+                        {
+                            return false;
+                        }
+
                         return true;
                     }
 
@@ -342,6 +346,9 @@ internal static class SystemCertificationOutCorridorSupport
 
         if (instance.Status != WorkflowStatus.Completed)
         {
+            evidence.Fail(
+                "cert.out.terminal",
+                $"Outsourcing instance {instanceId} status={instance.Status}, expected Completed.");
             return false;
         }
 
@@ -366,10 +373,11 @@ internal static class SystemCertificationOutCorridorSupport
         var danglingLinks = await (
             from tl in db.TaskLinks.AsNoTracking()
             join pa in db.ProjectAssignments.AsNoTracking() on tl.TaskId equals pa.Id
+            join st in db.ProjectAssignmentStatuses.AsNoTracking() on pa.StatusId equals st.Id
             where tl.LinkedEntityType == TaskLinkEntityType.WorkflowInstance
                   && tl.LinkedEntityId == instanceId
                   && tl.Role == TaskLinkRole.Trigger
-                  && pa.StatusId != 3
+                  && st.IsOpen
             select tl.Id).CountAsync(cancellationToken);
         if (danglingLinks > 0)
         {
