@@ -75,6 +75,11 @@ internal sealed class SystemCertificationRevScenario : ISystemCertificationScena
             "After ACC write + read-back: ReviewMaterialCheckCompleted on MAT child");
 
         evidence.Declare(
+            "cert.rev.mat.transition.FileInitialMaterials",
+            CertificationRequirement.Required,
+            "After ACC write + read-back: ReviewMaterialFiled through ITaskCompletionService");
+
+        evidence.Declare(
             "cert.rev.mat.acc.write",
             CertificationRequirement.Required,
             "MAT FileInitialMaterials ACC move through IEmailMoveToProjectService");
