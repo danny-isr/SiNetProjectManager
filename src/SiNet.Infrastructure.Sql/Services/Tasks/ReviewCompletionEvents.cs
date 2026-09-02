@@ -80,4 +80,19 @@ public static class ReviewCompletionEvents
 
     /// <summary>Generic: an administrative project-close decision was made — approved/rejected/needs-more-info (REV.Close / PLN.Close CloseProject task).</summary>
     public const string ProjectCloseDecided                   = "Review.ProjectCloseDecided";
+
+    // ───────────────────────────────────────────────────────────────────
+    // Outsourcing (OUT.*) — explicit completion events with no TaskResult.
+    // Workflow transitions remain AllRequiredTasksClosed + AllTasksComplete;
+    // these events only close the associated driving task so auto-advance can run.
+    // ───────────────────────────────────────────────────────────────────
+
+    /// <summary>OUT.ReceiveOffer — outsource quote received; closes ReceiveOutsourceQuote.</summary>
+    public const string OutsourceQuoteReceived                = "Review.OutsourceQuoteReceived";
+
+    /// <summary>OUT.ApproveOffer — outsource offer approved; closes ApproveOutsourceQuote.</summary>
+    public const string OutsourceOfferApproved                = "Review.OutsourceOfferApproved";
+
+    /// <summary>OUT.MonitorPayments — outsource payments completed; closes MonitorOutsourcePayments.</summary>
+    public const string OutsourcePaymentsCompleted            = "Review.OutsourcePaymentsCompleted";
 }

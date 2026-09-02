@@ -696,6 +696,45 @@ public static class ReviewTaskInteractionRegistry
                 },
                 AutoCloseOnCompletion: true,
                 RequiresUserConfirmation: true),
+
+            // ─────────────────────────────────────────────────────────────
+            // Outsourcing (OUT.*) — project-scoped ProjectWork surface.
+            // No TaskResult; completion is the explicit OUT completion event
+            // (ClosesAssociatedTask on ReviewCompletionEventBehavior).
+            // ─────────────────────────────────────────────────────────────
+
+            new(
+                TaskTypeCodes.ReceiveOutsourceQuote,
+                TaskOpenMode.ProjectWork,
+                TaskComponentKeys.ProjectWork,
+                TaskWorkTargetEntityType.Project,
+                TaskLinkRole.Related,
+                TaskCompletionPolicy.ExplicitCompletionEvent,
+                Array.Empty<string>(),
+                AutoCloseOnCompletion: true,
+                RequiresUserConfirmation: false),
+
+            new(
+                TaskTypeCodes.ApproveOutsourceQuote,
+                TaskOpenMode.ProjectWork,
+                TaskComponentKeys.ProjectWork,
+                TaskWorkTargetEntityType.Project,
+                TaskLinkRole.Related,
+                TaskCompletionPolicy.ExplicitCompletionEvent,
+                Array.Empty<string>(),
+                AutoCloseOnCompletion: true,
+                RequiresUserConfirmation: false),
+
+            new(
+                TaskTypeCodes.MonitorOutsourcePayments,
+                TaskOpenMode.ProjectWork,
+                TaskComponentKeys.ProjectWork,
+                TaskWorkTargetEntityType.Project,
+                TaskLinkRole.Related,
+                TaskCompletionPolicy.ExplicitCompletionEvent,
+                Array.Empty<string>(),
+                AutoCloseOnCompletion: true,
+                RequiresUserConfirmation: false),
         };
 
         var byCode = new Dictionary<string, TaskInteractionDefinition>(StringComparer.Ordinal);

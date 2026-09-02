@@ -463,6 +463,30 @@ public static class ReviewCompletionEventBehavior
                 },
                 NewProjectStatusCode: null,
                 RequestWorkflowAdvance: true),
+
+            // Outsourcing (OUT.*) — no TaskResult; ClosesAssociatedTask is the
+            // declaration that the driving work is done. Seed transitions stay
+            // AllRequiredTasksClosed + AllTasksComplete (not TaskResultEquals).
+            new(ReviewCompletionEvents.OutsourceQuoteReceived,
+                new[] { TaskTypeCodes.ReceiveOutsourceQuote },
+                Array.Empty<string>(),
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
+
+            new(ReviewCompletionEvents.OutsourceOfferApproved,
+                new[] { TaskTypeCodes.ApproveOutsourceQuote },
+                Array.Empty<string>(),
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
+
+            new(ReviewCompletionEvents.OutsourcePaymentsCompleted,
+                new[] { TaskTypeCodes.MonitorOutsourcePayments },
+                Array.Empty<string>(),
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
         };
 
         var d = new Dictionary<string, ReviewCompletionBehavior>(StringComparer.Ordinal);

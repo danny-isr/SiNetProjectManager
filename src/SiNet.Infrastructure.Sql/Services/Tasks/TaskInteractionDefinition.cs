@@ -105,6 +105,12 @@ public enum TaskCompletionPolicy
 
     /// <summary>Completed by closing the project (final task).</summary>
     CloseProject = 7,
+
+    /// <summary>
+    /// Completed when an explicit completion event closes the task — no TaskResult is recorded.
+    /// Used by OUT.* tasks whose workflow advances on AllRequiredTasksClosed / AllTasksComplete.
+    /// </summary>
+    ExplicitCompletionEvent = 8,
 }
 
 /// <summary>
