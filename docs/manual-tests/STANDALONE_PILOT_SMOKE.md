@@ -1,10 +1,11 @@
 # Standalone Pilot — Operator Smoke Checklist
 
-> **Status:** Automated L4W **Pass** (2026-08-24, commit `a9883af`) — **Phase 2: operator interactive smoke Not Run**  
+> **Status:** Automated L4W **Pass** (2026-08-24) + **Core Workflow Live Certification 7/7** @ `0803186` (2026-09-02) — **Phase 2: operator interactive smoke Not Run**  
 > **Host:** `SiNet.App.Wpf.exe` + AccService Remote (MultiStart)  
 > **Strategy:** [`docs/TEST_STRATEGY.md`](../TEST_STRATEGY.md)  
 > **Envelope:** [`docs/NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md)  
 > **Workflow gate:** [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./STANDALONE_WORKFLOW_PRODUCTION_GATE.md)  
+> **Certification audit:** [`docs/certification/SYSTEM_WORKFLOW_CERTIFICATION_AUDIT.md`](../certification/SYSTEM_WORKFLOW_CERTIFICATION_AUDIT.md)  
 > **Pilot controls:** [`docs/PILOT_CONTROLS.md`](../PILOT_CONTROLS.md)  
 > **Supersedes:** [`NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md`](./NEW_SYSTEM_SMOKE_CHECKLIST-2026-07-27.md),
 > [`EMAIL_ACC_STANDALONE_SMOKE.md`](./EMAIL_ACC_STANDALONE_SMOKE.md)
@@ -13,29 +14,33 @@
 
 Run offline automation first (CI / local). Then optional Live (`SINET_LIVE_SMOKE=1`). This checklist is **only** what still needs a human.
 
+**Do not mark this checklist Pass because automated certification is green.** Interactive UI soak is a separate evidence layer.
+
 ---
 
 ## Session metadata
 
 | Field | Value |
 | --- | --- |
-| Date | 2026-08-24 |
-| Operator | Pending — Phase 2 interactive (automated tier Pass on DEV) |
-| Environment | DEV machine `danny` — `danny\SQLEXPRESS` / `SiData`, Gmail `shirly@si-eng.co.il`, ACC Place `SI` |
-| Branch / commit | `development` @ `a9883af` |
-| Build config | Release |
-| Offline tests | **Pass** — `SiNet.App.Wpf.Tests` Release, `Category!=LiveSmoke`: **3449** passed, 0 failed |
-| Live tests | **Pass** — `Category=PilotSmoke` on DEV (evidence `154135` / `154602`); `Category=LiveSmoke` when gates set |
+| Date | 2026-09-02 (interactive session pending) |
+| Operator | Pending — Phase 2 interactive |
+| Environment | DEV machine — `danny\SQLEXPRESS` / `SiData`, Gmail `shirly@si-eng.co.il`, ACC Place `SI` |
+| Branch / commit | `development` @ `080318610bb06facf92896df41c47d3d70cd2f39` |
+| Build config | **Debug** preferred for soak (`[WF-STEP]` + DevTools); Release for menu gating checks |
+| Offline tests | **Pass** @ baseline — re-confirm on tip before soak |
+| Core Workflow Live Certification | **7/7 Certified** @ `0803186` — PRP Happy (policy boundary), PRP Reject, OPN (policy boundary), PLN, MAT, REV, OUT. **Not** FULL SYSTEM CERTIFIED |
+| Interactive smoke | **Not Run** |
+| Live tests (L4W P0) | Historical Pass 2026-08-24 — see [`PILOT_CONTROLS.md`](../PILOT_CONTROLS.md) |
 
 ### Phase 2 — operator interactive smoke (current)
 
-Automated P0 controls and Gmail/ACC write paths are **Pass** — see [`PILOT_CONTROLS.md`](../PILOT_CONTROLS.md) § Live evidence.
+Automated core workflow certification is **Certified** on `0803186`. Interactive UI/operator soak has **not** started.
 
-**Your turn:** walk §1–§6 below in Release (or DEBUG for `[WF-STEP]`), then update §6 final decision and [`NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md) §9 **Interactive smoke**.
+**Your turn:** walk §1–§6 below in Debug (or Release for menu gating), then update §6 final decision and [`NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md) §9 **Interactive smoke**.
 
-**Prerequisites:** MultiStart AccService + `SiNet.App.Wpf`; seed baseline complete; workflow groups populated; unassigned inbox email available.
+**Prerequisites:** MultiStart AccService + `SiNet.App.Wpf`; seed baseline complete; workflow groups populated; `[SYS-CERT]` / DEV emails only; ACC Place `SI` only.
 
-**After interactive Pass:** proceed to [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./STANDALONE_WORKFLOW_PRODUCTION_GATE.md) Tree A operator soak (Proposal happy path 2.0–2.8).
+**After interactive Pass:** continue [`STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](./STANDALONE_WORKFLOW_PRODUCTION_GATE.md) Trees as needed; still do **not** claim FULL SYSTEM CERTIFIED while SendQuote/SendOpinion outbound remain policy-blocked.
 
 ### P0 Live Smoke (Pilot controls) — 2026-08-17
 

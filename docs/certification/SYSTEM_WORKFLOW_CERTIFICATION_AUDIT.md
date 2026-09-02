@@ -1,15 +1,33 @@
 # Full System Workflow Certification — Phase 1 Audit
 
-> **Status:** Audit complete — awaiting approval to build the harness (Phase 2)
-> **Commit audited:** `a6bbb99555e710a40c94409dfd01c516086389d6` (`development`; HEAD confirmed unchanged at audit time)
-> **Scope:** Read-only audit. No code, seed, schema or UI was changed.
+> **Status:** Audit retained as design history; **Core Workflow Live Certification baseline recorded below**
+> **Commit audited (Phase 1):** `a6bbb99555e710a40c94409dfd01c516086389d6` (`development`; HEAD confirmed unchanged at audit time)
+> **Scope (Phase 1):** Read-only audit. No code, seed, schema or UI was changed.
 > **Related:** [`../PILOT_CONTROLS.md`](../PILOT_CONTROLS.md), [`../TEST_STRATEGY.md`](../TEST_STRATEGY.md) §4W, [`../manual-tests/STANDALONE_WORKFLOW_PRODUCTION_GATE.md`](../manual-tests/STANDALONE_WORKFLOW_PRODUCTION_GATE.md)
 
-This document is the Phase 1 deliverable: what exists today, what the certification tier must prove, and
-every gap that blocks an end-to-end proof. It does **not** claim any certification result.
+## Core Workflow Live Certification baseline (2026-09-02)
 
-The existing L4W `Category=PilotSmoke` tier is **retained unchanged** as the fast smoke. Certification is a
-new, separate tier.
+| Field | Value |
+| --- | --- |
+| **Baseline SHA** | `080318610bb06facf92896df41c47d3d70cd2f39` (`development`) |
+| **Verdict** | **CORE WORKFLOW LIVE CERTIFIED — 7/7 workflow scenarios on one SHA** |
+| **Not claimed** | **Not** `FULL SYSTEM CERTIFIED` (outbound Gmail SendQuote / SendOpinion remain policy-blocked) |
+| **Interactive UI smoke** | **Not Run** — operator soak is the next phase; do not mark Pass here |
+| **Schema** | No migration / schema change on this baseline |
+
+| Scenario | Result | Boundary |
+| --- | --- | --- |
+| PRP Happy | **Certified** | to outbound policy boundary (`SendQuoteToClient` BLOCKED BY POLICY) |
+| PRP Reject | **Certified** | terminal reject path |
+| OPN | **Certified** | to outbound policy boundary (`SendOpinion` BLOCKED BY POLICY) |
+| PLN | **Certified** | |
+| MAT | **Certified** | |
+| REV | **Certified** | |
+| OUT | **Certified** | explicit completion events; no TaskResult codes |
+
+Evidence directory (DEV machine): `%LOCALAPPDATA%\SiNet\system-certification\` — final preflight `system-certification-20260902-164640-4b9866.json` and the seven scenario files bound to the same CommitSha.
+
+This document remains the Phase 1 design/audit record (what the tier must prove and which gaps existed at audit time). Live results above supersede the outdated “Phase 3–7 Not started” rows in §5 for **automated** certification only. The existing L4W `Category=PilotSmoke` tier is **retained unchanged** as the fast smoke. Certification is a separate tier.
 
 ---
 
@@ -331,19 +349,17 @@ serialization introduced in `a6bbb99` is extended to certification so runs canno
 | Phase | Content | Status |
 | --- | --- | --- |
 | 1 | Audit, coverage matrix, gaps (this document) | **Complete** |
-| 2 | Harness, integrity validator, evidence gate, DEV protection | **Primitives complete; DI host outstanding** |
-| 3 | PRP full incl. continuation into PLN | Not started |
-| 4 | OPN full | Not started |
-| 5 | MAT + PLN | Not started |
-| 6 | REV | Not started |
-| 7 | OUT | Not started |
+| 2 | Harness, integrity validator, evidence gate, DEV protection | **Complete** (write host + scenarios delivered after Phase 1) |
+| 3 | PRP full incl. continuation to SendQuote policy boundary | **Automated Certified** @ `0803186` (happy + reject) |
+| 4 | OPN full to SendOpinion policy boundary | **Automated Certified** @ `0803186` |
+| 5 | MAT + PLN | **Automated Certified** @ `0803186` |
+| 6 | REV | **Automated Certified** @ `0803186` |
+| 7 | OUT | **Automated Certified** @ `0803186` |
 | 8 | Email actions that are not workflow starts | Not started |
-| 9 | Failure / retry / restart / watchdog scenarios | Not started |
-| 10 | Full clean run + final report | Not started |
+| 9 | Failure / retry / restart / watchdog scenarios (interactive) | Not started — operator soak |
+| 10 | Full clean run + final report | Automated 7/7 report recorded 2026-09-02; interactive soak pending |
 
-Known blockers to a `PASS` verdict, independent of harness quality: §2.1 (watchdog/SubWorkflow), §2.2
-(mis-wired email actions), and the `Review` and `Outsourcing` seed gaps in §3. These are product gaps and
-will be reported as `BLOCKED / PRODUCT GAP` rather than worked around.
+Known historical blockers in the audit body (§2.x / seed gaps) were closed or reclassified during the LIVE certification loop. Outbound `SendQuoteToClient` / `SendOpinion` remain **`BLOCKED BY POLICY`** (§4 / operator decisions) — that is intentional and is **not** a PASS.
 
 ### Operator decisions, 2026-08-24
 

@@ -1,7 +1,7 @@
 # New System — Production cutover envelope (`SiNet.App.Wpf`)
 
 > **Status:** Active (2026-08-02) -- **cutover host** (replaces V2 distribution)
-> **Updated:** 07.08.2026 (As-Is reconciliation -- evidence layers; §8.1 Historical; selector not in header)
+> **Updated:** 02.09.2026 (Core Workflow Live Certification baseline `0803186`; interactive soak still Not Run)
 > **Scope:** Defines what **`SiNet.App.Wpf.exe`** may expose as the **only shipped desktop app**.
 > V2 remains in-repo for reference/build; it is **not** published. Office safety net until
 > cutover sign-off is the external legacy system (outside this repo).
@@ -24,7 +24,8 @@
 > [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md),
 > [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md),
 > [`ACC_CONTROL_PLANE.md`](./ACC_CONTROL_PLANE.md),
-> [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md).
+> [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md),
+> [`certification/SYSTEM_WORKFLOW_CERTIFICATION_AUDIT.md`](./certification/SYSTEM_WORKFLOW_CERTIFICATION_AUDIT.md).
 
 ---
 
@@ -32,8 +33,9 @@
 
 | Layer | Meaning | Example |
 | --- | --- | --- |
-| Repo tip | What `origin/release` / `origin/development` contain | Ship commit `127dc0e`, App.Wpf **1.0.23** (verified 2026-08-07 follow-up; earlier reconciliation snapshot was `3bfe152` / 1.0.22) |
-| Automated tests | What CI / local `dotnet test` proved on a given commit | §8.1 Historical Snapshot |
+| Repo tip | What `origin/release` / `origin/development` contain | Core Workflow Live Certification baseline `080318610bb06facf92896df41c47d3d70cd2f39` on `development` (2026-09-02) |
+| Automated tests | What CI / local `dotnet test` proved on a given commit | Offline suite Pass @ `0803186`; GitHub CI green still gated on `SIBLING_REPOS_TOKEN` |
+| Core Workflow Live Certification | Production-seam LIVE proof of 7 workflows on one SHA | **Certified 7/7** @ `0803186` — **not** FULL SYSTEM CERTIFIED |
 | Interactive smoke | Operator checklist on a machine | §9 -- **Not Run** unless signed |
 | Ops install | What pilot PCs actually run from UNC | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) -- **Needs Review** |
 ## 1. Purpose & status
@@ -48,7 +50,17 @@ System host** for a controlled internal pilot when:
 - AccService **Remote** is the default MultiStart path (`AccService:BaseUrl`); Local inbox bootstrap
   is available only when BaseUrl is empty (slice 2b).
 
-**Interactive smoke status:** **Not Run** — see §9. Agent/build/tests do **not** authorize pilot users.
+**Interactive smoke status:** **Not Run** — see §9. Agent/build/tests/automated certification do **not** authorize pilot users.
+
+### Core Workflow Live Certification (2026-09-02)
+
+| Field | Value |
+| --- | --- |
+| Baseline | `development` @ `080318610bb06facf92896df41c47d3d70cd2f39` |
+| Verdict | **CORE WORKFLOW LIVE CERTIFIED — 7/7** on one SHA |
+| Scenarios | PRP Happy (to outbound policy boundary), PRP Reject, OPN (to outbound policy boundary), PLN, MAT, REV, OUT — all **Certified** |
+| Explicitly **not** claimed | **FULL SYSTEM CERTIFIED** — SendQuote / SendOpinion outbound Gmail remain **BLOCKED BY POLICY** |
+| Detail | [`certification/SYSTEM_WORKFLOW_CERTIFICATION_AUDIT.md`](./certification/SYSTEM_WORKFLOW_CERTIFICATION_AUDIT.md) |
 
 ### Controlled Production Pilot runtime (P1)
 
@@ -247,11 +259,13 @@ Live layer (`Category=LiveSmoke`) was **Not Run** here (no AccService/DB session
 | Field | Value |
 | --- | --- |
 | **Interactive smoke** | **Not Run** |
-| **P0 Live Smoke (L4W automated, 2026-08-24)** | **Pass** on DEV — SQL/Pilot corridor + Gmail/ACC; evidence `p0-pilot-smoke-20260824-154135.md` / `154602.md` — see [`PILOT_CONTROLS.md`](./PILOT_CONTROLS.md) § Live evidence; offline **3449** Pass |
+| **Core Workflow Live Certification (2026-09-02)** | **7/7 Certified** @ `080318610bb06facf92896df41c47d3d70cd2f39` — PRP±Reject, OPN, PLN, MAT, REV, OUT; **not** FULL SYSTEM CERTIFIED (SendQuote/SendOpinion policy-blocked) |
+| **P0 Live Smoke (L4W automated, 2026-08-24)** | **Pass** on DEV — SQL/Pilot corridor + Gmail/ACC; evidence `p0-pilot-smoke-20260824-154135.md` / `154602.md` — see [`PILOT_CONTROLS.md`](./PILOT_CONTROLS.md) § Live evidence; offline **3449** Pass (historical count — re-run on tip) |
 | **Primary host** | `SiNet.App.Wpf.exe` + AccService MultiStart |
 | **Operator checklist** | [`manual-tests/STANDALONE_PILOT_SMOKE.md`](./manual-tests/STANDALONE_PILOT_SMOKE.md) (+ workflow gate) |
 | **Rollout** | [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md) |
 | **Pilot after Pass** | 1–2 internal users while external legacy system stays available |
+| **Release gates still open** | GitHub CI green (`SIBLING_REPOS_TOKEN`); interactive smoke Pass; DB backup/restore drill; MasterPlan API key rotation; outbound Gmail policy |
 
 ### 9.1 Operator focus (standalone)
 

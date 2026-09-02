@@ -2,6 +2,7 @@
 
 > **Host:** `SiNet.App.Wpf.exe` (standalone DEBUG for `[WF-STEP]`; Release for production menu checks)  
 > **Date opened:** 2026-07-30  
+> **Core Workflow Live Certification baseline:** `080318610bb06facf92896df41c47d3d70cd2f39` — **7/7 automated scenarios Certified** (see [`../certification/SYSTEM_WORKFLOW_CERTIFICATION_AUDIT.md`](../certification/SYSTEM_WORKFLOW_CERTIFICATION_AUDIT.md)). **Not** FULL SYSTEM CERTIFIED. **Interactive UI soak: Not Run.**  
 > **Related:** [`PROPOSAL_WORKFLOW_MANUAL_TEST.md`](./PROPOSAL_WORKFLOW_MANUAL_TEST.md),
 > [`NEW_SYSTEM_PRODUCTION_READINESS.md`](../NEW_SYSTEM_PRODUCTION_READINESS.md),
 > [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](../WORK_SURFACE_WORKFLOW_INTEGRATION.md),
@@ -90,18 +91,19 @@ Progression under test = email start + task completion via `ITaskCompletionServi
 
 | Id | Workflow | Start | UI | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **Restart — clean DB** (2026-07-31) | Fresh DB: follow §0.2b–0.2c then Tree A from 2.0. Prior 3146/3147 ignored |
-| B | Opinion `OPN.*` | `CreateOpinionProject` | Email + Task workbench | **Not Run** (live) | Checklist §3 ready; no dedicated engine test yet |
-| C | Planning `PLN.*` | ProjectType mapping / post-quote work order | Project create + tasks | **Blocked (pilot)** | Approved Blocked §4.C.Blocked — ProjectWork Deferred |
-| D | Review `REV.*` + MAT | Review start / hosted MAT | Tasks (+ ProjectWork) | **Blocked (pilot)** | Approved Blocked §5 — REV.Intake unseeded + ProjectWork Deferred |
-| E | Integrity + Watchdog | Workbench + Dev Watchdog | Tasks | **Not Run** (live) | Mirror Proposal §4; engine integrity covered in §7 |
-| F | Closed viewer | Menu **צפייה בתהליכים (סגור)** | Read-only | **Not Run** (live) | No mutation |
+| A | Proposal `PRP.*` | `CreatePriceQuote` / `RejectPriceQuote` | Email + Task workbench | **Automated Certified** @ `0803186` (happy + reject); **Interactive Not Run** | Happy path certified to SendQuote policy boundary; Reject certified. UI soak still required |
+| B | Opinion `OPN.*` | `CreateOpinionProject` | Email + Task workbench | **Automated Certified** @ `0803186` to SendOpinion policy boundary; **Interactive Not Run** | |
+| C | Planning `PLN.*` | ProjectType mapping / post-quote work order | Project create + tasks | **Automated Certified** @ `0803186`; **Interactive Not Run** | Earlier “Blocked (pilot)” superseded for automated certification only |
+| D | Review `REV.*` + MAT | Review start / hosted MAT | Tasks (+ ProjectWork) | **Automated Certified** @ `0803186` (REV + MAT); **Interactive Not Run** | |
+| E | Integrity + Watchdog | Workbench + Dev Watchdog | Tasks | **Not Run** (interactive) | Absolute integrity Pass on each automated scenario evidence |
+| F | Closed viewer | Menu **צפייה בתהליכים (סגור)** | Read-only | **Not Run** (interactive) | No mutation |
+| G | Outsourcing `OUT.*` | `IWorkflowCommandService.StartAsync` (cert) / UI when available | Tasks | **Automated Certified** @ `0803186`; **Interactive Not Run** | Explicit completion events; no TaskResult codes |
 
-**Gate rollup:** **Conditional** — automated Workflow suite Pass; C/D pilot-Blocked approved; A/B/E/F await operator soak.
+**Gate rollup:** **Automated core workflows Certified on `0803186`**. Interactive operator soak **Not Run**. Outbound SendQuote/SendOpinion remain **BLOCKED BY POLICY** — not FULL SYSTEM CERTIFIED.
 
 ### P0 Live Smoke note (2026-08-24, commit `a9883af`)
 
-Automated L4W tier **Pass** on DEV — Pilot controls S1–S8a/S7b + Gmail/ACC G1–G2/A1–A7 ([`PILOT_CONTROLS.md`](../PILOT_CONTROLS.md) § Live evidence). **Interactive Tree A** is unblocked for operator soak on DEV; mark Tree A Pass/Fail only after Proposal runbook 2.0–2.8 with log tail from §0.1.
+Automated L4W tier **Pass** on DEV — Pilot controls S1–S8a/S7b + Gmail/ACC G1–G2/A1–A7 ([`PILOT_CONTROLS.md`](../PILOT_CONTROLS.md) § Live evidence). Superseded for workflow breadth by Core Workflow Live Certification @ `0803186` (see audit doc). **Interactive** soak remains Not Run until operator signs §0 / Tree steps.
 
 ---
 
