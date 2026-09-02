@@ -343,7 +343,9 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
     /// creation. Mirrors the legacy <c>ActionExecutor</c> dispatch:
     /// <c>CreatePriceQuote → Proposal</c> at ProjectSetup (click already means quote — skip Intake),
     /// <c>RejectPriceQuote → Proposal</c> (intake auto-classified as not-a-quote → terminal),
-    /// <c>CreateOpinionProject → Opinion</c> (bound to the email's office project).
+    /// <c>CreateOpinionProject → Opinion</c> (bound to the email's office project),
+    /// <c>CreateNewReview → Review</c> at ProjectSetup (official request already received — skip Intake /
+    /// AwaitingMunicipalityRequest).
     /// </summary>
     private static bool TryResolveWorkflowStart(
         string actionCode,
@@ -371,6 +373,12 @@ internal sealed class SqlEmailSuggestedActionExecutionService(
                 isProjectBound = true;
                 intakeResultCode = null;
                 initialStageCode = null;
+                return true;
+            case EmailSuggestedActionCodes.CreateNewReview:
+                workflowCode = WorkflowCodes.Review;
+                isProjectBound = false;
+                intakeResultCode = null;
+                initialStageCode = ReviewStageCodes.ProjectSetup;
                 return true;
             default:
                 workflowCode = string.Empty;

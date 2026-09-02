@@ -34,7 +34,7 @@ public sealed class SystemCertificationPrpSourceIngestTests
             harness.Provider,
             harness.DbFactory,
             harness.Context,
-            proposalDefinitionId: 1,
+            triggerWorkflowDefinitionId: 1,
             harness.GmailDetails,
             harness.Evidence,
             CancellationToken.None);
@@ -55,7 +55,7 @@ public sealed class SystemCertificationPrpSourceIngestTests
             harness.Provider,
             harness.DbFactory,
             harness.Context,
-            proposalDefinitionId: 1,
+            triggerWorkflowDefinitionId: 1,
             harness.GmailDetails,
             harness.Evidence,
             CancellationToken.None);
@@ -75,7 +75,7 @@ public sealed class SystemCertificationPrpSourceIngestTests
             harness.Provider,
             harness.DbFactory,
             harness.Context,
-            proposalDefinitionId: 1,
+            triggerWorkflowDefinitionId: 1,
             harness.GmailDetails,
             harness.Evidence,
             CancellationToken.None);
@@ -137,7 +137,7 @@ public sealed class SystemCertificationPrpSourceIngestTests
             harness.Provider,
             harness.DbFactory,
             harness.Context,
-            proposalDefinitionId: 1,
+            triggerWorkflowDefinitionId: 1,
             harness.GmailDetails,
             harness.Evidence,
             CancellationToken.None);

@@ -63,6 +63,12 @@ internal static class SystemCertificationEnvironment
     /// <summary>Explicit opt-in for MAT-via-PLN live writes after preflight PASS.</summary>
     public const string MatLiveEnabledEnv = "SINET_SYSTEM_CERT_MAT_LIVE";
 
+    /// <summary>Explicit opt-in for REV CreateNewReview live writes after preflight PASS.</summary>
+    public const string RevLiveEnabledEnv = "SINET_SYSTEM_CERT_REV_LIVE";
+
+    /// <summary>Explicit opt-in for OUT StartAsync live writes after preflight PASS.</summary>
+    public const string OutLiveEnabledEnv = "SINET_SYSTEM_CERT_OUT_LIVE";
+
     /// <summary>
     /// Required Gmail API message id for PRP CreatePriceQuote. No mailbox scanning fallback.
     /// </summary>
@@ -88,6 +94,11 @@ internal static class SystemCertificationEnvironment
     /// Required Gmail API message id for MAT-via-PLN StartAsync email trigger / ACC filing identity.
     /// </summary>
     public const string MatSourceGmailMessageIdEnv = "SINET_SYSTEM_CERT_MAT_SOURCE_GMAIL_MESSAGE_ID";
+
+    /// <summary>
+    /// Required Gmail API message id for REV CreateNewReview. No mailbox scanning fallback.
+    /// </summary>
+    public const string RevSourceGmailMessageIdEnv = "SINET_SYSTEM_CERT_REV_SOURCE_GMAIL_MESSAGE_ID";
 
     /// <summary>
     /// Optional RFC822 Message-Id for the PRP source email; when set it must match the loaded message.
@@ -155,6 +166,12 @@ internal static class SystemCertificationEnvironment
 
     /// <summary>True when MAT-via-PLN live writes are explicitly enabled.</summary>
     public static bool IsMatLiveRequested() => IsFlagSet(MatLiveEnabledEnv);
+
+    /// <summary>True when REV CreateNewReview live writes are explicitly enabled.</summary>
+    public static bool IsRevLiveRequested() => IsFlagSet(RevLiveEnabledEnv);
+
+    /// <summary>True when OUT StartAsync live writes are explicitly enabled.</summary>
+    public static bool IsOutLiveRequested() => IsFlagSet(OutLiveEnabledEnv);
 
     /// <summary>
     /// Resolves the declared SQL target from environment only. The connection string

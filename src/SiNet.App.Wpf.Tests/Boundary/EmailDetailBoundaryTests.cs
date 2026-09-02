@@ -186,6 +186,16 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("defaultOfficeProjectId", sql, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void CreateNewReview_maps_to_review_project_setup_start()
+    {
+        var sql = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Email/Detail/SqlEmailWorkflowServices.cs");
+        Assert.Contains("EmailSuggestedActionCodes.CreateNewReview", sql, StringComparison.Ordinal);
+        Assert.Contains("WorkflowCodes.Review", sql, StringComparison.Ordinal);
+        Assert.Contains("ReviewStageCodes.ProjectSetup", sql, StringComparison.Ordinal);
+        Assert.Contains("isProjectBound = false", sql, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Guard: mailbox "filed" is Gmail-label-only. See docs/EMAIL_ACC_SOURCE_OF_TRUTH.md
     /// and EmailSystemPrinciples §6.6 — do not reintroduce SQL ProjectId as IsFiledToProject.

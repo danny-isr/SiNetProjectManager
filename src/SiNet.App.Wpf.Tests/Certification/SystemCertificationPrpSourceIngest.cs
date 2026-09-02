@@ -29,7 +29,7 @@ internal static class SystemCertificationPrpSourceIngest
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         SystemCertificationHost.SystemCertificationRunContext context,
-        int proposalDefinitionId,
+        int triggerWorkflowDefinitionId,
         EmailMessageDetails gmailDetails,
         SystemCertificationEvidence evidence,
         CancellationToken cancellationToken = default)
@@ -50,13 +50,13 @@ internal static class SystemCertificationPrpSourceIngest
 
         var existingInboxId = await FindInboxMessageIdAsync(dbFactory, gmailDetails, cancellationToken);
         if (existingInboxId is int existing
-            && await HasActiveProposalForInboxAsync(
-                dbFactory, proposalDefinitionId, existing, cancellationToken))
+            && await HasActiveWorkflowForInboxAsync(
+                dbFactory, triggerWorkflowDefinitionId, existing, cancellationToken))
         {
             evidence.Fail(
                 "cert.prp.source_ingest",
                 $"Explicit source inbox id={existing} already has an active workflow instance "
-                + $"(definition id={proposalDefinitionId}) — FAIL BEFORE WORKFLOW START.");
+                + $"(definition id={triggerWorkflowDefinitionId}) — FAIL BEFORE WORKFLOW START.");
             return null;
         }
 
@@ -549,15 +549,15 @@ internal static class SystemCertificationPrpSourceIngest
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    private static async Task<bool> HasActiveProposalForInboxAsync(
+    private static async Task<bool> HasActiveWorkflowForInboxAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
-        int proposalDefinitionId,
+        int workflowDefinitionId,
         int inboxMessageId,
         CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         return await db.WorkflowInstances.AsNoTracking().AnyAsync(
-            w => w.WorkflowDefinitionId == proposalDefinitionId
+            w => w.WorkflowDefinitionId == workflowDefinitionId
                  && w.TriggerType == WorkflowTriggerType.Email
                  && w.TriggerEntityId == inboxMessageId
                  && w.Status != WorkflowStatus.Completed

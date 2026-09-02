@@ -62,16 +62,16 @@ internal static class SystemCertificationScenarioRegistry
             typeof(Scenarios.SystemCertificationPlnScenario)),
         new(
             "Review",
-            ScenarioDisposition.ScenarioBlocked,
-            "no email start mapping; no ProjectType continuation into REV",
-            "cert.rev.blocked",
-            null),
+            ScenarioDisposition.ScenarioRequired,
+            "REV full scenario from CreateNewReview email start through MAT child and no-police happy path",
+            Scenarios.SystemCertificationRevScenario.Id,
+            typeof(Scenarios.SystemCertificationRevScenario)),
         new(
             "Outsourcing",
-            ScenarioDisposition.ScenarioBlocked,
-            "no TaskResult codes; transitions rely on AllTasksComplete only",
-            "cert.out.blocked",
-            null),
+            ScenarioDisposition.ScenarioRequired,
+            "OUT contract A from StartAsync through AllTasksComplete transitions",
+            Scenarios.SystemCertificationOutScenario.Id,
+            typeof(Scenarios.SystemCertificationOutScenario)),
     ];
 
     private static readonly IReadOnlyDictionary<string, ScenarioPlan> PlanByWorkflowCode =

@@ -363,4 +363,46 @@ internal static class SystemCertificationTransitionAssertions
         TaskTypeCodes.FileInitialMaterials,
         TaskTypeCodes.CheckQuoteMaterialCompleteness,
     ];
+
+    /// <summary>Expected REV stage after completing a driving task on the no-police happy path.</summary>
+    internal static string? ExpectedRevStageAfterTask(string completedTaskTypeCode) =>
+        completedTaskTypeCode switch
+        {
+            TaskTypeCodes.OpenReviewProject => ReviewStageCodes.MaterialIntake,
+            TaskTypeCodes.PerformProfessionalReview => ReviewStageCodes.AwaitingManagerApproval,
+            TaskTypeCodes.ApproveReviewReport => ReviewStageCodes.AwaitingPlannerCorrections,
+            TaskTypeCodes.TrackPlannerCorrections => ReviewStageCodes.RecheckRound,
+            TaskTypeCodes.RecheckPlan => ReviewStageCodes.PoliceApprovalDecision,
+            TaskTypeCodes.DeterminePoliceApprovalRequirement => ReviewStageCodes.Close,
+            TaskTypeCodes.CloseProject => ReviewStageCodes.Completed,
+            _ => null,
+        };
+
+    internal static IReadOnlyList<string> RevHappyPathTaskTypes { get; } =
+    [
+        TaskTypeCodes.OpenReviewProject,
+        TaskTypeCodes.PerformProfessionalReview,
+        TaskTypeCodes.ApproveReviewReport,
+        TaskTypeCodes.TrackPlannerCorrections,
+        TaskTypeCodes.RecheckPlan,
+        TaskTypeCodes.DeterminePoliceApprovalRequirement,
+        TaskTypeCodes.CloseProject,
+    ];
+
+    internal static IReadOnlyList<string> OutHappyPathTaskTypes { get; } =
+    [
+        TaskTypeCodes.ReceiveOutsourceQuote,
+        TaskTypeCodes.ApproveOutsourceQuote,
+        TaskTypeCodes.MonitorOutsourcePayments,
+    ];
+
+    /// <summary>Expected OUT stage after completing a driving task through contract A.</summary>
+    internal static string? ExpectedOutStageAfterTask(string completedTaskTypeCode) =>
+        completedTaskTypeCode switch
+        {
+            TaskTypeCodes.ReceiveOutsourceQuote => OutsourcingStageCodes.ApproveOffer,
+            TaskTypeCodes.ApproveOutsourceQuote => OutsourcingStageCodes.MonitorPayments,
+            TaskTypeCodes.MonitorOutsourcePayments => OutsourcingStageCodes.Complete,
+            _ => null,
+        };
 }

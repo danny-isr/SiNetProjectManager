@@ -356,7 +356,7 @@ internal static class SystemCertificationPlnCorridorSupport
         return false;
     }
 
-    private static async Task<bool> WalkMatChildAsync(
+    internal static async Task<bool> WalkMatChildAsync(
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         SystemCertificationIntegrityValidator integrity,
@@ -497,12 +497,12 @@ internal static class SystemCertificationPlnCorridorSupport
         return false;
     }
 
-    private static async Task<int> WaitForActiveMatChildAsync(
+    internal static async Task<int> WaitForMatChildAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         int materialDefinitionId,
         int parentInstanceId,
         SystemCertificationEvidence evidence,
-        EvidenceSteps steps,
+        string evidenceStep,
         CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < 40; attempt++)
@@ -518,8 +518,8 @@ internal static class SystemCertificationPlnCorridorSupport
             if (childId > 0)
             {
                 evidence.Pass(
-                    steps.MatChild,
-                    $"MaterialIntake child instance id={childId} under PLN parent {parentInstanceId}.");
+                    evidenceStep,
+                    $"MaterialIntake child instance id={childId} under parent {parentInstanceId}.");
                 evidence.Created("WorkflowInstance", childId.ToString(), WorkflowCodes.MaterialIntake);
                 return childId;
             }
@@ -528,12 +528,27 @@ internal static class SystemCertificationPlnCorridorSupport
         }
 
         evidence.Fail(
-            steps.MatChild,
-            $"No MaterialIntake child appeared under PLN parent {parentInstanceId} after FollowWorkOrder.");
+            evidenceStep,
+            $"No MaterialIntake child appeared under parent {parentInstanceId}.");
         return 0;
     }
 
-    private static async Task<string?> ReadStageCodeAsync(
+    private static Task<int> WaitForActiveMatChildAsync(
+        IDbContextFactory<SiNetSQLDbContext> dbFactory,
+        int materialDefinitionId,
+        int parentInstanceId,
+        SystemCertificationEvidence evidence,
+        EvidenceSteps steps,
+        CancellationToken cancellationToken) =>
+        WaitForMatChildAsync(
+            dbFactory,
+            materialDefinitionId,
+            parentInstanceId,
+            evidence,
+            steps.MatChild,
+            cancellationToken);
+
+    internal static async Task<string?> ReadStageCodeAsync(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         int instanceId,
         CancellationToken cancellationToken)

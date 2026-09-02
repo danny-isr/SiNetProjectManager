@@ -19,7 +19,7 @@ internal static class SystemCertificationPrpSourceEmail
         IServiceProvider provider,
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         SystemCertificationHost.SystemCertificationRunContext context,
-        int proposalDefinitionId,
+        int triggerWorkflowDefinitionId,
         SystemCertificationEnvironment.GmailLayer gmail,
         SystemCertificationEvidence evidence,
         CancellationToken cancellationToken = default,
@@ -119,7 +119,7 @@ internal static class SystemCertificationPrpSourceEmail
             provider,
             dbFactory,
             context,
-            proposalDefinitionId,
+            triggerWorkflowDefinitionId,
             details,
             evidence,
             cancellationToken);
