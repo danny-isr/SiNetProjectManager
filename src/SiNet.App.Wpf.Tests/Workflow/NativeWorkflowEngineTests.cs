@@ -363,6 +363,80 @@ public sealed class NativeWorkflowEngineTests
         }
     }
 
+    [Fact]
+    public async Task WhenClosedOpenQuoteProjectStillHoldsWorkPriority_ThenNextStartReleasesSlotAndCreatesTask()
+    {
+        var (provider, options) = await BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var (projectId, emailId1, _) = await SeedProjectAndEmailAsync(options);
+            var execution = BuildExecutionService(provider);
+
+            var first = await execution.ExecuteAsync(
+                new EmailSuggestedActionExecutionCommand(
+                    EmailSuggestedActionCodes.CreatePriceQuote, emailId1, UserId),
+                CancellationToken.None);
+            Assert.True(first.Succeeded, first.Message);
+            Assert.True(first.WorkflowInstanceId is int and > 0);
+
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                var stale = await GetOpenStageTaskAsync(options, first.WorkflowInstanceId!.Value, TaskTypeCodes.OpenQuoteProject);
+                var completed = await db.ProjectAssignmentStatuses.SingleAsync(s => s.Code == TaskStatusCodes.Completed);
+                var tracked = await db.ProjectAssignments.SingleAsync(t => t.Id == stale.Id);
+                tracked.StatusId = completed.Id;
+                tracked.Status = completed.Code;
+                // Leave WorkPriority set — mimics ad-hoc cancel that forgot to release the unique slot.
+                Assert.True(tracked.WorkPriority.HasValue);
+
+                var instance = await db.WorkflowInstances.SingleAsync(w => w.Id == first.WorkflowInstanceId.Value);
+                instance.Status = WorkflowStatus.Cancelled;
+                instance.CompletedAtUtc = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                db.EmailInboxMessages.Add(new EmailInboxMessage
+                {
+                    MessageUniqueId = $"<msg-{Guid.NewGuid():N}@test>",
+                    ProjectId = projectId,
+                    FromAddress = "a@b.c",
+                    Subject = "[SYS-CERT] second quote",
+                });
+                await db.SaveChangesAsync();
+            }
+
+            int emailId2;
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                emailId2 = await db.EmailInboxMessages
+                    .Where(m => m.ProjectId == projectId && m.Id != emailId1)
+                    .OrderByDescending(m => m.Id)
+                    .Select(m => m.Id)
+                    .FirstAsync();
+            }
+
+            var second = await execution.ExecuteAsync(
+                new EmailSuggestedActionExecutionCommand(
+                    EmailSuggestedActionCodes.CreatePriceQuote, emailId2, UserId),
+                CancellationToken.None);
+            Assert.True(second.Succeeded, second.Message);
+            Assert.DoesNotContain("לא נוצרו משימות", second.Message ?? string.Empty, StringComparison.Ordinal);
+
+            var open = await GetOpenStageTaskAsync(options, second.WorkflowInstanceId!.Value, TaskTypeCodes.OpenQuoteProject);
+            Assert.True(open.Id > 0);
+
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                var staleAgain = await db.ProjectAssignments
+                    .Where(t => t.ProjectId == projectId && t.TaskTypeId == open.TaskTypeId && t.Id != open.Id)
+                    .ToListAsync();
+                Assert.All(staleAgain, t => Assert.Null(t.WorkPriority));
+            }
+        }
+    }
+
     private static SqlEmailSuggestedActionExecutionService BuildExecutionService(
         Microsoft.Extensions.DependencyInjection.ServiceProvider provider) =>
         new(

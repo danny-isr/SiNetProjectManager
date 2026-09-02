@@ -177,6 +177,16 @@ internal static class SystemCertificationPrpCorridorSupport
             return 0;
         }
 
+        if (result.Succeeded
+            && !string.IsNullOrWhiteSpace(result.Message)
+            && result.Message.Contains("לא נוצרו משימות", StringComparison.Ordinal))
+        {
+            evidence.Fail(
+                "cert.prp.create_price_quote",
+                "CreatePriceQuote started a Proposal instance without first-stage tasks: " + result.Message);
+            return 0;
+        }
+
         var instanceId = result.WorkflowInstanceId
             ?? await FindActiveProposalInstanceForInboxAsync(
                 dbFactory,

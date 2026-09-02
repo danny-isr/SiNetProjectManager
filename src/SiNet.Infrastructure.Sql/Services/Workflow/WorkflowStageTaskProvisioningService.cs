@@ -348,24 +348,36 @@ internal sealed class WorkflowStageTaskProvisioningService
                     continue;
                 }
 
-                // Unbound Proposal OR parallel B2 track: when the unique-open (parent=null) slot is
-                // taken by another instance, create a non-queued shell parent + queued child.
+                // IX_ProjectAssignment_UniqueOpenTask filters on WorkPriority IS NOT NULL (not IsOpen).
+                // A closed/cancelled row that still holds WorkPriority therefore blocks the slot —
+                // production completion clears WorkPriority; ad-hoc cancels may leave it stale.
                 int? parentAssignmentId = null;
-                var collidingOpen = existingOpenTask is null
+                var uniqueSlotOccupant = existingOpenTask is null
                     ? await db.ProjectAssignments
-                        .AsNoTracking()
+                        .Include(t => t.AssignmentStatus)
                         .FirstOrDefaultAsync(t =>
                             t.ProjectId == instance.ProjectId
                             && t.AssignedToId == assigneeId
                             && t.TaskTypeId == template.TaskTypeId
                             && t.ParentAssignmentId == null
-                            && t.WorkPriority != null
-                            && t.AssignmentStatus != null
-                            && t.AssignmentStatus.IsOpen, ct)
+                            && t.WorkPriority != null, ct)
                         .ConfigureAwait(false)
                     : null;
 
-                if (collidingOpen is not null)
+                if (uniqueSlotOccupant is not null
+                    && uniqueSlotOccupant.AssignmentStatus is { IsOpen: false })
+                {
+                    Trace.TraceWarning(
+                        $"[Provisioning] Releasing stale unique-open slot on closed task #{uniqueSlotOccupant.Id} "
+                        + $"(Project={instance.ProjectId}, Assignee={assigneeId}, TaskType={template.TaskTypeId}).");
+                    uniqueSlotOccupant.WorkPriority = null;
+                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                    uniqueSlotOccupant = null;
+                }
+
+                // Unbound Proposal OR parallel B2 track: when the unique-open (parent=null) slot is
+                // taken by another open instance, create a non-queued shell parent + queued child.
+                if (uniqueSlotOccupant is not null)
                 {
                     var shell = new ProjectAssignment
                     {
@@ -382,7 +394,7 @@ internal sealed class WorkflowStageTaskProvisioningService
                     parentAssignmentId = shell.Id;
 
                     Trace.TraceWarning(
-                        $"[Provisioning] Open-slot collision on task #{collidingOpen.Id}; " +
+                        $"[Provisioning] Open-slot collision on task #{uniqueSlotOccupant.Id}; " +
                         $"creating child under shell #{shell.Id} for instance {instanceId} (bound={instance.IsProjectBound}).");
                 }
 
@@ -418,10 +430,9 @@ internal sealed class WorkflowStageTaskProvisioningService
                 WorkflowDebugTrace.Step("Provisioning.TaskCreated",
                     $"instance={instanceId} stage={stageId} template={template.Id} taskType={template.TaskTypeId} FAILED: {ex.Message}");
 
-                // Inside the atomic close+advance transaction, swallowing would leave the
-                // instance advanced with zero stage tasks (seen after OpenQuoteProject).
-                if (db.Database.CurrentTransaction is not null)
-                    throw;
+                // Never swallow: a silent failure leaves Active instances with no driving work
+                // (seen after OpenQuoteProject when the unique-open slot was held by a stale row).
+                throw;
             }
         }
 
