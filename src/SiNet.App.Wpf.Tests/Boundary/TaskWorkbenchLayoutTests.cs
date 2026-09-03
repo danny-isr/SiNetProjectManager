@@ -116,6 +116,7 @@ public sealed class TaskWorkbenchLayoutTests
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
         Assert.Contains("AutomationId=\"TaskWorkbench.ScopeSelector\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationId=\"TaskWorkbench.UserSelector\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationId=\"TaskWorkbench.OpenTask\"", xaml, StringComparison.Ordinal);
         Assert.Contains(
             "Property=\"AutomationProperties.AutomationId\" Value=\"{Binding TaskId, StringFormat=Task.{0}}\"",
             xaml,
@@ -128,6 +129,19 @@ public sealed class TaskWorkbenchLayoutTests
         var dto = SampleTask(275, WorkQueueBucketCodes.Medium);
         Assert.Equal(dto.Title, dto.ToString());
         Assert.DoesNotContain("TaskSummaryDto", dto.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoadAsync_restores_previously_selected_task()
+    {
+        var vm = CreateViewModelWithTasks(SampleTask(275, WorkQueueBucketCodes.Medium));
+        await vm.LoadAsync();
+        vm.SelectedTask = vm.MediumTasks[0];
+
+        await vm.LoadAsync();
+
+        Assert.NotNull(vm.SelectedTask);
+        Assert.Equal(275, vm.SelectedTask!.TaskId);
     }
 
     [Fact]

@@ -464,6 +464,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
 
         IsBusy = true;
         BucketCounts counts = default;
+        var previouslySelectedId = SelectedTask?.TaskId;
         try
         {
             QuickTasks.Clear();
@@ -541,6 +542,8 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
 
             OnPropertyChanged(nameof(LoadMode));
             UpdateDiagnostics(counts);
+            if (previouslySelectedId is int keepId)
+                RestoreSelection(keepId);
         }
         catch (Exception ex)
         {

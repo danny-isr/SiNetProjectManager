@@ -222,7 +222,11 @@
         <!-- Actions toolbar -->
         <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,4">
             <Button Content="רענון" Command="{Binding RefreshCommand}" Style="{StaticResource TaskWorkbenchCompactButton}" />
-            <Button Content="פתח משימה" Command="{Binding OpenTaskCommand}" Style="{StaticResource TaskWorkbenchCompactButton}" />
+            <Button Content="פתח משימה"
+                    Command="{Binding OpenTaskCommand}"
+                    AutomationProperties.AutomationId="TaskWorkbench.OpenTask"
+                    AutomationProperties.Name="פתח משימה"
+                    Style="{StaticResource TaskWorkbenchCompactButton}" />
             <Button Content="הוסף משימה" Command="{Binding AddTaskCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
                     Visibility="{Binding CanWrite, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <Button Content="מחק משימה" Command="{Binding DeleteTaskCommand}" Style="{StaticResource TaskWorkbenchCompactButton}"
