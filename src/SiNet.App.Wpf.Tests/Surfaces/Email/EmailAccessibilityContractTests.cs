@@ -123,6 +123,51 @@ public sealed class EmailAccessibilityContractTests
     }
 
     [Fact]
+    public void EmailWorkflowActionsPane_action_items_expose_ActionCode_as_AutomationId()
+    {
+        var xaml = File.ReadAllText(Path.Combine(
+            RepoPaths.RepoRoot,
+            "src", "SiNet.App.Wpf", "Surfaces", "Email", "Detail", "EmailWorkflowActionsPaneView.xaml"));
+        Assert.Contains(
+            "Property=\"AutomationProperties.AutomationId\" Value=\"{Binding ActionCode}\"",
+            xaml,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmailSuggestedActionDto_ActionCode_values_are_stable_for_ui_automation()
+    {
+        Assert.Equal(
+            EmailSuggestedActionCodes.CreatePriceQuote,
+            new EmailSuggestedActionDto(
+                EmailSuggestedActionCodes.CreatePriceQuote,
+                "פתיחת הצעת מחיר",
+                null,
+                20).ActionCode);
+        Assert.Equal(
+            EmailSuggestedActionCodes.RejectPriceQuote,
+            new EmailSuggestedActionDto(
+                EmailSuggestedActionCodes.RejectPriceQuote,
+                "לא בקשת הצעת מחיר",
+                null,
+                25).ActionCode);
+        Assert.Equal(
+            EmailSuggestedActionCodes.CreateOpinionProject,
+            new EmailSuggestedActionDto(
+                EmailSuggestedActionCodes.CreateOpinionProject,
+                "פתיחת חוות דעת",
+                null,
+                50).ActionCode);
+        Assert.Equal(
+            EmailSuggestedActionCodes.CreateNewReview,
+            new EmailSuggestedActionDto(
+                EmailSuggestedActionCodes.CreateNewReview,
+                "פתיחת עבודה (מהרשות)",
+                null,
+                30).ActionCode);
+    }
+
+    [Fact]
     public void EmailSuggestedActionDto_ToString_is_DisplayName_not_dto_internals()
     {
         var dto = new EmailSuggestedActionDto(

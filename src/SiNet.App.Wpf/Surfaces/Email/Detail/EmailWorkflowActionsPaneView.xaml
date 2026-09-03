@@ -6,6 +6,7 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <Style x:Key="WorkflowActionItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="AutomationProperties.AutomationId" Value="{Binding ActionCode}" />
             <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
         </Style>
     </UserControl.Resources>
