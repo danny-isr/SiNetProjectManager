@@ -51,9 +51,9 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             .CountAsync(a => a.MessageId == inboxMessageId, cancellationToken)
             .ConfigureAwait(false);
 
-        var (hasProposal, proposalSummary) = await TryGetActiveProposalForEmailAsync(
-                db, inboxMessageId, cancellationToken)
-            .ConfigureAwait(false);
+        var (hasProposal, proposalSummary, emailWorkflowCount, emailFamilyDisplay) =
+            await GetEmailTriggeredWorkflowMetricsAsync(db, inboxMessageId, cancellationToken)
+                .ConfigureAwait(false);
 
         // Inbox rows always have a ProjectId (defaults to office "ניהול משרד").
         // Associated = filed to a real project, not the office default.
@@ -68,9 +68,9 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             return new EmailWorkflowContextDto(
                 HasContext: true,
                 ProjectDisplay: "לא משויך לפרויקט",
-                WorkflowFamilyDisplay: hasProposal ? "הצעת מחיר" : null,
-                ConfidenceDisplay: hasProposal ? "פעיל" : null,
-                ActiveWorkflowCount: hasProposal ? 1 : 0,
+                WorkflowFamilyDisplay: emailFamilyDisplay,
+                ConfidenceDisplay: emailWorkflowCount > 0 ? "פעיל" : null,
+                ActiveWorkflowCount: emailWorkflowCount,
                 AttachmentCount: attachmentCount,
                 IsAssociatedToProject: false,
                 HasActiveProposalForEmail: hasProposal,
@@ -87,9 +87,9 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             return new EmailWorkflowContextDto(
                 HasContext: true,
                 ProjectDisplay: "לא משויך לפרויקט",
-                WorkflowFamilyDisplay: hasProposal ? "הצעת מחיר" : null,
-                ConfidenceDisplay: hasProposal ? "פעיל" : null,
-                ActiveWorkflowCount: hasProposal ? 1 : 0,
+                WorkflowFamilyDisplay: emailFamilyDisplay,
+                ConfidenceDisplay: emailWorkflowCount > 0 ? "פעיל" : null,
+                ActiveWorkflowCount: emailWorkflowCount,
                 AttachmentCount: attachmentCount,
                 IsAssociatedToProject: false,
                 HasActiveProposalForEmail: hasProposal,
@@ -114,9 +114,9 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
         return new EmailWorkflowContextDto(
             HasContext: true,
             projectDisplay,
-            WorkflowFamilyDisplay: hasProposal ? "הצעת מחיר" : null,
-            activeWorkflows > 0 || hasProposal ? "גבוהה" : "בינונית",
-            Math.Max(activeWorkflows, hasProposal ? 1 : 0),
+            WorkflowFamilyDisplay: emailFamilyDisplay ?? (hasProposal ? "הצעת מחיר" : null),
+            activeWorkflows > 0 || emailWorkflowCount > 0 ? "גבוהה" : "בינונית",
+            Math.Max(activeWorkflows, emailWorkflowCount),
             attachmentCount,
             IsAssociatedToProject: true,
             HasActiveProposalForEmail: hasProposal,
@@ -164,25 +164,15 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             .ConfigureAwait(false);
     }
 
-    private static async Task<(bool HasProposal, string? Summary)> TryGetActiveProposalForEmailAsync(
-        SiNetSQLDbContext db,
-        int inboxMessageId,
-        CancellationToken cancellationToken)
+    private static async Task<(bool HasProposal, string? Summary, int ActiveCount, string? FamilyDisplay)>
+        GetEmailTriggeredWorkflowMetricsAsync(
+            SiNetSQLDbContext db,
+            int inboxMessageId,
+            CancellationToken cancellationToken)
     {
-        var proposalDefId = await db.WorkflowDefinitions
+        var rows = await db.WorkflowInstances
             .AsNoTracking()
-            .Where(d => d.Code == WorkflowCodes.Proposal && d.IsActive)
-            .Select(d => (int?)d.Id)
-            .FirstOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        if (proposalDefId is null)
-            return (false, null);
-
-        var row = await db.WorkflowInstances
-            .AsNoTracking()
-            .Where(w => w.WorkflowDefinitionId == proposalDefId.Value
-                        && w.TriggerType == WorkflowTriggerType.Email
+            .Where(w => w.TriggerType == WorkflowTriggerType.Email
                         && w.TriggerEntityId == inboxMessageId
                         && w.Status != WorkflowStatus.Completed
                         && w.Status != WorkflowStatus.Cancelled)
@@ -190,20 +180,40 @@ internal sealed class SqlEmailWorkflowContextService(IDbContextFactory<SiNetSQLD
             .Select(w => new
             {
                 w.Id,
+                DefCode = w.WorkflowDefinition != null ? w.WorkflowDefinition.Code : null,
+                DefName = w.WorkflowDefinition != null ? w.WorkflowDefinition.Name : null,
                 StageName = w.CurrentStage != null ? w.CurrentStage.Name : null,
                 StageCode = w.CurrentStage != null ? w.CurrentStage.Code : null,
             })
-            .FirstOrDefaultAsync(cancellationToken)
+            .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (row is null)
-            return (false, null);
+        if (rows.Count == 0)
+            return (false, null, 0, null);
 
-        var stage = !string.IsNullOrWhiteSpace(row.StageName)
-            ? row.StageName
-            : row.StageCode ?? "פעיל";
-        return (true, $"נפתח תהליך הצעת מחיר #{row.Id} — {stage}");
+        var primary = rows[0];
+        var familyDisplay = MapWorkflowFamilyDisplay(primary.DefCode) ?? primary.DefName;
+
+        var proposalRow = rows.FirstOrDefault(r =>
+            string.Equals(r.DefCode, WorkflowCodes.Proposal, StringComparison.OrdinalIgnoreCase));
+
+        if (proposalRow is null)
+            return (false, null, rows.Count, familyDisplay);
+
+        var stage = !string.IsNullOrWhiteSpace(proposalRow.StageName)
+            ? proposalRow.StageName
+            : proposalRow.StageCode ?? "פעיל";
+        return (true, $"נפתח תהליך הצעת מחיר #{proposalRow.Id} — {stage}", rows.Count, familyDisplay);
     }
+
+    private static string? MapWorkflowFamilyDisplay(string? definitionCode) =>
+        definitionCode switch
+        {
+            WorkflowCodes.Proposal => "הצעת מחיר",
+            WorkflowCodes.Opinion => "חוות דעת",
+            WorkflowCodes.Review => "בדיקת תוכנית",
+            _ => null,
+        };
 
     private static async Task<int> ResolveDefaultOfficeProjectIdAsync(
         SiNetSQLDbContext db,

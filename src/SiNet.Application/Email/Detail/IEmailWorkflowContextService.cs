@@ -37,7 +37,11 @@ public sealed record EmailSuggestedActionDto(
     string ActionCode,
     string DisplayName,
     string? Description,
-    int SortOrder);
+    int SortOrder)
+{
+    /// <summary>UI Automation name for ComboBox items — never expose DTO internals.</summary>
+    public override string ToString() => DisplayName;
+}
 
 public interface IEmailSuggestedActionExecutionService
 {

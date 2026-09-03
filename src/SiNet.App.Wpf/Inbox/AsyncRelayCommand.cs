@@ -1,4 +1,6 @@
+using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using SiNet.App.Wpf.Infrastructure;
 
 namespace SiNet.App.Wpf.Inbox;
@@ -47,7 +49,19 @@ public sealed class AsyncRelayCommand : ICommand
 
     public event EventHandler? CanExecuteChanged;
 
-    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    public void RaiseCanExecuteChanged()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(RaiseCanExecuteChangedCore, DispatcherPriority.Normal);
+            return;
+        }
+
+        RaiseCanExecuteChangedCore();
+    }
+
+    private void RaiseCanExecuteChangedCore() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
 
 /// <summary>
@@ -115,5 +129,17 @@ public sealed class AsyncRelayCommand<T> : ICommand
 
     public event EventHandler? CanExecuteChanged;
 
-    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    public void RaiseCanExecuteChanged()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(RaiseCanExecuteChangedCore, DispatcherPriority.Normal);
+            return;
+        }
+
+        RaiseCanExecuteChangedCore();
+    }
+
+    private void RaiseCanExecuteChangedCore() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }

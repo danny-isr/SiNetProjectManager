@@ -5,6 +5,9 @@
              Background="{DynamicResource SiSurfaceBrush}">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style x:Key="WorkflowActionItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
+        </Style>
     </UserControl.Resources>
     <Border Padding="6,2">
         <Grid>
@@ -115,12 +118,17 @@
                           ItemsSource="{Binding SuggestedActions}"
                           SelectedItem="{Binding SelectedAction}"
                           DisplayMemberPath="DisplayName"
+                          ItemContainerStyle="{StaticResource WorkflowActionItemStyle}"
+                          AutomationProperties.AutomationId="Email.Workflow.ActionSelector"
+                          AutomationProperties.Name="בחירת פעולת תהליך"
                           VerticalAlignment="Center"
                           Padding="2,1"
                           FontSize="{DynamicResource SiTextSmallFontSize}" />
 
                 <Button Grid.Column="2"
                         Content="▶ בצע"
+                        AutomationProperties.AutomationId="Email.Workflow.ExecuteAction"
+                        AutomationProperties.Name="בצע פעולת תהליך"
                         Command="{Binding ExecuteActionCommand}"
                         Padding="8,1"
                         Margin="4,0,0,0"
@@ -131,6 +139,8 @@
                         FontSize="{DynamicResource SiTextSmallFontSize}" />
 
                 <TextBlock Grid.Column="3"
+                           AutomationProperties.AutomationId="Email.Workflow.Status"
+                           AutomationProperties.Name="סטטוס פעולת תהליך"
                            Text="{Binding StatusMessage}"
                            Foreground="#1565C0"
                            VerticalAlignment="Center"

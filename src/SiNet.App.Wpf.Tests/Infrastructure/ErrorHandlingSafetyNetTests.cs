@@ -45,6 +45,29 @@ public sealed class ErrorHandlingSafetyNetTests
     }
 
     [Fact]
+    public async Task AsyncRelayCommand_RaiseCanExecuteChanged_marshals_to_dispatcher_from_background_thread()
+    {
+        var command = new AsyncRelayCommand(() => Task.CompletedTask, () => true);
+        var signaled = false;
+        command.CanExecuteChanged += (_, _) => signaled = true;
+
+        await Task.Run(() => command.RaiseCanExecuteChanged());
+
+        for (var i = 0; i < 40 && !signaled; i++)
+            await Task.Delay(25);
+
+        Assert.True(signaled);
+    }
+
+    [Fact]
+    public void AsyncRelayCommand_RaiseCanExecuteChanged_uses_dispatcher_marshaling()
+    {
+        var source = ReadRepoFile("src/SiNet.App.Wpf/Inbox/AsyncRelayCommand.cs");
+        Assert.Contains("Application.Current?.Dispatcher", source, StringComparison.Ordinal);
+        Assert.Contains("BeginInvoke(RaiseCanExecuteChangedCore", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void InspectionTreeViewModel_load_methods_have_catch_blocks()
     {
         var source = ReadRepoFile("src/SiNet.App.Wpf/Inspection/InspectionTreeViewModel.cs");

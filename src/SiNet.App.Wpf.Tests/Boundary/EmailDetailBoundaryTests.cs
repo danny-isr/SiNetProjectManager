@@ -196,6 +196,15 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("isProjectBound = false", sql, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Workflow_context_counts_email_triggered_instances_by_inbox_message()
+    {
+        var sql = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Email/Detail/SqlEmailWorkflowServices.cs");
+        Assert.Contains("GetEmailTriggeredWorkflowMetricsAsync", sql, StringComparison.Ordinal);
+        Assert.Contains("TriggerEntityId == inboxMessageId", sql, StringComparison.Ordinal);
+        Assert.Contains("MapWorkflowFamilyDisplay", sql, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Guard: mailbox "filed" is Gmail-label-only. See docs/EMAIL_ACC_SOURCE_OF_TRUTH.md
     /// and EmailSystemPrinciples §6.6 — do not reintroduce SQL ProjectId as IsFiledToProject.

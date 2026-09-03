@@ -1,6 +1,7 @@
 using System.IO;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Tests.Boundary;
+using SiNet.Application.Email.Detail;
 using SiNet.Application.Projects;
 using Xunit;
 
@@ -94,5 +95,44 @@ public sealed class EmailAccessibilityContractTests
 
         Assert.Equal("1042 — פרויקט בדיקה", dto.ToString());
         Assert.DoesNotContain("ProjectSummaryDto", dto.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Email.Workflow.ActionSelector")]
+    [InlineData("Email.Workflow.ExecuteAction")]
+    [InlineData("Email.Workflow.Status")]
+    public void EmailWorkflowActionsPane_declares_stable_AutomationId(string automationId)
+    {
+        var xaml = File.ReadAllText(Path.Combine(
+            RepoPaths.RepoRoot,
+            "src", "SiNet.App.Wpf", "Surfaces", "Email", "Detail", "EmailWorkflowActionsPaneView.xaml"));
+        Assert.Contains($"AutomationId=\"{automationId}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmailWorkflowActionsPane_action_items_bind_AutomationProperties_Name_to_DisplayName()
+    {
+        var xaml = File.ReadAllText(Path.Combine(
+            RepoPaths.RepoRoot,
+            "src", "SiNet.App.Wpf", "Surfaces", "Email", "Detail", "EmailWorkflowActionsPaneView.xaml"));
+        Assert.Contains("WorkflowActionItemStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains(
+            "Property=\"AutomationProperties.Name\" Value=\"{Binding DisplayName}\"",
+            xaml,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmailSuggestedActionDto_ToString_is_DisplayName_not_dto_internals()
+    {
+        var dto = new EmailSuggestedActionDto(
+            EmailSuggestedActionCodes.CreatePriceQuote,
+            "פתיחת הצעת מחיר",
+            Description: null,
+            SortOrder: 20);
+
+        Assert.Equal("פתיחת הצעת מחיר", dto.ToString());
+        Assert.DoesNotContain("EmailSuggestedActionDto", dto.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CreatePriceQuote", dto.ToString(), StringComparison.Ordinal);
     }
 }
