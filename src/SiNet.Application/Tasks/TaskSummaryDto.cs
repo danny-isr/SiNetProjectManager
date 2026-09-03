@@ -27,4 +27,8 @@ public sealed record TaskSummaryDto(
     string? JobTypeTitle = null,
     string? CurrentStageName = null,
     /// <summary>Preformatted process · track · stage line for list cards (null when unknown).</summary>
-    string? TrackDisplayLine = null);
+    string? TrackDisplayLine = null)
+{
+    public override string ToString() =>
+        string.IsNullOrWhiteSpace(Title) ? $"Task {TaskId}" : Title;
+}

@@ -49,6 +49,8 @@
             <Setter Property="Margin" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="AutomationProperties.AutomationId" Value="{Binding TaskId, StringFormat=Task.{0}}" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -178,6 +180,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="False" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="2,1" />
@@ -259,6 +262,8 @@
                           DisplayMemberPath="DisplayName"
                           SelectedValue="{Binding SelectedScope}"
                           IsEnabled="{Binding CanSelectTaskScope}"
+                          AutomationProperties.AutomationId="TaskWorkbench.ScopeSelector"
+                          AutomationProperties.Name="מציג משימות"
                           Style="{DynamicResource SiComboBoxStyle}"
                           FontSize="{DynamicResource SiTextSmallFontSize}"
                           MinWidth="120"
@@ -268,6 +273,8 @@
                           SelectedValuePath="UserId"
                           DisplayMemberPath="DisplayName"
                           SelectedValue="{Binding SelectedUserId}"
+                          AutomationProperties.AutomationId="TaskWorkbench.UserSelector"
+                          AutomationProperties.Name="בחירת משתמש"
                           Style="{DynamicResource SiComboBoxStyle}"
                           FontSize="{DynamicResource SiTextSmallFontSize}"
                           MinWidth="120"

@@ -111,6 +111,26 @@ public sealed class TaskWorkbenchLayoutTests
     }
 
     [Fact]
+    public void Task_workbench_declares_stable_scope_and_user_AutomationIds()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Tasks/TaskWorkbenchView.xaml");
+        Assert.Contains("AutomationId=\"TaskWorkbench.ScopeSelector\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationId=\"TaskWorkbench.UserSelector\"", xaml, StringComparison.Ordinal);
+        Assert.Contains(
+            "Property=\"AutomationProperties.AutomationId\" Value=\"{Binding TaskId, StringFormat=Task.{0}}\"",
+            xaml,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TaskSummaryDto_ToString_is_title_not_dto_internals()
+    {
+        var dto = SampleTask(275, WorkQueueBucketCodes.Medium);
+        Assert.Equal(dto.Title, dto.ToString());
+        Assert.DoesNotContain("TaskSummaryDto", dto.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Project_filter_off_loads_all_projects()
     {
         var vm = CreateViewModelWithTasks(
