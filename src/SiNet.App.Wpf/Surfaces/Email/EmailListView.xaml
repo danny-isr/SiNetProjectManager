@@ -31,6 +31,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource SiBorderBrush}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Background" Value="{Binding RowBackgroundColor, Converter={StaticResource HexToBrush}}" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
             <Setter Property="Tag"
                     Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=local:EmailListView}}" />
             <Setter Property="ContextMenu">

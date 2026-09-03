@@ -64,39 +64,17 @@ public static class AutodeskServiceCollectionExtensions
         services.AddTransient<LocalAccFolderRenameService>();
         services.AddTransient<LocalAccItemMetadataService>();
         services.AddTransient<LocalAccProjectTreeSearchService>();
-        services.AddHttpClient<RemoteAccProjectCatalogService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccLiveProjectDiscoveryService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccProjectService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccDocumentService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccFolderPathService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccFolderBrowserService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccItemService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccFolderRenameService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccItemMetadataService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccProjectTreeSearchService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
-        services.AddHttpClient<RemoteAccInboxBootstrapService>()
-            .ConfigurePrimaryHttpMessageHandler(sp =>
-                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+        AddAccServiceOperationClient<RemoteAccProjectCatalogService>(services);
+        AddAccServiceOperationClient<RemoteAccLiveProjectDiscoveryService>(services);
+        AddAccServiceOperationClient<RemoteAccProjectService>(services);
+        AddAccServiceOperationClient<RemoteAccDocumentService>(services);
+        AddAccServiceOperationClient<RemoteAccFolderPathService>(services);
+        AddAccServiceOperationClient<RemoteAccFolderBrowserService>(services);
+        AddAccServiceOperationClient<RemoteAccItemService>(services);
+        AddAccServiceOperationClient<RemoteAccFolderRenameService>(services);
+        AddAccServiceOperationClient<RemoteAccItemMetadataService>(services);
+        AddAccServiceOperationClient<RemoteAccProjectTreeSearchService>(services);
+        AddAccServiceOperationClient<RemoteAccInboxBootstrapService>(services);
         services.AddHttpClient<RemoteAccFileUploadService>((sp, client) =>
                 AccServiceHttpClientConfigurator.ConfigureFileTransferClient(
                     client,
@@ -128,5 +106,16 @@ public static class AutodeskServiceCollectionExtensions
                 sp.GetRequiredService<RemoteAccInboxBootstrapService>()));
 
         return services;
+    }
+
+    private static void AddAccServiceOperationClient<TClient>(IServiceCollection services)
+        where TClient : class
+    {
+        services.AddHttpClient<TClient>((sp, client) =>
+                AccServiceHttpClientConfigurator.ConfigureOperationClient(
+                    client,
+                    sp.GetRequiredService<AccServiceControlPlaneOptions>()))
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
     }
 }

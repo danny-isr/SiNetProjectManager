@@ -156,6 +156,9 @@ SiNet.App.Wpf/Shared/Projects/ProjectSelectorDesignData.cs
 - It binds to a **project DTO** (`ProjectSummaryDto`), never to an EF entity.
 - Host windows **embed** `ProjectSelectorView` and observe `ICurrentProjectContext` for reactions;
   they do not push Email/Task/Workflow logic into the selector.
+- **Automation / accessibility:** search editor `AutomationId` = `ProjectSelector.Search` (distinct from
+  `Email.Filter.FreeText`). `ProjectSummaryDto.ToString()` returns a human display
+  (`{ProjectNumber} — {ProjectName}`) so list-item UIA names are usable without binding to DTO dumps.
 
 ### Shared / modular contract
 

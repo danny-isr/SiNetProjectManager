@@ -71,7 +71,7 @@ internal sealed class EmailDetailSelectionCoordinator
         row = await LoadBodyIfNeededAsync(row, loadVersion, isBodyLoadedForMessage, cancellationToken)
             .ConfigureAwait(true);
         cancellationToken.ThrowIfCancellationRequested();
-        await RunAccPipelineAsync(row, loadVersion).ConfigureAwait(true);
+        await RunAccPipelineAsync(row, loadVersion, cancellationToken).ConfigureAwait(true);
     }
 
     public async Task<EmailListRow> LoadBodyIfNeededAsync(
@@ -90,7 +90,10 @@ internal sealed class EmailDetailSelectionCoordinator
         return _emailList.FindRowById(row.Id) ?? row;
     }
 
-    public async Task RunAccPipelineAsync(EmailListRow row, int loadVersion)
+    public async Task RunAccPipelineAsync(
+        EmailListRow row,
+        int loadVersion,
+        CancellationToken cancellationToken = default)
     {
         if (!ShouldApplySelectedEmailLoad(row.Id, loadVersion))
         {
@@ -101,20 +104,38 @@ internal sealed class EmailDetailSelectionCoordinator
         _setSelectedAccStatusDisplay("בודק ACC…");
         _setStatusMessage("בודק ACC…");
 
-        var (updatedRow, status) = await _emailList.TryPassiveAccIngestOnSelectionAsync(
-            row,
-            () => ShouldApplySelectedEmailLoad(row.Id, loadVersion))
-            .ConfigureAwait(true);
-
-        if (!ShouldApplySelectedEmailLoad(row.Id, loadVersion))
+        try
         {
-            return;
-        }
+            var (updatedRow, status) = await _emailList.TryPassiveAccIngestOnSelectionAsync(
+                    row,
+                    () => ShouldApplySelectedEmailLoad(row.Id, loadVersion),
+                    cancellationToken)
+                .ConfigureAwait(true);
 
-        _setSelectedAccStatusDisplay(status?.StatusDisplay
-            ?? updatedRow.AccStatusDisplay
-            ?? _getSelectedEmail()?.AccStatusDisplay
-            ?? string.Empty);
+            if (!ShouldApplySelectedEmailLoad(row.Id, loadVersion))
+            {
+                return;
+            }
+
+            _setSelectedAccStatusDisplay(status?.StatusDisplay
+                ?? updatedRow.AccStatusDisplay
+                ?? _getSelectedEmail()?.AccStatusDisplay
+                ?? string.Empty);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            if (!ShouldApplySelectedEmailLoad(row.Id, loadVersion))
+            {
+                return;
+            }
+
+            _setSelectedAccStatusDisplay(EmailAccSelectionHandler.AccUnavailableOperatorMessage);
+            _setStatusMessage(EmailAccSelectionHandler.AccUnavailableOperatorMessage);
+        }
     }
 
     public void MergeExternalDownloadAttachments(IReadOnlyList<EmailExternalDownloadItem> externalItems)

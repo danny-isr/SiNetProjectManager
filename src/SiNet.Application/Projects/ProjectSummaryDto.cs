@@ -34,4 +34,28 @@ public sealed record ProjectSummaryDto(
     bool IsActive,
     int? StatusId = null,
     IReadOnlyList<int>? JobTypeIds = null,
-    string? ProjectLabelName = null);
+    string? ProjectLabelName = null)
+{
+    /// <summary>
+    /// Human display for UI Automation / list items (avoids default record dumps).
+    /// </summary>
+    public override string ToString()
+    {
+        if (string.IsNullOrWhiteSpace(ProjectNumber) && string.IsNullOrWhiteSpace(ProjectName))
+        {
+            return ProjectId > 0 ? $"Project {ProjectId}" : string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(ProjectName))
+        {
+            return ProjectNumber;
+        }
+
+        if (string.IsNullOrWhiteSpace(ProjectNumber))
+        {
+            return ProjectName;
+        }
+
+        return $"{ProjectNumber} — {ProjectName}";
+    }
+}

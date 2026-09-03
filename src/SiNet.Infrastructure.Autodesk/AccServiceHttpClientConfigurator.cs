@@ -13,6 +13,16 @@ public static class AccServiceHttpClientConfigurator
         client.Timeout = options.FileTransferTimeout;
     }
 
+    /// <summary>
+    /// Bounded timeout for AccService JSON/control-plane clients (not large file transfer).
+    /// </summary>
+    public static void ConfigureOperationClient(HttpClient client, AccServiceControlPlaneOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(options);
+        client.Timeout = options.OperationTimeout;
+    }
+
     public static HttpMessageHandler CreateHandler(AccServiceControlPlaneOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);

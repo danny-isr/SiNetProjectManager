@@ -140,7 +140,9 @@
                     <Button Content="רענן"
                             Command="{Binding RefreshPageCommand}"
                             Style="{StaticResource ActionButton}"
-                            IsEnabled="{Binding CanRefreshEmails}" />
+                            IsEnabled="{Binding CanRefreshEmails}"
+                            AutomationProperties.AutomationId="Email.Action.Refresh"
+                            AutomationProperties.Name="רענן רשימת מיילים" />
                     <Button Content="סנכרן שמות לייבלים"
                             Command="{Binding SyncProjectLabelNamesCommand}"
                             Style="{StaticResource ActionButton}"
@@ -171,7 +173,9 @@
                               SelectedValue="{Binding SelectedMailboxScope}"
                               SelectedValuePath="Scope"
                               DisplayMemberPath="DisplayName"
-                              Margin="0,0,4,0" ToolTip="תיבה" />
+                              Margin="0,0,4,0" ToolTip="תיבה"
+                              AutomationProperties.AutomationId="Email.Filter.MailboxScope"
+                              AutomationProperties.Name="תיבת דואר" />
                     <ComboBox Width="90" MinHeight="24"
                               Style="{DynamicResource SiComboBoxStyle}"
                               FontSize="{DynamicResource SiTextSmallFontSize}"
@@ -179,22 +183,30 @@
                               SelectedValue="{Binding SelectedMailboxCategory}"
                               SelectedValuePath="Category"
                               DisplayMemberPath="DisplayName"
-                              Margin="0,0,4,0" ToolTip="קטגוריה" />
+                              Margin="0,0,4,0" ToolTip="קטגוריה"
+                              AutomationProperties.AutomationId="Email.Filter.Category"
+                              AutomationProperties.Name="קטגוריה" />
                     <TextBox Width="120" MinHeight="24" VerticalContentAlignment="Center"
                              Style="{DynamicResource SiTextBoxStyle}"
                              FontSize="{DynamicResource SiTextSmallFontSize}"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,4,0" ToolTip="חיפוש חופשי" />
+                             Margin="0,0,4,0" ToolTip="חיפוש חופשי"
+                             AutomationProperties.AutomationId="Email.Filter.FreeText"
+                             AutomationProperties.Name="חיפוש חופשי" />
                     <TextBox Width="100" MinHeight="24" VerticalContentAlignment="Center"
                              Style="{DynamicResource SiTextBoxStyle}"
                              FontSize="{DynamicResource SiTextSmallFontSize}"
                              Text="{Binding AddressFilter, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,4,0" ToolTip="from:/to:" />
+                             Margin="0,0,4,0" ToolTip="from:/to:"
+                             AutomationProperties.AutomationId="Email.Filter.Address"
+                             AutomationProperties.Name="סינון כתובת" />
                     <TextBox Width="100" MinHeight="24" VerticalContentAlignment="Center"
                              Style="{DynamicResource SiTextBoxStyle}"
                              FontSize="{DynamicResource SiTextSmallFontSize}"
                              Text="{Binding SubjectFilter, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,4,0" ToolTip="subject:" />
+                             Margin="0,0,4,0" ToolTip="subject:"
+                             AutomationProperties.AutomationId="Email.Filter.Subject"
+                             AutomationProperties.Name="סינון נושא" />
                     <ComboBox Width="140" MinHeight="24"
                               Style="{DynamicResource SiComboBoxStyle}"
                               FontSize="{DynamicResource SiTextSmallFontSize}"
@@ -202,7 +214,9 @@
                               SelectedValue="{Binding SelectedLabel}"
                               SelectedValuePath="Name"
                               DisplayMemberPath="Name"
-                              Margin="0,0,4,0" ToolTip="label:" />
+                              Margin="0,0,4,0" ToolTip="label:"
+                              AutomationProperties.AutomationId="Email.Filter.Label"
+                              AutomationProperties.Name="סינון תווית" />
                     <ComboBox Width="90" MinHeight="24"
                               Style="{DynamicResource SiComboBoxStyle}"
                               FontSize="{DynamicResource SiTextSmallFontSize}"
@@ -210,13 +224,21 @@
                               SelectedValue="{Binding SelectedProjectLinkFilter}"
                               SelectedValuePath="Value"
                               DisplayMemberPath="DisplayName"
-                              Margin="0,0,4,0" />
-                    <Button Content="חפש" Command="{Binding ApplyFiltersCommand}" Style="{StaticResource ActionButton}" />
-                    <Button Content="נקה" Command="{Binding ClearFiltersCommand}" Style="{StaticResource ActionButton}" />
+                              Margin="0,0,4,0"
+                              AutomationProperties.AutomationId="Email.Filter.ProjectLink"
+                              AutomationProperties.Name="סינון שיוך לפרויקט" />
+                    <Button Content="חפש" Command="{Binding ApplyFiltersCommand}" Style="{StaticResource ActionButton}"
+                            AutomationProperties.AutomationId="Email.Action.Search"
+                            AutomationProperties.Name="חפש מיילים" />
+                    <Button Content="נקה" Command="{Binding ClearFiltersCommand}" Style="{StaticResource ActionButton}"
+                            AutomationProperties.AutomationId="Email.Action.ClearFilters"
+                            AutomationProperties.Name="נקה מסננים" />
                     <ToggleButton Content="עם צרופות"
                                   IsChecked="{Binding AttachmentsOnly, Mode=OneWay}"
                                   Command="{Binding ToggleAttachmentsOnlyCommand}"
-                                  Style="{StaticResource ToggleActionButton}" />
+                                  Style="{StaticResource ToggleActionButton}"
+                                  AutomationProperties.AutomationId="Email.Filter.AttachmentsOnly"
+                                  AutomationProperties.Name="רק עם צרופות" />
                 </WrapPanel>
                 <!-- Deprecated inline diagnostics row (2026-07): moved to PageInfo tooltip above to keep the bar at two rows.
                      Kept collapsed (not deleted) in case the inline display needs to return; safe to remove after verification. -->

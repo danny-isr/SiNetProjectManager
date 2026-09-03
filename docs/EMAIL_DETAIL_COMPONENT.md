@@ -1,6 +1,7 @@
 # Email Detail Component
 
-> **Status:** Phase 0 scaffold (2026-07-09)  
+> **Status:** Active  
+> **Updated:** 03.09.2026 (ACC selection bounded timeout / unavailable UX)  
 > Related: [EMAIL_LIST_MIGRATION.md](./EMAIL_LIST_MIGRATION.md), [WORK_SURFACE_WORKFLOW_INTEGRATION.md](./WORK_SURFACE_WORKFLOW_INTEGRATION.md)
 
 ## Goal
@@ -53,6 +54,18 @@ See plan: IEmailBodyRenderer, IEmailAccIngestionService, IEmailAttachmentTagging
   mailbox-filed to a project (or after File-to-project). Unfiled browse without
   attachments does not ingest. See `docs/NATIVE_EMAIL_ACC_INGEST.md` §N4.3.
 - “העלה ל-ACC” requires attachments **or** `IsFiledToProject`.
+
+### ACC status on selection (bounded wait)
+
+- Selecting an email must **never** leave the UI on «בודק ACC…» indefinitely.
+- `EmailDetailSelectionCoordinator.RunAccPipelineAsync` passes the selection `CancellationToken`
+  into `EmailAccSelectionHandler` so a newer selection cancels stale ACC work.
+- Status sync (`LoadStatusAsync`) uses a linked **CancelAfter** (~15s). Operator-facing failure when
+  AccService is unreachable / times out: **«ACC אינו זמין כרגע»** (technical detail stays in logs /
+  exception mapping, not raw socket text on the badge).
+- Non–file-transfer AccService HTTP clients use `AccServiceControlPlaneOptions.OperationTimeout`
+  (default 15s). File upload/download keep `FileTransferTimeout` (Infinite) for large attachments.
+- `IsAccStatusLoading` is always cleared on success, timeout, cancel, or error.
 
 ### FileMaterial / MoveToProject (six decisions)
 

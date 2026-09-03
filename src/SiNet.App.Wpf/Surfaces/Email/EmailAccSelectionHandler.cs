@@ -1,3 +1,5 @@
+using System.Net.Http;
+using System.Net.Sockets;
 using SiNet.Application.Email.Acc;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
@@ -8,6 +10,11 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 /// </summary>
 internal sealed class EmailAccSelectionHandler
 {
+    /// <summary>Bounded wait for ACC status sync so selection never sticks on «בודק ACC…».</summary>
+    internal static readonly TimeSpan AccStatusSyncTimeout = TimeSpan.FromSeconds(15);
+
+    internal const string AccUnavailableOperatorMessage = "ACC אינו זמין כרגע";
+
     private readonly IEmailAccStatusService? _statusService;
     private readonly IEmailAccUploadCoordinator? _uploadCoordinator;
     private readonly IEmailAccIngestQueue? _ingestQueue;
@@ -103,6 +110,9 @@ internal sealed class EmailAccSelectionHandler
         };
         Patch(loading);
 
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(AccStatusSyncTimeout);
+
         try
         {
             var status = await _statusService
@@ -110,12 +120,25 @@ internal sealed class EmailAccSelectionHandler
                     row.InternetMessageId,
                     row.Id,
                     ResolveActingUserLogin(),
-                    cancellationToken)
+                    timeoutCts.Token)
                 .ConfigureAwait(true);
 
             var patched = ApplyAccStatus(row, status);
             Patch(patched);
             return (patched, status);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            var cleared = ClearAccStatusLoading(row);
+            Patch(cleared);
+            throw;
+        }
+        catch (Exception ex) when (IsAccServiceUnavailable(ex, cancellationToken))
+        {
+            var unavailable = CreateUnavailableRow(row);
+            StatusMessageChanged?.Invoke(AccUnavailableOperatorMessage);
+            Patch(unavailable);
+            return (unavailable, null);
         }
         catch (Exception ex)
         {
@@ -213,12 +236,30 @@ internal sealed class EmailAccSelectionHandler
             return await FinalizeAfterUploadAsync(row, upload, isStillSelected, cancellationToken)
                 .ConfigureAwait(true);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            var cleared = ClearAccUploadBusy(ClearAccStatusLoading(row));
+            Patch(cleared);
+            throw;
+        }
+        catch (Exception ex) when (IsAccServiceUnavailable(ex, cancellationToken))
+        {
+            var unavailable = ClearAccUploadBusy(CreateUnavailableRow(row));
+            if (isStillSelected())
+            {
+                StatusMessageChanged?.Invoke(AccUnavailableOperatorMessage);
+            }
+
+            Patch(unavailable);
+            return (unavailable, status);
+        }
         catch (Exception ex)
         {
             var failed = row with
             {
                 IsAccUploadBusy = false,
                 AccUploadStatusText = null,
+                IsAccStatusLoading = false,
                 AccStatusDisplay = ex.Message,
                 AccProcessingStatus = EmailAccProcessingStatus.Failed,
             };
@@ -276,12 +317,20 @@ internal sealed class EmailAccSelectionHandler
 
             return (patched, finalStatus);
         }
+        catch (Exception ex) when (IsAccServiceUnavailable(ex, cancellationToken))
+        {
+            var unavailable = ClearAccUploadBusy(CreateUnavailableRow(row));
+            StatusMessageChanged?.Invoke(AccUnavailableOperatorMessage);
+            Patch(unavailable);
+            return (unavailable, null);
+        }
         catch (Exception ex)
         {
             var failed = row with
             {
                 IsAccUploadBusy = false,
                 AccUploadStatusText = null,
+                IsAccStatusLoading = false,
                 AccStatusDisplay = ex.Message,
                 AccProcessingStatus = EmailAccProcessingStatus.Failed,
             };
@@ -441,6 +490,54 @@ internal sealed class EmailAccSelectionHandler
         }
 
         return patched;
+    }
+
+    private static EmailListRow CreateUnavailableRow(EmailListRow row) =>
+        row with
+        {
+            IsAccStatusLoading = false,
+            IsAccUploadBusy = false,
+            AccUploadStatusText = null,
+            AccProcessingStatus = EmailAccProcessingStatus.Unknown,
+            AccStatusDisplay = AccUnavailableOperatorMessage,
+        };
+
+    private static EmailListRow ClearAccStatusLoading(EmailListRow row) =>
+        row with { IsAccStatusLoading = false };
+
+    private static EmailListRow ClearAccUploadBusy(EmailListRow row) =>
+        row with { IsAccUploadBusy = false, AccUploadStatusText = null };
+
+    /// <summary>
+    /// True for AccService unreachable / timed-out control-plane calls (operator-facing soft message).
+    /// Selection cancellation is excluded so callers can rethrow <see cref="OperationCanceledException"/>.
+    /// </summary>
+    internal static bool IsAccServiceUnavailable(Exception ex, CancellationToken selectionToken)
+    {
+        if (ex is OperationCanceledException)
+        {
+            return !selectionToken.IsCancellationRequested;
+        }
+
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            switch (current)
+            {
+                case HttpRequestException:
+                case SocketException:
+                case TimeoutException:
+                case TaskCanceledException:
+                    return true;
+            }
+
+            if (current.GetType().Name.Contains("Http", StringComparison.Ordinal)
+                && current.Message.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string ResolveActingUserLogin()

@@ -116,6 +116,8 @@
                      Text="{Binding EditorText, UpdateSourceTrigger=PropertyChanged}"
                      GotFocus="SearchBox_OnGotFocus"
                      PreviewKeyDown="SearchBox_OnPreviewKeyDown"
+                     AutomationProperties.AutomationId="ProjectSelector.Search"
+                     AutomationProperties.Name="חיפוש פרויקט"
                      ToolTip="&#x05D7;&#x05E4;&#x05E9; &#x05DC;&#x05E4;&#x05D9; &#x05DE;&#x05E1;&#x05E4;&#x05E8; / &#x05E9;&#x05DD; / &#x05E2;&#x05D9;&#x05E8; / &#x05DC;&#x05E7;&#x05D5;&#x05D7;" />
 
             <Button Grid.Column="1"
@@ -161,6 +163,7 @@
                                 <Setter Property="MinHeight" Value="{DynamicResource SiControlRowHeight}" />
                                 <Setter Property="Padding" Value="6,2" />
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="AutomationProperties.Name" Value="{Binding}" />
                             </Style>
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>

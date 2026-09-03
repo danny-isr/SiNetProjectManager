@@ -198,6 +198,26 @@ public sealed record EmailListRow(
     public bool IsAccLockedByOther =>
         AccProcessingStatus == EmailAccProcessingStatus.LockedByOtherUser;
 
+    /// <summary>
+    /// Safe UIA / accessibility name from visible metadata only (no body / preview).
+    /// </summary>
+    public string AutomationName
+    {
+        get
+        {
+            var sender = string.IsNullOrWhiteSpace(Sender) ? "?" : Sender.Trim();
+            var subject = string.IsNullOrWhiteSpace(Subject) ? "(ללא נושא)" : Subject.Trim();
+            if (subject.Length > 80)
+            {
+                subject = subject[..80] + "…";
+            }
+
+            return $"{sender} — {subject}";
+        }
+    }
+
+    public override string ToString() => AutomationName;
+
     public bool IsAccPartialFailure =>
         AccProcessingStatus == EmailAccProcessingStatus.PartiallyUploaded
         || AccProcessingStatus == EmailAccProcessingStatus.MissingInAcc;

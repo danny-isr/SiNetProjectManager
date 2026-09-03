@@ -18,6 +18,26 @@ Self-contained **Email List component** for the Email Workbench: Outlook-style c
 | `EmailListViewModel` | `src/SiNet.App.Wpf/Surfaces/Email/EmailListViewModel.cs` | Paging, filters, auth, load states, link enrichment |
 | `EmailWindowViewModel` | parent shell | Detail pane, `ApplyContext`, optional project context |
 
+## Automation / accessibility (filter bar + rows)
+
+Stable `AutomationProperties.AutomationId` values on `EmailListFilterBar` (for regression / WpfPilot):
+
+| Control | AutomationId |
+| --- | --- |
+| Mailbox scope | `Email.Filter.MailboxScope` |
+| Category | `Email.Filter.Category` |
+| Free-text | `Email.Filter.FreeText` |
+| From/To | `Email.Filter.Address` |
+| Subject | `Email.Filter.Subject` |
+| Label | `Email.Filter.Label` |
+| Project-link filter | `Email.Filter.ProjectLink` |
+| Attachments-only | `Email.Filter.AttachmentsOnly` |
+| Search | `Email.Action.Search` |
+| Clear | `Email.Action.ClearFilters` |
+| Refresh | `Email.Action.Refresh` |
+
+Email list rows expose a safe UIA name via `EmailListRow.AutomationName` / `ToString()` (`sender — subject`), not full body text. Distinct from project search: `ProjectSelector.Search`.
+
 ## Default Gmail query (legacy vs new)
 
 ### Legacy (`GoogleService` / `EmailManagementViewModel`)
