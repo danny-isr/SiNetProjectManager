@@ -54,6 +54,19 @@ public sealed class NewShellMenuUiAutomationTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void NewShellMenuItem_open_marshals_to_wpf_dispatcher_for_uia_invoke()
+    {
+        var source = File.ReadAllText(NewShellMenuItemPath);
+
+        Assert.Contains("dispatcher.CheckAccess()", source, StringComparison.Ordinal);
+        Assert.Contains("dispatcher.Invoke(_open)", source, StringComparison.Ordinal);
+        Assert.Contains("InvokeOpen()", source, StringComparison.Ordinal);
+    }
+
     private static string NewShellWindowXamlPath =>
         Path.Combine(Boundary.RepoPaths.RepoRoot, "src", "SiNet.App.Wpf", "Shell", "NewShellWindow.xaml");
+
+    private static string NewShellMenuItemPath =>
+        Path.Combine(Boundary.RepoPaths.RepoRoot, "src", "SiNet.App.Wpf", "Shell", "NewShellMenuItem.cs");
 }

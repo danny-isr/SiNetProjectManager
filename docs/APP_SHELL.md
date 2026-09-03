@@ -223,7 +223,9 @@ Rules:
   `{Binding Description}` so hierarchical `MenuItem` peers expose the Hebrew title (e.g.
   «מיילים», «לוח משימות») instead of the CLR type name `NewShellMenuItem`. Stable
   `AutomationId` keys (e.g. `Shell.Menu.Email`) are a deliberate follow-up — not required
-  for semantic Name-based selection.
+  for semantic Name-based selection. Leaf `OpenCommand` / `Open()` marshal to the WPF
+  dispatcher so UIA `InvokePattern` (often off the UI thread) can safely `Window.Show`
+  or navigate in-shell content.
 
 Initial menu (P3 + P6 + native admin):
 

@@ -20,7 +20,9 @@ public sealed class NewShellMenuItem
         Description = description;
         IsAvailable = isAvailable;
         Children = new ObservableCollection<NewShellMenuItem>();
-        OpenCommand = new RelayCommand(_ => _open(), _ => IsAvailable);
+        // UIA InvokePattern / FlaUI may raise Command off the WPF UI thread; marshal so
+        // Window.Show and in-shell NavigateTo always run on the dispatcher.
+        OpenCommand = new RelayCommand(_ => InvokeOpen(), _ => IsAvailable);
     }
 
     private NewShellMenuItem(string title, IEnumerable<NewShellMenuItem> children, string? description)
@@ -59,5 +61,22 @@ public sealed class NewShellMenuItem
     public ICommand? OpenCommand { get; }
 
     /// <summary>Opens the migrated surface. No-op for groups.</summary>
-    public void Open() => _open?.Invoke();
+    public void Open() => InvokeOpen();
+
+    private void InvokeOpen()
+    {
+        if (_open is null)
+        {
+            return;
+        }
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            _open();
+            return;
+        }
+
+        dispatcher.Invoke(_open);
+    }
 }
