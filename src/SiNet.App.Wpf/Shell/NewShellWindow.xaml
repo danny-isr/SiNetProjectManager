@@ -70,6 +70,9 @@
                     <Setter Property="ToolTip" Value="{Binding Description}" />
                     <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
                     <Setter Property="Padding" Value="10,4" />
+                    <!-- UI Automation: expose Title (not the NewShellMenuItem type name) for semantic agents/tests -->
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    <Setter Property="AutomationProperties.HelpText" Value="{Binding Description}" />
                 </Style>
             </Menu.ItemContainerStyle>
         </Menu>

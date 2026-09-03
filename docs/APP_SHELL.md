@@ -218,6 +218,12 @@ Rules:
   `SiTextNormalFontSize`) via implicit styles in `ThemeStyles.xaml`. Local
   `ItemContainerStyle` must `BasedOn` the implicit `MenuItem` style so command bindings
   do not drop theme fonts (see `SETTINGS.md` §9).
+- **UI Automation (operators / WpfPilot):** `Menu.ItemContainerStyle` sets
+  `AutomationProperties.Name` → `{Binding Title}` and `AutomationProperties.HelpText` →
+  `{Binding Description}` so hierarchical `MenuItem` peers expose the Hebrew title (e.g.
+  «מיילים», «לוח משימות») instead of the CLR type name `NewShellMenuItem`. Stable
+  `AutomationId` keys (e.g. `Shell.Menu.Email`) are a deliberate follow-up — not required
+  for semantic Name-based selection.
 
 Initial menu (P3 + P6 + native admin):
 
