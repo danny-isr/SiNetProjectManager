@@ -117,10 +117,16 @@ internal sealed class EmailDetailSelectionCoordinator
                 return;
             }
 
-            _setSelectedAccStatusDisplay(status?.StatusDisplay
+            var display = status?.StatusDisplay
                 ?? updatedRow.AccStatusDisplay
                 ?? _getSelectedEmail()?.AccStatusDisplay
-                ?? string.Empty);
+                ?? string.Empty;
+            _setSelectedAccStatusDisplay(display);
+            // Clear the transient «בודק ACC…» status-bar text once the pipeline settles.
+            if (!string.IsNullOrWhiteSpace(display))
+            {
+                _setStatusMessage(display);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
