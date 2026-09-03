@@ -60,7 +60,7 @@ public sealed class NewShellMenuUiAutomationTests
         var source = File.ReadAllText(NewShellMenuItemPath);
 
         Assert.Contains("dispatcher.CheckAccess()", source, StringComparison.Ordinal);
-        Assert.Contains("dispatcher.Invoke(_open)", source, StringComparison.Ordinal);
+        Assert.Contains("dispatcher.BeginInvoke(_open)", source, StringComparison.Ordinal);
         Assert.Contains("InvokeOpen()", source, StringComparison.Ordinal);
     }
 

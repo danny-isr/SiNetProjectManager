@@ -77,6 +77,8 @@ public sealed class NewShellMenuItem
             return;
         }
 
-        dispatcher.Invoke(_open);
+        // BeginInvoke: sync Invoke from the UIA callback thread can fail to present
+        // owned Windows; async marshal matches mouse-click scheduling more closely.
+        _ = dispatcher.BeginInvoke(_open);
     }
 }
