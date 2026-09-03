@@ -351,7 +351,38 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
         var dialog = createDialog();
         TaskSurfaceWindowLayout.PrepareTaskSurfaceWindow(dialog);
         coordinator?.RegisterActive(dialog, kind, taskId);
-        dialog.ShowDialog();
+
+        // Task Workbench is Topmost; task dialogs are not. Lower the workbench while the modal
+        // dialog runs so ShowDialog is not blocked behind an unreachable window.
+        var workbench = FindLoadedTaskWorkbench();
+        var restoreTopmost = workbench is { Topmost: true };
+        if (restoreTopmost)
+            workbench!.Topmost = false;
+
+        try
+        {
+            dialog.ShowDialog();
+        }
+        finally
+        {
+            if (restoreTopmost && workbench is { IsLoaded: true })
+                workbench.Topmost = true;
+        }
+
         return true;
+    }
+
+    private static TaskWorkbenchView? FindLoadedTaskWorkbench()
+    {
+        if (System.Windows.Application.Current?.Windows is not { } windows)
+            return null;
+
+        foreach (Window window in windows)
+        {
+            if (window is TaskWorkbenchView { IsLoaded: true } workbench)
+                return workbench;
+        }
+
+        return null;
     }
 }

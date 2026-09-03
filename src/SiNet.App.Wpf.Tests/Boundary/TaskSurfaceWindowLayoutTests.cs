@@ -54,6 +54,8 @@ public sealed class TaskSurfaceWindowLayoutTests
         Assert.DoesNotContain("WindowStartupLocation.CenterOwner", floatingHost, StringComparison.Ordinal);
         Assert.Contains("OpenQuoteProject", launcher, StringComparison.Ordinal);
         Assert.Contains("ShowTaskDialog", launcher, StringComparison.Ordinal);
+        Assert.Contains("FindLoadedTaskWorkbench", launcher, StringComparison.Ordinal);
+        Assert.Contains("workbench!.Topmost = false", launcher, StringComparison.Ordinal);
         Assert.Contains("ITaskSurfaceWindowCoordinator", launcher, StringComparison.Ordinal);
         Assert.Contains("EmailWorkItemTaskFloatingHost", launcher, StringComparison.Ordinal);
         Assert.Contains("InspectionTaskFloatingHost", launcher, StringComparison.Ordinal);
