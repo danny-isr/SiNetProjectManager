@@ -1124,25 +1124,32 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
     {
-        UpdateActiveProjectDisplay(e.Project);
-        EmailDetail.UpdateActiveProjectDisplay(e.Project);
-        _ = SafeApplyProjectContextFromWorkbenchAsync();
-
-        if (!IsConnected)
+        // ProjectChanged may fire off the UI thread; ObservableCollection / CollectionView
+        // mutations in ApplyProjectContext must stay on the dispatcher (FollowQuote open path).
+        _ = UiThread.RunAsync(async () =>
         {
-            StatusMessage = e.Project is null
-                ? "לא נבחר פרויקט — מציג כל המיילים לאחר רענון."
-                : "הפרויקט הוחלף. התחבר ל-Google.";
-        }
-        else
-        {
-            StatusMessage = e.Project is null
-                ? "לא נבחר פרויקט — מצב כל המיילים."
-                : $"פרויקט נבחר: {e.Project.ProjectNumber} — {e.Project.ProjectName}";
-        }
+            UpdateActiveProjectDisplay(e.Project);
+            EmailDetail.UpdateActiveProjectDisplay(e.Project);
 
-        (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-        (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            if (!IsConnected)
+            {
+                StatusMessage = e.Project is null
+                    ? "לא נבחר פרויקט — מציג כל המיילים לאחר רענון."
+                    : "הפרויקט הוחלף. התחבר ל-Google.";
+            }
+            else
+            {
+                StatusMessage = e.Project is null
+                    ? "לא נבחר פרויקט — מצב כל המיילים."
+                    : $"פרויקט נבחר: {e.Project.ProjectNumber} — {e.Project.ProjectName}";
+            }
+
+            (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+
+            await SafeApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
+            return true;
+        });
     }
 
     private async Task ApplyProjectContextFromWorkbenchAsync()
