@@ -35,6 +35,7 @@ public sealed class UserManagementViewModel : ObservableObject
         MasterPlanEmployees = [];
         AvailableRoles =
         [
+            AppRole.Unauthorized,
             AppRole.Employee,
             AppRole.Management,
             AppRole.Administrator,

@@ -4,7 +4,8 @@ namespace SiNet.Infrastructure.Sql.Services.Identity;
 
 /// <summary>
 /// Process-wide authenticated user for the standalone New System host.
-/// Populated once at startup by <see cref="SqlWindowsCurrentUserAuthenticator"/>.
+/// Populated at startup by <see cref="SqlWindowsCurrentUserAuthenticator"/>
+/// (including Pending/Unauthorized sessions that open the restricted shell).
 /// </summary>
 public sealed class AuthenticatedUserSession : ICurrentUserContext, ICurrentUserProfileService
 {
@@ -12,7 +13,14 @@ public sealed class AuthenticatedUserSession : ICurrentUserContext, ICurrentUser
 
     public int? UserId => _profile?.UserId;
 
-    public bool HasAccess => _profile is { IsActive: true, Role: not AppRole.Unauthorized };
+    /// <summary>True when an SIUser row is bound (including PendingApproval).</summary>
+    public bool HasSession => _profile is not null;
+
+    /// <summary>Business access: active SIUser with Role ≥ Employee (excludes Pending/Unauthorized).</summary>
+    public bool HasAccess => _profile is { IsActive: true } profile && profile.HasBusinessAccess;
+
+    /// <summary>Active Unauthorized SIUser — restricted pending shell.</summary>
+    public bool IsPendingApproval => _profile?.IsPendingApproval == true;
 
     public void SetAuthenticated(CurrentUserProfileDto profile)
     {

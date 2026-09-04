@@ -23,6 +23,11 @@ internal sealed class SiUserEntityConfiguration : IEntityTypeConfiguration<SiUse
         entity.HasIndex(e => e.MasterPlanEmployeeId)
             .IsUnique()
             .HasFilter("[MasterPlanEmployeeId] IS NOT NULL");
+
+        // Prefer unique LoginName (operator migration). Concurrent registration also uses
+        // sp_getapplock + DbUpdateException re-read — see SqlWindowsCurrentUserAuthenticator.
+        // Do not declare HasIndex here until the operator applies SIUser_LoginName_Unique,
+        // otherwise the schema gate can fail on DEV before the migration exists.
     }
 }
 

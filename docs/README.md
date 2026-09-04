@@ -79,6 +79,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`NEW_SYSTEM_BOUNDARY.md`](./NEW_SYSTEM_BOUNDARY.md) | New System boundary |
 | [`PROCESS_BACKBONE_FOUNDATION.md`](./PROCESS_BACKBONE_FOUNDATION.md) | Process backbone |
 | [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md) | Identity & permissions target |
+| [`IDENTITY_SIUSER_GATE.md`](./IDENTITY_SIUSER_GATE.md) | SIUser authority, pending auto-registration, Google/ACC coherence |
 | [`SETTINGS.md`](./SETTINGS.md) | Settings (Stage 5) |
 | [`TEST_STRATEGY.md`](./TEST_STRATEGY.md) | Test strategy |
 | [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md) | AI-assisted development guide |

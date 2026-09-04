@@ -63,7 +63,15 @@ public static class GoogleServiceCollectionExtensions
         // Native Gmail send over the same provider singleton. Requires the GmailSend scope; until a
         // user re-consents, SendAsync reports RequiresConsent rather than throwing.
         services.AddSingleton<IEmailSender, GmailEmailSender>();
-        services.AddSingleton<IEmailGmailModifyService, GmailEmailModifyService>();
+        services.AddSingleton<GmailEmailModifyService>();
+        services.AddSingleton<IEmailGmailModifyService>(sp =>
+        {
+            var inner = sp.GetRequiredService<GmailEmailModifyService>();
+            var guard = sp.GetService<SiNet.Application.Identity.IIdentityOperationGuard>();
+            return guard is null
+                ? inner
+                : new IdentityGuardedGmailModifyService(inner, guard);
+        });
         services.AddSingleton<IGmailLabelChangeJournal, LocalGmailLabelChangeJournal>();
 
         // ProjectWork Google Drive: Shared Drive primitives + IFileStore over the shared session.

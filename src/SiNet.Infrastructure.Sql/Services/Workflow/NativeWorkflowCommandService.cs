@@ -1,4 +1,5 @@
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
+using SiNet.Application.Identity;
 using SiNet.Application.Workflow;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -16,19 +17,24 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
     private readonly WorkflowTaskOrchestrator _orchestrator;
     private readonly WorkflowEngine _engine;
     private readonly IPilotStartGate _pilotStartGate;
+    private readonly IIdentityOperationGuard? _identityGuard;
 
     public NativeWorkflowCommandService(
         WorkflowTaskOrchestrator orchestrator,
         WorkflowEngine engine,
-        IPilotStartGate pilotStartGate)
+        IPilotStartGate pilotStartGate,
+        IIdentityOperationGuard? identityGuard = null)
     {
         _orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _pilotStartGate = pilotStartGate ?? throw new ArgumentNullException(nameof(pilotStartGate));
+        _identityGuard = identityGuard;
     }
 
     public async ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
     {
+        await EnsureIdentityAsync(ct).ConfigureAwait(false);
+
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step("Engine.Command.Start",
             $"def={command.DefinitionId} project={command.ProjectId} trigger={command.TriggerType} entity={command.TriggerEntityId} user={command.UserId} bound={command.IsProjectBound} initialStage={command.InitialStageCode ?? "(default)"} jobType={command.JobTypeId?.ToString() ?? "(none)"}");
@@ -50,13 +56,26 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
             command.JobTypeId).ConfigureAwait(false);
     }
 
-    public ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct) =>
-        _orchestrator.AdvanceWithTasksAsync(
+    public async ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct)
+    {
+        await EnsureIdentityAsync(ct).ConfigureAwait(false);
+        return await _orchestrator.AdvanceWithTasksAsync(
             command.InstanceId,
             command.TargetStageId,
             command.UserId,
             command.Notes,
-            ct);
+            ct).ConfigureAwait(false);
+    }
+
+    private async Task EnsureIdentityAsync(CancellationToken ct)
+    {
+        if (_identityGuard is null)
+        {
+            return;
+        }
+
+        await _identityGuard.EnsureAllowedAsync(IdentityOperationKind.WorkflowMutate, ct).ConfigureAwait(false);
+    }
 
     public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceAsync(TaskClosedCommand command, CancellationToken ct)
     {

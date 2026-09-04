@@ -154,7 +154,8 @@ public partial class App : System.Windows.Application
             splash.SetStatus("מאמת משתמש...");
             StandaloneHostLoggingBootstrap.Info("[STARTUP] Authorizing Windows user...");
             var authenticator = _services.GetRequiredService<SqlWindowsCurrentUserAuthenticator>();
-            if (!await authenticator.TryAuthenticateAsync(_shutdownCts.Token).ConfigureAwait(true))
+            var authResult = await authenticator.AuthenticateAsync(_shutdownCts.Token).ConfigureAwait(true);
+            if (authResult.Status == WindowsUserAuthStatus.Blocked)
             {
                 MessageBox.Show(
                     "המשתמש הנוכחי אינו מורשה להשתמש במערכת.\nנא לפנות למנהל המערכת.",
@@ -163,6 +164,13 @@ public partial class App : System.Windows.Application
                     MessageBoxImage.Error);
                 Shutdown();
                 return;
+            }
+
+            // PendingApproval and Authorized both open the shell (restricted vs normal).
+            var coherence = _services.GetService<IIdentityCoherenceService>();
+            if (coherence is not null)
+            {
+                await coherence.EvaluateAsync(cancellationToken: _shutdownCts.Token).ConfigureAwait(true);
             }
 
             splash.SetStatus("מחיל הגדרות...");

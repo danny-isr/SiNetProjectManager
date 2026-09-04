@@ -78,6 +78,9 @@
                             </MultiDataTrigger.Conditions>
                             <Setter Property="Background" Value="#F1F6FF"/>
                         </MultiDataTrigger>
+                        <DataTrigger Binding="{Binding IsPendingApproval}" Value="True">
+                            <Setter Property="Background" Value="#FFF8E1"/>
+                        </DataTrigger>
                         <DataTrigger Binding="{Binding IsActive}" Value="False">
                             <Setter Property="Background" Value="#FFF1F1"/>
                         </DataTrigger>

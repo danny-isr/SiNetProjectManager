@@ -102,6 +102,7 @@ public sealed class UserEditRow : ObservableObject
             {
                 OnPropertyChanged(nameof(RoleDisplay));
                 OnPropertyChanged(nameof(IsAdministrator));
+                OnPropertyChanged(nameof(IsPendingApproval));
                 NotifyDirtyChanged();
             }
         }
@@ -111,6 +112,9 @@ public sealed class UserEditRow : ObservableObject
 
     public bool IsAdministrator => Role == AppRole.Administrator;
 
+    /// <summary>Active Unauthorized — pending administrator approval (highlight in grid).</summary>
+    public bool IsPendingApproval => IsActive && Role == AppRole.Unauthorized;
+
     public bool IsActive
     {
         get => _isActive;
@@ -118,6 +122,7 @@ public sealed class UserEditRow : ObservableObject
         {
             if (SetField(ref _isActive, value))
             {
+                OnPropertyChanged(nameof(IsPendingApproval));
                 NotifyDirtyChanged();
             }
         }

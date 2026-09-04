@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Domain.Files;
 
@@ -24,19 +25,22 @@ public sealed class GoogleDriveFileStore : IFileStore
     private readonly GmailOptions _options;
     private readonly IAppLogger _logger;
     private readonly IProjectWorkScanExclusionPolicy _scanExclusions;
+    private readonly IIdentityOperationGuard? _identityGuard;
 
     public GoogleDriveFileStore(
         IGoogleDriveFileService drive,
         IProjectDriveFolderResolver folderResolver,
         GmailOptions options,
         IAppLogger logger,
-        IProjectWorkScanExclusionPolicy? scanExclusions = null)
+        IProjectWorkScanExclusionPolicy? scanExclusions = null,
+        IIdentityOperationGuard? identityGuard = null)
     {
         _drive = drive ?? throw new ArgumentNullException(nameof(drive));
         _folderResolver = folderResolver ?? throw new ArgumentNullException(nameof(folderResolver));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _scanExclusions = scanExclusions ?? new SettingsBackedProjectWorkScanExclusionPolicy();
+        _identityGuard = identityGuard;
     }
 
     /// <inheritdoc />
@@ -166,6 +170,13 @@ public sealed class GoogleDriveFileStore : IFileStore
 
         if (!File.Exists(localSourcePath))
             throw new FileNotFoundException("Source file not found for Drive upload.", localSourcePath);
+
+        if (_identityGuard is not null)
+        {
+            await _identityGuard
+                .EnsureAllowedAsync(IdentityOperationKind.GoogleDriveWrite, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         EnsureDriveConfigured();
 

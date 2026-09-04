@@ -77,25 +77,41 @@
             </Menu.ItemContainerStyle>
         </Menu>
 
-        <!-- Footer health -->
+        <!-- Footer health + identity -->
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource SiPrimaryBrush}" Padding="12,4">
-            <Button Command="{Binding OpenSystemStatusCommand}"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    Padding="0"
-                    Cursor="Hand"
-                    HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Right"
-                    ToolTip="מצב מערכת — לחץ לפרטים">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="10" Height="10" Margin="0,0,8,0"
-                             Fill="{Binding OverallHealthBrush}" />
-                    <TextBlock Text="{Binding StatusText}"
-                               Style="{DynamicResource SiTextTinyStyle}"
-                               Foreground="White" Opacity="0.9"
-                               VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           x:Name="IdentityStatusText"
+                           Text="{Binding IdentityStatusText}"
+                           ToolTip="{Binding IdentityStatusToolTip}"
+                           Style="{DynamicResource SiTextTinyStyle}"
+                           Foreground="White" Opacity="0.95"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="Shell.IdentityStatus"/>
+                <Button Grid.Column="1"
+                        Command="{Binding OpenSystemStatusCommand}"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="8,0,0,0"
+                        Cursor="Hand"
+                        HorizontalAlignment="Right"
+                        HorizontalContentAlignment="Right"
+                        ToolTip="מצב מערכת — לחץ לפרטים">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="10" Height="10" Margin="0,0,8,0"
+                                 Fill="{Binding OverallHealthBrush}" />
+                        <TextBlock Text="{Binding StatusText}"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   Foreground="White" Opacity="0.9"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </Grid>
         </Border>
 
         <!-- Main content host (email and other in-shell surfaces) -->

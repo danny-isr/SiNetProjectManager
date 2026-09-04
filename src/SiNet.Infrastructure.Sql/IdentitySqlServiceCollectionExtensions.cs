@@ -22,6 +22,12 @@ public static class IdentitySqlServiceCollectionExtensions
         services.TryAddSingleton<ICurrentUserContext>(sp => sp.GetRequiredService<AuthenticatedUserSession>());
         services.TryAddSingleton<ICurrentUserProfileService>(sp => sp.GetRequiredService<AuthenticatedUserSession>());
         services.TryAddTransient<SqlWindowsCurrentUserAuthenticator>();
+        services.TryAddTransient<IWindowsCurrentUserAuthenticator>(sp =>
+            sp.GetRequiredService<SqlWindowsCurrentUserAuthenticator>());
+        services.TryAddTransient<ICurrentUserSessionRefreshService, SqlCurrentUserSessionRefreshService>();
+        services.TryAddSingleton<IIdentityCoherenceService, IdentityCoherenceService>();
+        services.TryAddSingleton<IIdentityOperationGuard, IdentityOperationGuard>();
+        services.TryAddSingleton<IAccHumanMembershipProbe, NullAccHumanMembershipProbe>();
         services.TryAddTransient<IDatabaseSchemaGate, SqlDatabaseSchemaGate>();
         services.TryAddTransient<IDebugAuthorizationRoleOverrideService, SqlDebugAuthorizationRoleOverrideService>();
 

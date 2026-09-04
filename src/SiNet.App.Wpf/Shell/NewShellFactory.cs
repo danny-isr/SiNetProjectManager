@@ -65,6 +65,16 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     {
         ThemeResourceLoader.EnsureApplicationResourcesMerged();
 
+        var profileService = _services.GetService<ICurrentUserProfileService>();
+        var profile = profileService is null
+            ? null
+            : await profileService.GetCurrentUserAsync(cancellationToken).ConfigureAwait(true);
+
+        if (profile?.IsPendingApproval == true)
+        {
+            return await CreatePendingShellAsync(profile, cancellationToken).ConfigureAwait(true);
+        }
+
         var currentUserDisplay = await ResolveCurrentUserDisplayAsync(cancellationToken).ConfigureAwait(true);
         var currentProject = _services.GetService<ICurrentProjectContext>();
 
@@ -85,13 +95,15 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             ? OpenNativeSystemStatus
             : null;
 
+        var identity = _services.GetService<IIdentityCoherenceService>();
         var viewModel = new NewShellViewModel(
             menu,
             currentUserDisplay,
             currentProject,
             openNewProject: openNewProject,
             runtimeStatus: runtimeStatus,
-            openSystemStatus: openSystemStatus);
+            openSystemStatus: openSystemStatus,
+            identityCoherence: identity);
 
         // Attach shell content navigation so hosted surfaces (email) can NavigateTo the content host.
         if (_services.GetService<IShellContentHost>() is { } contentHost)
@@ -950,6 +962,42 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
         window.ShowDialog();
+    }
+
+    private async Task<Window> CreatePendingShellAsync(
+        CurrentUserProfileDto profile,
+        CancellationToken cancellationToken)
+    {
+        var coherence = _services.GetRequiredService<IIdentityCoherenceService>();
+        await coherence.EvaluateAsync(cancellationToken: cancellationToken).ConfigureAwait(true);
+
+        var pendingVm = new PendingIdentityViewModel(
+            profile,
+            coherence,
+            onBecameAuthorized: () =>
+            {
+                // Soft transition: ask the user to restart into the full shell after approval.
+                MessageBox.Show(
+                    "ההרשאות עודכנו. יש להפעיל מחדש את האפליקציה כדי לפתוח את המערכת המלאה.",
+                    "הרשאות עודכנו",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            });
+
+        var identity = coherence;
+        var viewModel = new NewShellViewModel(
+            menuItems: Array.Empty<NewShellMenuItem>(),
+            currentUserDisplay: CurrentUserProfileDisplay.Format(profile),
+            currentProjectContext: null,
+            openNewProject: null,
+            runtimeStatus: null,
+            openSystemStatus: null,
+            identityCoherence: identity);
+
+        viewModel.CurrentContent = new PendingIdentityView(pendingVm);
+        viewModel.ApplyIdentitySnapshot(coherence.Current);
+
+        return new NewShellWindow(viewModel, emailSurfaceHost: null);
     }
 
     private async Task<string?> ResolveCurrentUserDisplayAsync(CancellationToken cancellationToken)

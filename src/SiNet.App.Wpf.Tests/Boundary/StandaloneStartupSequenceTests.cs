@@ -17,13 +17,14 @@ public sealed class StandaloneStartupSequenceTests
         var vault = IndexOf(source, "EnsureVaultDatabaseReadyAsync");
         var compose = IndexOf(source, "AddSiNetStandaloneHost");
         var schema = IndexOf(source, "ValidateSchemaAsync");
-        var auth = IndexOf(source, "TryAuthenticateAsync");
+        var auth = IndexOf(source, "AuthenticateAsync");
         var shell = IndexOf(source, "CreateShellAsync");
 
         Assert.True(vault < compose, "Vault gate must precede AddSiNetStandaloneHost");
         Assert.True(compose < schema, "Composition must precede schema gate");
         Assert.True(schema < auth, "Schema gate must precede Windows-user auth");
         Assert.True(auth < shell, "Auth must precede CreateShellAsync");
+        Assert.Contains("WindowsUserAuthStatus.Blocked", source, StringComparison.Ordinal);
     }
 
     [Fact]

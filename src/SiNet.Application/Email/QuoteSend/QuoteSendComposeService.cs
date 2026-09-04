@@ -1,5 +1,6 @@
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Common;
+using SiNet.Application.Identity;
 
 namespace SiNet.Application.Email.QuoteSend;
 
@@ -15,6 +16,7 @@ public sealed class QuoteSendComposeService : IQuoteSendComposeService
     private readonly IProposalSourceEmailQuery _sourceQuery;
     private readonly IQuoteSendProofStore _proofStore;
     private readonly IConnectorAuthService _auth;
+    private readonly IIdentityOperationGuard? _identityGuard;
 
     public QuoteSendComposeService(
         IEmailGateway gateway,
@@ -22,7 +24,8 @@ public sealed class QuoteSendComposeService : IQuoteSendComposeService
         IEmailInboxQueryService inboxQuery,
         IProposalSourceEmailQuery sourceQuery,
         IQuoteSendProofStore proofStore,
-        IConnectorAuthService auth)
+        IConnectorAuthService auth,
+        IIdentityOperationGuard? identityGuard = null)
     {
         _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
         _sender = sender ?? throw new ArgumentNullException(nameof(sender));
@@ -30,6 +33,7 @@ public sealed class QuoteSendComposeService : IQuoteSendComposeService
         _sourceQuery = sourceQuery ?? throw new ArgumentNullException(nameof(sourceQuery));
         _proofStore = proofStore ?? throw new ArgumentNullException(nameof(proofStore));
         _auth = auth ?? throw new ArgumentNullException(nameof(auth));
+        _identityGuard = identityGuard;
     }
 
     public Task<ProposalSourceEmailRef?> GetProposalSourceEmailAsync(
@@ -129,6 +133,17 @@ public sealed class QuoteSendComposeService : IQuoteSendComposeService
             return EmailSendResult.Fail("Acting user id is required.");
         if (draft.To.Count == 0)
             return EmailSendResult.Fail("At least one To recipient is required.");
+
+        if (_identityGuard is not null)
+        {
+            var decision = await _identityGuard
+                .EvaluateAsync(IdentityOperationKind.GmailWrite, cancellationToken)
+                .ConfigureAwait(false);
+            if (!decision.Allowed)
+            {
+                return EmailSendResult.Fail(decision.Reason ?? "Identity operation denied.");
+            }
+        }
 
         var request = new EmailSendRequest
         {
