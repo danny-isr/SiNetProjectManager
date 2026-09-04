@@ -109,11 +109,15 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
                     _services.GetService<IEmailInboxQueryService>()));
         }
 
-        if (string.Equals(context.TaskTypeCode, "OpenQuoteProject", StringComparison.OrdinalIgnoreCase))
+        // OpenReviewProject reuses the same ProjectSetup-from-email dialog + decision service
+        // (completion event Review.ProjectCreated). Without this branch it falls through to the
+        // generic email surface and never shows the create-project form.
+        if (string.Equals(context.TaskTypeCode, "OpenQuoteProject", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(context.TaskTypeCode, "OpenReviewProject", StringComparison.OrdinalIgnoreCase))
         {
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step("Launcher.Open",
-                $"task={context.TaskId} → routing to OpenQuoteProject combined dialog (email={context.PrimaryWorkTargetEntityId})");
+                $"task={context.TaskId} type={context.TaskTypeCode} → routing to OpenQuoteProject combined dialog (email={context.PrimaryWorkTargetEntityId})");
 
             if (_services.GetService<IOpenQuoteProjectDecisionService>() is not { } openQuoteDecisionService)
             {
