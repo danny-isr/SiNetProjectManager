@@ -554,12 +554,15 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         finally
         {
             IsBusy = false;
-            if (_reloadPending && !_disposed)
-            {
-                _reloadPending = false;
-                WorkflowDebugTrace.Step("Tasks.Workbench", "draining reloadPending → LoadAsync");
-                _ = LoadAsync();
-            }
+        }
+
+        // Drain coalesced reloads after releasing IsBusy so LoadAsync can actually run.
+        // Await (do not fire-and-forget) so AsyncRelayCommand._isExecuting stays aligned with work.
+        if (_reloadPending && !_disposed)
+        {
+            _reloadPending = false;
+            WorkflowDebugTrace.Step("Tasks.Workbench", "draining reloadPending → LoadAsync");
+            await LoadAsync(ct).ConfigureAwait(true);
         }
     }
 
@@ -671,6 +674,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             return;
 
         var taskId = SelectedTask.TaskId;
+        var shouldReload = false;
         IsBusy = true;
         try
         {
@@ -688,16 +692,20 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
                         MessageBoxImage.Warning);
 
                     if (offer == MessageBoxResult.Yes)
+                    {
                         await RunDeactivateAsync(taskId, actorId).ConfigureAwait(true);
-
-                    return;
+                        shouldReload = true;
+                    }
                 }
-
-                MessageBox.Show(result.Message, "מחיקת משימה", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                else
+                {
+                    MessageBox.Show(result.Message, "מחיקת משימה", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
             }
-
-            await LoadAsync().ConfigureAwait(true);
+            else
+            {
+                shouldReload = true;
+            }
         }
         catch (Exception ex)
         {
@@ -708,6 +716,9 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         {
             IsBusy = false;
         }
+
+        if (shouldReload)
+            await LoadAsync().ConfigureAwait(true);
     }
 
     private async Task DeactivateSelectedAsync()
@@ -732,11 +743,14 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         {
             Debug.WriteLine(ex);
             MessageBox.Show(ex.Message, "השבתת משימה", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
         }
         finally
         {
             IsBusy = false;
         }
+
+        await LoadAsync().ConfigureAwait(true);
     }
 
     private async Task RunDeactivateAsync(int taskId, int actorId)
@@ -749,7 +763,6 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         }
 
         StatusMessage = $"המשימה #{taskId} הושבתה וה-Workflow (אם קיים) הושהה.";
-        await LoadAsync().ConfigureAwait(true);
     }
 
     private async Task ReactivateSelectedAsync()
@@ -758,6 +771,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             return;
 
         var taskId = SelectedTask.TaskId;
+        var succeeded = false;
         IsBusy = true;
         try
         {
@@ -769,18 +783,24 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             }
 
             StatusMessage = $"המשימה #{taskId} הופעלה מחדש וה-Workflow (אם היה מושהה) חודש.";
-            await LoadAsync().ConfigureAwait(true);
-            RestoreSelection(taskId);
+            succeeded = true;
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
             MessageBox.Show(ex.Message, "הפעלת משימה מחדש", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
         }
         finally
         {
             IsBusy = false;
         }
+
+        if (!succeeded)
+            return;
+
+        await LoadAsync().ConfigureAwait(true);
+        RestoreSelection(taskId);
     }
 
     private async Task RepairQueueAsync()
@@ -803,17 +823,19 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             StatusMessage =
                 $"תיקון תור: {result.BucketsProcessed} תורים, {result.TasksAssignedPriority} null, " +
                 $"{result.DuplicatePrioritiesFixed} כפילויות, {result.GapsClosed} חורים.";
-            await LoadAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
             StatusMessage = $"שגיאה בתיקון תור: {ex.Message}";
+            return;
         }
         finally
         {
             IsBusy = false;
         }
+
+        await LoadAsync().ConfigureAwait(true);
     }
 
     private async Task<TaskQueueRepairResult> RepairUserBucketsAsync(int userId)
@@ -886,6 +908,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             return;
 
         var taskId = SelectedTask.TaskId;
+        var succeeded = false;
         IsBusy = true;
         try
         {
@@ -897,18 +920,24 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             }
 
             StatusMessage = $"הועבר למעלה: {FormatQueueMoveResult(result)}";
-            await LoadAsync().ConfigureAwait(true);
-            RestoreSelection(taskId);
+            succeeded = true;
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
             StatusMessage = $"שגיאה בהעברה למעלה: {ex.Message}";
+            return;
         }
         finally
         {
             IsBusy = false;
         }
+
+        if (!succeeded)
+            return;
+
+        await LoadAsync().ConfigureAwait(true);
+        RestoreSelection(taskId);
     }
 
     private async Task MoveSelectedDownAsync()
@@ -917,6 +946,7 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             return;
 
         var taskId = SelectedTask.TaskId;
+        var succeeded = false;
         IsBusy = true;
         try
         {
@@ -928,18 +958,24 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
             }
 
             StatusMessage = $"הועבר למטה: {FormatQueueMoveResult(result)}";
-            await LoadAsync().ConfigureAwait(true);
-            RestoreSelection(taskId);
+            succeeded = true;
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
             StatusMessage = $"שגיאה בהעברה למטה: {ex.Message}";
+            return;
         }
         finally
         {
             IsBusy = false;
         }
+
+        if (!succeeded)
+            return;
+
+        await LoadAsync().ConfigureAwait(true);
+        RestoreSelection(taskId);
     }
 
     private static string FormatQueueMoveResult(TaskQueueOperationResult result)
@@ -1011,30 +1047,34 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
 
         // Capture before LoadAsync — reload clears SelectedTask.
         var taskId = SelectedTask.TaskId;
+        var opened = false;
 
+        // Hold IsBusy only around the open call — not around LoadAsync.
+        // LoadAsync early-returns when IsBusy is already true (coalesce), which left the board stale
+        // and could strand AsyncRelayCommand._isExecuting / toolbar enablement during long modals.
         IsBusy = true;
         try
         {
-            var opened = await _workSurfaceLauncher
+            opened = await _workSurfaceLauncher
                 .TryOpenFromTaskAsync(taskId, ct)
                 .ConfigureAwait(true);
-
-            // Surfaces (e.g. OpenQuoteProject) may close/advance the workflow — reload the board.
-            await LoadAsync(ct).ConfigureAwait(true);
-
-            StatusMessage = opened
-                ? $"נפתחה משימה #{taskId}."
-                : $"לא ניתן לפתוח את משימה #{taskId}. אין fallback.";
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
             StatusMessage = $"שגיאה בפתיחת משימה: {ex.Message}";
+            return;
         }
         finally
         {
             IsBusy = false;
         }
+
+        // Surfaces (e.g. OpenQuoteProject) may close/advance the workflow — reload the board.
+        await LoadAsync(ct).ConfigureAwait(true);
+        StatusMessage = opened
+            ? $"נפתחה משימה #{taskId}."
+            : $"לא ניתן לפתוח את משימה #{taskId}. אין fallback.";
     }
 
     internal async Task ResolveSelectedAsync(CancellationToken ct = default)
