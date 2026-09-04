@@ -10,6 +10,8 @@ public enum IdentityCoherenceStatus
     NotConnected = 4,
     Mismatch = 5,
     Blocked = 6,
+    /// <summary>Authorized + Google match, but ACC membership for the active project was not verified.</summary>
+    AccUnverified = 7,
 }
 
 /// <summary>Auth mode reported for ACC Data Management (not the human member).</summary>
@@ -41,7 +43,11 @@ public sealed record IdentityCoherenceSnapshot(
     bool? AccMembershipMatch,
     string? AutodeskThreeLeggedEmail,
     bool? AutodeskThreeLeggedMatch,
-    string? FailureReason)
+    string? FailureReason,
+    string? AccAccessLevel = null,
+    int? SiProjectId = null,
+    string? AccProjectId = null,
+    bool AccRelevant = false)
 {
     public static IdentityCoherenceSnapshot Checking() =>
         new(

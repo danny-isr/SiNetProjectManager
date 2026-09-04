@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Domain.Files;
 using SiNet.Infrastructure.Sql.Services.ProjectWork;
@@ -29,6 +30,7 @@ public sealed class AccFileStore : IFileStore
     private readonly IAccWritePolicy _writePolicy;
     private readonly IAccFileUploadService _uploadService;
     private readonly IAccItemService _itemService;
+    private readonly IIdentityOperationGuard? _identityGuard;
 
     public AccFileStore(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
@@ -37,7 +39,8 @@ public sealed class AccFileStore : IFileStore
         IAccFileDownloadService downloadService,
         IAccWritePolicy writePolicy,
         IAccFileUploadService uploadService,
-        IAccItemService itemService)
+        IAccItemService itemService,
+        IIdentityOperationGuard? identityGuard = null)
     {
         ArgumentNullException.ThrowIfNull(dbFactory);
         ArgumentNullException.ThrowIfNull(folderPathService);
@@ -53,6 +56,7 @@ public sealed class AccFileStore : IFileStore
         _writePolicy = writePolicy;
         _uploadService = uploadService;
         _itemService = itemService;
+        _identityGuard = identityGuard;
     }
 
     /// <inheritdoc />
@@ -176,6 +180,16 @@ public sealed class AccFileStore : IFileStore
         if (!TryParseHandle(folderHandle, out var accProjectId, out var accFolderId))
             throw new InvalidOperationException($"Invalid ACC folder handle: '{folderHandle}'.");
 
+        if (_identityGuard is not null)
+        {
+            await _identityGuard
+                .EnsureAllowedAsync(
+                    IdentityOperationKind.AccFileWrite,
+                    IdentityOperationContext.ForAccProject(accProjectId),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         var request = new AccFileUploadRequest(accProjectId, localSourcePath, targetFileName)
         {
             TargetFolderId = accFolderId,
@@ -202,6 +216,16 @@ public sealed class AccFileStore : IFileStore
 
         if (string.IsNullOrEmpty(file.AccProjectId))
             throw new InvalidOperationException("ACC delete requires the owning ACC project id on the scanned file.");
+
+        if (_identityGuard is not null)
+        {
+            await _identityGuard
+                .EnsureAllowedAsync(
+                    IdentityOperationKind.AccFileWrite,
+                    IdentityOperationContext.ForAccProject(file.AccProjectId),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         await _itemService.HideAsync(file.AccProjectId, file.NativeId, cancellationToken).ConfigureAwait(false);
     }

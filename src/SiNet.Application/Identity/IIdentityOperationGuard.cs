@@ -10,11 +10,15 @@ public interface IIdentityOperationGuard
     /// Ensures the current identity may perform <paramref name="kind"/>.
     /// Throws <see cref="IdentityOperationDeniedException"/> when denied.
     /// </summary>
-    Task EnsureAllowedAsync(IdentityOperationKind kind, CancellationToken cancellationToken = default);
+    Task EnsureAllowedAsync(
+        IdentityOperationKind kind,
+        IdentityOperationContext? context = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Non-throwing check; never performs external writes.</summary>
     Task<IdentityGuardDecision> EvaluateAsync(
         IdentityOperationKind kind,
+        IdentityOperationContext? context = null,
         CancellationToken cancellationToken = default);
 }
 

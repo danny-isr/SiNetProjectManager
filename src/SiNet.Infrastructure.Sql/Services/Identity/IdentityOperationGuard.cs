@@ -9,9 +9,12 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
         coherence ?? throw new ArgumentNullException(nameof(coherence));
 
     /// <inheritdoc />
-    public async Task EnsureAllowedAsync(IdentityOperationKind kind, CancellationToken cancellationToken = default)
+    public async Task EnsureAllowedAsync(
+        IdentityOperationKind kind,
+        IdentityOperationContext? context = null,
+        CancellationToken cancellationToken = default)
     {
-        var decision = await EvaluateAsync(kind, cancellationToken).ConfigureAwait(false);
+        var decision = await EvaluateAsync(kind, context, cancellationToken).ConfigureAwait(false);
         if (!decision.Allowed)
         {
             throw new IdentityOperationDeniedException(
@@ -23,10 +26,12 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
     /// <inheritdoc />
     public async Task<IdentityGuardDecision> EvaluateAsync(
         IdentityOperationKind kind,
+        IdentityOperationContext? context = null,
         CancellationToken cancellationToken = default)
     {
-        // Writes must never proceed on a known mismatch — re-evaluate before side effects.
-        var probeAcc = kind is IdentityOperationKind.AccProjectMembershipWrite
+        context ??= IdentityOperationContext.Empty;
+
+        var needsAcc = kind is IdentityOperationKind.AccProjectMembershipWrite
             or IdentityOperationKind.AccFileWrite
             or IdentityOperationKind.CrossSystemWorkflow;
 
@@ -36,7 +41,14 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
                         or IdentityOperationKind.GoogleDriveWrite
                         or IdentityOperationKind.GoogleSheetsWrite
                         or IdentityOperationKind.CrossSystemWorkflow,
-                    ProbeAccMembership: probeAcc),
+                    ProbeAccMembership: needsAcc,
+                    SiProjectId: context.SiProjectId,
+                    AccProjectId: context.AccProjectId,
+                    AutodeskThreeLeggedEmail: context.AutodeskThreeLeggedEmail,
+                    AllowAccMembershipReconcile: needsAcc,
+                    HasActiveProject: needsAcc
+                        || context.SiProjectId is > 0
+                        || !string.IsNullOrWhiteSpace(context.AccProjectId)),
                 cancellationToken)
             .ConfigureAwait(false);
 
@@ -65,7 +77,7 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
 
             IdentityOperationKind.AccProjectMembershipWrite
                 or IdentityOperationKind.AccFileWrite
-                => RequireAccMembershipWhenProbed(snapshot),
+                => RequireAccMembershipStrict(snapshot, context),
 
             IdentityOperationKind.AutodeskThreeLeggedWrite
                 => RequireThreeLeggedMatch(snapshot),
@@ -76,7 +88,7 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
                 => RequireAuthorized(snapshot),
 
             IdentityOperationKind.CrossSystemWorkflow
-                => RequireGoogleAndAcc(snapshot),
+                => RequireGoogleAndAcc(snapshot, context),
 
             _ => Deny(snapshot, $"Unknown identity operation kind '{kind}'."),
         };
@@ -91,7 +103,6 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
             return Deny(snapshot, snapshot.FailureReason ?? "User is not authorized for business operations.");
         }
 
-        // Workflow/project mutate require authorized SIUser; Google may be NotConnected for non-connector ops.
         if (snapshot.SiUserId is null or <= 0)
         {
             return Deny(snapshot, "No SIUser session.");
@@ -115,7 +126,13 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
         return Allow(snapshot);
     }
 
-    private static IdentityGuardDecision RequireAccMembershipWhenProbed(IdentityCoherenceSnapshot snapshot)
+    /// <summary>
+    /// Project-specific ACC business writes: AccMembershipMatch must be true.
+    /// null / unavailable / no project context → deny.
+    /// </summary>
+    private static IdentityGuardDecision RequireAccMembershipStrict(
+        IdentityCoherenceSnapshot snapshot,
+        IdentityOperationContext context)
     {
         var auth = RequireAuthorized(snapshot);
         if (!auth.Allowed)
@@ -123,14 +140,23 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
             return auth;
         }
 
+        if (context.SiProjectId is null or <= 0 && string.IsNullOrWhiteSpace(context.AccProjectId))
+        {
+            return Deny(snapshot, "ACC write requires SiProjectId or AccProjectId context.");
+        }
+
+        if (snapshot.AccMembershipMatch == true)
+        {
+            return Allow(snapshot);
+        }
+
         if (snapshot.AccMembershipMatch == false)
         {
             return Deny(snapshot, "ACC project membership does not include SIUser.Email.");
         }
 
-        // When membership was not probed (null), still allow 2-legged file plumbing only if
-        // SIUser is authorized + Email populated — human ACC mismatch is fail-closed when probed.
-        return Allow(snapshot);
+        return Deny(snapshot, snapshot.FailureReason
+            ?? "ACC membership could not be verified — operation denied (fail-closed).");
     }
 
     private static IdentityGuardDecision RequireThreeLeggedMatch(IdentityCoherenceSnapshot snapshot)
@@ -154,7 +180,9 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
         return Allow(snapshot);
     }
 
-    private static IdentityGuardDecision RequireGoogleAndAcc(IdentityCoherenceSnapshot snapshot)
+    private static IdentityGuardDecision RequireGoogleAndAcc(
+        IdentityCoherenceSnapshot snapshot,
+        IdentityOperationContext context)
     {
         var google = RequireGoogleMatch(snapshot);
         if (!google.Allowed)
@@ -162,7 +190,7 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
             return google;
         }
 
-        return RequireAccMembershipWhenProbed(snapshot);
+        return RequireAccMembershipStrict(snapshot, context);
     }
 
     private static IdentityGuardDecision Allow(IdentityCoherenceSnapshot snapshot) =>

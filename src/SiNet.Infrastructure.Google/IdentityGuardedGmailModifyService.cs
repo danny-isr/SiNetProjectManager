@@ -117,5 +117,5 @@ public sealed class IdentityGuardedGmailModifyService(
         => _inner.ListMessageIdsByLabelAsync(labelId, cancellationToken);
 
     private Task EnsureGmailWriteAsync(CancellationToken cancellationToken)
-        => _identityGuard.EnsureAllowedAsync(IdentityOperationKind.GmailWrite, cancellationToken);
+        => _identityGuard.EnsureAllowedAsync(IdentityOperationKind.GmailWrite, context: null, cancellationToken);
 }

@@ -153,6 +153,37 @@ public sealed class RemoteAccProjectProvisioningService : IAccProjectProvisionin
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<AccProjectMemberInfo>> ListProjectMembersAsync(
+        string accProjectId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(accProjectId))
+            throw new ArgumentException("accProjectId is required.", nameof(accProjectId));
+
+        const string operation = "ListProjectMembersAsync";
+        var relativeUrl = $"v1/acc/projects/{Uri.EscapeDataString(accProjectId.Trim())}/members";
+        LogRequestStart(operation, "GET", relativeUrl);
+
+        try
+        {
+            using var resp = await _http.GetAsync(relativeUrl, cancellationToken);
+            await EnsureSuccessAsync(resp, operation, cancellationToken);
+            LogRequestSuccess(operation, (int)resp.StatusCode);
+            var list = await resp.Content.ReadFromJsonAsync<List<AccProjectMemberDto>>(cancellationToken: cancellationToken)
+                ?? new List<AccProjectMemberDto>();
+            return list
+                .Where(m => !string.IsNullOrWhiteSpace(m.Email))
+                .Select(m => new AccProjectMemberInfo(m.Email.Trim(), m.Name, m.AccessLevel, m.Status))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is not HttpRequestException)
+        {
+            LogRequestException(operation, ex, cancellationToken);
+            throw;
+        }
+    }
+
+    /// <inheritdoc/>
     /// <remarks>
     /// Diagnostic-only probes are not exposed over HTTP. They run against a freshly
     /// created throwaway ACC project and were used to validate the template-permissions

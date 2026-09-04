@@ -245,18 +245,29 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnCurrentProjectChanged(object? sender, ProjectChangedEventArgs e)
     {
+        void Apply()
+        {
+            ApplyProject(e.Project);
+            if (_identityCoherence is null)
+            {
+                return;
+            }
+
+            var projectId = e.Project?.ProjectId;
+            _ = _identityCoherence.EvaluateAsync(new IdentityCoherenceEvaluateOptions(
+                DisconnectGoogleOnMismatch: true,
+                ProbeAccMembership: projectId is > 0,
+                SiProjectId: projectId is > 0 ? projectId : null,
+                HasActiveProject: projectId is > 0));
+        }
+
         if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
         {
-            dispatcher.BeginInvoke(() =>
-            {
-                ApplyProject(e.Project);
-                _ = _identityCoherence?.EvaluateAsync();
-            }, DispatcherPriority.Background);
+            dispatcher.BeginInvoke(Apply, DispatcherPriority.Background);
             return;
         }
 
-        ApplyProject(e.Project);
-        _ = _identityCoherence?.EvaluateAsync();
+        Apply();
     }
 
     private void OnRuntimeStatusChanged(object? sender, EventArgs e)

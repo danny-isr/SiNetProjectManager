@@ -6,6 +6,7 @@ namespace SiNet.Infrastructure.Sql.Services.Identity;
 /// <summary>
 /// Central SIUser ↔ Google ↔ ACC membership coherence evaluator.
 /// On Google mismatch, disconnects the shared Google session (Gmail/Drive/Sheets).
+/// Overall MATCH requires ACC membership readback when a project is active.
 /// </summary>
 public sealed class IdentityCoherenceService : IIdentityCoherenceService
 {
@@ -13,6 +14,7 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
     private readonly IConnectorAuthService? _googleAuth;
     private readonly ICurrentUserSessionRefreshService _sessionRefresh;
     private readonly IAccHumanMembershipProbe? _accMembership;
+    private readonly IAccProjectIdResolver? _accProjectIdResolver;
     private readonly object _gate = new();
     private IdentityCoherenceSnapshot _current = IdentityCoherenceSnapshot.Checking();
 
@@ -20,12 +22,14 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
         ICurrentUserProfileService profiles,
         ICurrentUserSessionRefreshService sessionRefresh,
         IConnectorAuthService? googleAuth = null,
-        IAccHumanMembershipProbe? accMembership = null)
+        IAccHumanMembershipProbe? accMembership = null,
+        IAccProjectIdResolver? accProjectIdResolver = null)
     {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _sessionRefresh = sessionRefresh ?? throw new ArgumentNullException(nameof(sessionRefresh));
         _googleAuth = googleAuth;
         _accMembership = accMembership;
+        _accProjectIdResolver = accProjectIdResolver;
 
         if (_googleAuth is not null)
         {
@@ -71,24 +75,7 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
 
         if (profile is null)
         {
-            return Publish(new IdentityCoherenceSnapshot(
-                Status: IdentityCoherenceStatus.Blocked,
-                SiUserId: null,
-                SiUserName: null,
-                SiUserLoginName: null,
-                SiUserEmail: null,
-                GoogleAuthenticated: false,
-                GoogleEmail: null,
-                GoogleMatch: null,
-                GmailMatch: null,
-                DriveMatch: null,
-                SheetsMatch: null,
-                AccAuthMode: AccAuthMode.ApplicationTwoLegged,
-                AccMembershipEmail: null,
-                AccMembershipMatch: null,
-                AutodeskThreeLeggedEmail: null,
-                AutodeskThreeLeggedMatch: null,
-                FailureReason: "No authenticated SIUser session."));
+            return Publish(Blocked("No authenticated SIUser session."));
         }
 
         if (!profile.IsActive)
@@ -135,24 +122,97 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
             }
         }
 
+        var accProjectId = string.IsNullOrWhiteSpace(options.AccProjectId)
+            ? null
+            : options.AccProjectId.Trim();
+        if (string.IsNullOrWhiteSpace(accProjectId)
+            && options.SiProjectId is int siPid and > 0
+            && _accProjectIdResolver is not null)
+        {
+            accProjectId = await _accProjectIdResolver
+                .ResolveAccProjectIdAsync(siPid, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var accRelevant = options.HasActiveProject == true
+            || options.SiProjectId is > 0
+            || !string.IsNullOrWhiteSpace(accProjectId);
+
         bool? accMatch = null;
         string? accMemberEmail = null;
-        if (options.ProbeAccMembership && _accMembership is not null
-            && !string.IsNullOrWhiteSpace(options.AccProjectId))
+        string? accAccess = null;
+
+        if (options.ProbeAccMembership && accRelevant)
         {
-            var probe = await _accMembership
-                .ProbeAsync(options.AccProjectId, siEmail, cancellationToken)
-                .ConfigureAwait(false);
-            if (probe is not null)
+            if (_accMembership is null)
             {
-                accMatch = probe.IsMember;
-                accMemberEmail = probe.MatchedMemberEmail;
-                if (!probe.IsMember)
+                if (status == IdentityCoherenceStatus.Match)
                 {
-                    status = IdentityCoherenceStatus.Mismatch;
-                    failure = failure is null
-                        ? "SIUser.Email is not an ACC project member."
-                        : failure + " ACC membership mismatch.";
+                    status = IdentityCoherenceStatus.AccUnverified;
+                    failure = "ACC membership probe is not registered.";
+                }
+
+                accMatch = null;
+            }
+            else
+            {
+                AccHumanMembershipProbeResult? probe;
+                if (!string.IsNullOrWhiteSpace(accProjectId))
+                {
+                    probe = await _accMembership
+                        .ProbeAsync(
+                            accProjectId,
+                            siEmail,
+                            allowReconcile: options.AllowAccMembershipReconcile,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                else if (options.SiProjectId is int siForProbe and > 0)
+                {
+                    probe = await _accMembership
+                        .ProbeForSiProjectAsync(
+                            siForProbe,
+                            siEmail,
+                            allowReconcile: options.AllowAccMembershipReconcile,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (probe is not null && string.IsNullOrWhiteSpace(accProjectId)
+                        && _accProjectIdResolver is not null)
+                    {
+                        accProjectId = await _accProjectIdResolver
+                            .ResolveAccProjectIdAsync(siForProbe, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                }
+                else
+                {
+                    probe = null;
+                }
+
+                if (probe is null || !probe.ProbeSucceeded)
+                {
+                    accMatch = null;
+                    if (status == IdentityCoherenceStatus.Match)
+                    {
+                        status = IdentityCoherenceStatus.AccUnverified;
+                        failure = probe?.FailureReason
+                            ?? (string.IsNullOrWhiteSpace(accProjectId) && options.SiProjectId is null
+                                ? "ACC project context missing."
+                                : "ACC membership probe unavailable.");
+                    }
+                }
+                else
+                {
+                    accMatch = probe.IsMember;
+                    accMemberEmail = probe.MatchedMemberEmail;
+                    accAccess = probe.AccessLevel;
+                    if (!probe.IsMember)
+                    {
+                        status = IdentityCoherenceStatus.Mismatch;
+                        failure = failure is null
+                            ? "SIUser.Email is not an ACC project member."
+                            : failure + " ACC membership mismatch.";
+                    }
                 }
             }
         }
@@ -171,7 +231,15 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
             }
         }
 
-        // Shared Google credential → Gmail/Drive/Sheets share the same match bit.
+        // Full MATCH requires Google match; when ACC is relevant, also AccMembershipMatch == true.
+        if (status == IdentityCoherenceStatus.Match
+            && accRelevant
+            && accMatch is not true)
+        {
+            status = IdentityCoherenceStatus.AccUnverified;
+            failure ??= "ACC membership not verified for active project.";
+        }
+
         return Publish(new IdentityCoherenceSnapshot(
             Status: status,
             SiUserId: profile.UserId,
@@ -189,8 +257,32 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
             AccMembershipMatch: accMatch,
             AutodeskThreeLeggedEmail: threeLeggedEmail,
             AutodeskThreeLeggedMatch: threeLeggedMatch,
-            FailureReason: failure));
+            FailureReason: failure,
+            AccAccessLevel: accAccess,
+            SiProjectId: options.SiProjectId,
+            AccProjectId: accProjectId,
+            AccRelevant: accRelevant));
     }
+
+    private static IdentityCoherenceSnapshot Blocked(string failure) =>
+        new(
+            Status: IdentityCoherenceStatus.Blocked,
+            SiUserId: null,
+            SiUserName: null,
+            SiUserLoginName: null,
+            SiUserEmail: null,
+            GoogleAuthenticated: false,
+            GoogleEmail: null,
+            GoogleMatch: null,
+            GmailMatch: null,
+            DriveMatch: null,
+            SheetsMatch: null,
+            AccAuthMode: AccAuthMode.ApplicationTwoLegged,
+            AccMembershipEmail: null,
+            AccMembershipMatch: null,
+            AutodeskThreeLeggedEmail: null,
+            AutodeskThreeLeggedMatch: null,
+            FailureReason: failure);
 
     private static IdentityCoherenceSnapshot BuildBase(
         CurrentUserProfileDto profile,

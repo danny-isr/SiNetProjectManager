@@ -49,6 +49,11 @@ internal sealed class ModeSwitchingAccProjectProvisioningService(
         CancellationToken cancellationToken) =>
         Active.ListAvailableTemplatesAsync(cancellationToken);
 
+    public Task<IReadOnlyList<AccProjectMemberInfo>> ListProjectMembersAsync(
+        string accProjectId,
+        CancellationToken cancellationToken) =>
+        Active.ListProjectMembersAsync(accProjectId, cancellationToken);
+
     public Task<string> ProbeFolderPermissionsAsync(CancellationToken cancellationToken) =>
         Active.ProbeFolderPermissionsAsync(cancellationToken);
 

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Diagnostics;
+using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -29,6 +30,7 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
     private readonly IFileServerRootResolver _fileServerRootResolver;
     private readonly IAccFileUploadService _accUploadService;
     private readonly IProjectAccMappingProvisioner? _accMappingProvisioner;
+    private readonly IIdentityOperationGuard? _identityGuard;
 
     public ProjectFileFilingService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
@@ -37,7 +39,8 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
         IFileServerVersionArchiver versionArchiver,
         IFileServerRootResolver fileServerRootResolver,
         IAccFileUploadService accUploadService,
-        IProjectAccMappingProvisioner? accMappingProvisioner = null)
+        IProjectAccMappingProvisioner? accMappingProvisioner = null,
+        IIdentityOperationGuard? identityGuard = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _folderPathResolver = folderPathResolver ?? throw new ArgumentNullException(nameof(folderPathResolver));
@@ -46,6 +49,7 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
         _fileServerRootResolver = fileServerRootResolver ?? throw new ArgumentNullException(nameof(fileServerRootResolver));
         _accUploadService = accUploadService ?? throw new ArgumentNullException(nameof(accUploadService));
         _accMappingProvisioner = accMappingProvisioner;
+        _identityGuard = identityGuard;
     }
 
     public async Task<FileProjectFileResult> FileAsync(FileProjectFileRequest request, CancellationToken ct = default)
@@ -183,6 +187,18 @@ public sealed class ProjectFileFilingService : IProjectFileFilingService
         CancellationToken ct)
     {
         var mapping = await ResolveAccMappingAsync(db, request.ProjectId, ct).ConfigureAwait(false);
+
+        if (_identityGuard is not null)
+        {
+            await _identityGuard
+                .EnsureAllowedAsync(
+                    IdentityOperationKind.AccFileWrite,
+                    new IdentityOperationContext(
+                        SiProjectId: request.ProjectId,
+                        AccProjectId: mapping.AccProjectId),
+                    ct)
+                .ConfigureAwait(false);
+        }
 
         var uploadRequest = new AccFileUploadRequest(
             mapping.AccProjectId!,

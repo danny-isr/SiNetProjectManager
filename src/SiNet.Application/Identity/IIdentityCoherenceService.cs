@@ -26,5 +26,9 @@ public interface IIdentityCoherenceService
 public sealed record IdentityCoherenceEvaluateOptions(
     bool DisconnectGoogleOnMismatch = true,
     bool ProbeAccMembership = true,
+    int? SiProjectId = null,
     string? AccProjectId = null,
-    string? AutodeskThreeLeggedEmail = null);
+    string? AutodeskThreeLeggedEmail = null,
+    bool AllowAccMembershipReconcile = true,
+    /// <summary>When true (or when Si/Acc project ids are set), ACC is relevant for overall MATCH.</summary>
+    bool? HasActiveProject = null);

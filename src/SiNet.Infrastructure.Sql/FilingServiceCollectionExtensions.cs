@@ -32,7 +32,8 @@ public static class FilingServiceCollectionExtensions
                 sp.GetRequiredService<IFileServerVersionArchiver>(),
                 sp.GetRequiredService<IFileServerRootResolver>(),
                 sp.GetRequiredService<IAccFileUploadService>(),
-                sp.GetService<IProjectAccMappingProvisioner>()));
+                sp.GetService<IProjectAccMappingProvisioner>(),
+                sp.GetService<SiNet.Application.Identity.IIdentityOperationGuard>()));
         return services;
     }
 }

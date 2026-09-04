@@ -97,45 +97,75 @@ public sealed class IdentityCoherenceAndGuardTests
     }
 
     [Fact]
-    public async Task Acc_membership_fail_closed_when_probed()
+    public async Task AccFileWrite_member_true_allowed()
+    {
+        var (guard, _) = CreateAccGuard(member: true);
+
+        var decision = await guard.EvaluateAsync(
+            IdentityOperationKind.AccFileWrite,
+            IdentityOperationContext.ForAccProject("acc-1"));
+
+        Assert.True(decision.Allowed);
+        Assert.True(decision.Snapshot.AccMembershipMatch);
+        Assert.Equal(IdentityCoherenceStatus.Match, decision.Snapshot.Status);
+    }
+
+    [Fact]
+    public async Task AccFileWrite_member_false_denied()
+    {
+        var (guard, _) = CreateAccGuard(member: false);
+
+        var decision = await guard.EvaluateAsync(
+            IdentityOperationKind.AccFileWrite,
+            IdentityOperationContext.ForAccProject("acc-1"));
+
+        Assert.False(decision.Allowed);
+        Assert.False(decision.Snapshot.AccMembershipMatch);
+    }
+
+    [Fact]
+    public async Task AccFileWrite_probe_unavailable_denied()
+    {
+        var (guard, _) = CreateAccGuard(member: null, probeSucceeded: false);
+
+        var decision = await guard.EvaluateAsync(
+            IdentityOperationKind.AccFileWrite,
+            IdentityOperationContext.ForAccProject("acc-1"));
+
+        Assert.False(decision.Allowed);
+        Assert.Null(decision.Snapshot.AccMembershipMatch);
+    }
+
+    [Fact]
+    public async Task AccFileWrite_no_project_context_denied()
+    {
+        var (guard, _) = CreateAccGuard(member: true);
+
+        var decision = await guard.EvaluateAsync(IdentityOperationKind.AccFileWrite);
+
+        Assert.False(decision.Allowed);
+        Assert.Contains("SiProjectId", decision.Reason!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Active_project_without_acc_verification_is_not_full_match()
     {
         var session = new AuthenticatedUserSession();
         session.SetAuthenticated(new CurrentUserProfileDto(
             1, "Danny", "DOMAIN\\danny", AppRole.Employee, true,
             Email: "danny@si.co.il"));
         var auth = new StubConnectorAuth { IsAuthenticated = true, ConnectedAccountEmail = "danny@si.co.il" };
-        var probe = new StubAccProbe { Result = new AccHumanMembershipProbeResult(null, IsMember: false, false) };
-        var coherence = new IdentityCoherenceService(session, new NoOpRefresh(session), auth, probe);
-        var guard = new IdentityOperationGuard(coherence);
+        var coherence = new IdentityCoherenceService(session, new NoOpRefresh(session), auth);
 
-        // AccFileWrite probes membership; force AccProjectId via Evaluate options inside guard —
-        // guard uses ProbeAccMembership=true but AccProjectId null → probe not called.
-        // Call coherence directly with AccProjectId then re-check guard snapshot path:
-        await coherence.EvaluateAsync(new IdentityCoherenceEvaluateOptions(
-            DisconnectGoogleOnMismatch: false,
-            ProbeAccMembership: true,
-            AccProjectId: "acc-project-1"));
-
-        var decision = await guard.EvaluateAsync(IdentityOperationKind.AccFileWrite);
-
-        // Second evaluate may not pass AccProjectId — use direct snapshot assertion:
         var snap = await coherence.EvaluateAsync(new IdentityCoherenceEvaluateOptions(
             DisconnectGoogleOnMismatch: false,
             ProbeAccMembership: true,
-            AccProjectId: "acc-project-1"));
-        Assert.False(snap.AccMembershipMatch);
-        Assert.Equal(IdentityCoherenceStatus.Mismatch, snap.Status);
+            HasActiveProject: true,
+            SiProjectId: 3213));
 
-        // When membership was probed false on Current, AccFileWrite with probeAcc should deny if AccProjectId set.
-        // IdentityOperationGuard does not pass AccProjectId — AccFileWrite allows when AccMembershipMatch is null.
-        // Fix: update guard to require AccMembershipMatch != false when Current already has false,
-        // OR pass AccProjectId. Simpler fix for product: RequireAccMembershipWhenProbed already denies when false.
-        // After Evaluate with AccProjectId, Current has AccMembershipMatch=false; guard's Evaluate re-runs
-        // without AccProjectId so AccMembershipMatch becomes null again.
-        // Strengthen guard: if kind needs ACC and Current.AccMembershipMatch==false after evaluate, deny —
-        // already there. Need guard to pass AccProjectId OR keep last AccMembershipMatch.
-        // For this test: assert coherence fail-closed and that EnsureAllowed with custom options path.
-        Assert.False(snap.AccMembershipMatch == true);
+        Assert.Equal(IdentityCoherenceStatus.AccUnverified, snap.Status);
+        Assert.Contains("ACC: טרם אומת", IdentityStatusDisplay.FormatFooter(snap), StringComparison.Ordinal);
+        Assert.DoesNotContain("זהות: תקינה", IdentityStatusDisplay.FormatFooter(snap), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -147,11 +177,40 @@ public sealed class IdentityCoherenceAndGuardTests
             Email: "danny@si.co.il"));
         var auth = new StubConnectorAuth { IsAuthenticated = true, ConnectedAccountEmail = "danny@si.co.il" };
         var coherence = new IdentityCoherenceService(session, new NoOpRefresh(session), auth);
-        var snap = await coherence.EvaluateAsync(new IdentityCoherenceEvaluateOptions(ProbeAccMembership: false));
+        var snap = await coherence.EvaluateAsync(new IdentityCoherenceEvaluateOptions(
+            ProbeAccMembership: false,
+            HasActiveProject: false));
 
         Assert.Equal(IdentityCoherenceStatus.Match, snap.Status);
         Assert.Equal(AccAuthMode.ApplicationTwoLegged, snap.AccAuthMode);
         Assert.Null(snap.AccMembershipMatch);
+        Assert.False(snap.AccRelevant);
+    }
+
+    private static (IdentityOperationGuard Guard, StubAccProbe Probe) CreateAccGuard(
+        bool? member,
+        bool probeSucceeded = true)
+    {
+        var session = new AuthenticatedUserSession();
+        session.SetAuthenticated(new CurrentUserProfileDto(
+            1, "User", "DOMAIN\\user", AppRole.Employee, true,
+            Email: "user@si.co.il"));
+        var auth = new StubConnectorAuth { IsAuthenticated = true, ConnectedAccountEmail = "user@si.co.il" };
+        AccHumanMembershipProbeResult? result = member is null && !probeSucceeded
+            ? new AccHumanMembershipProbeResult(
+                "user@si.co.il", null, false, false, ProbeSucceeded: false, FailureReason: "unavailable")
+            : member is null
+                ? null
+                : new AccHumanMembershipProbeResult(
+                    "user@si.co.il",
+                    member == true ? "user@si.co.il" : null,
+                    member == true,
+                    ReconcileAttempted: false,
+                    AccessLevel: member == true ? "member" : null,
+                    ProbeSucceeded: true);
+        var probe = new StubAccProbe { Result = result };
+        var coherence = new IdentityCoherenceService(session, new NoOpRefresh(session), auth, probe);
+        return (new IdentityOperationGuard(coherence), probe);
     }
 
     [Fact]
@@ -163,17 +222,14 @@ public sealed class IdentityCoherenceAndGuardTests
             Email: "danny@si.co.il"));
         var auth = new StubConnectorAuth { IsAuthenticated = true, ConnectedAccountEmail = "danny@si.co.il" };
         var coherence = new IdentityCoherenceService(session, new NoOpRefresh(session), auth);
-        await coherence.EvaluateAsync(new IdentityCoherenceEvaluateOptions(
-            AutodeskThreeLeggedEmail: "other@autodesk.com",
-            DisconnectGoogleOnMismatch: false));
-
-        Assert.Equal(IdentityCoherenceStatus.Mismatch, coherence.Current.Status);
-        Assert.False(coherence.Current.AutodeskThreeLeggedMatch);
-
-        // Guard re-evaluates without three-legged email → AutodeskThreeLeggedMatch null → deny for that kind.
         var guard = new IdentityOperationGuard(coherence);
-        var decision = await guard.EvaluateAsync(IdentityOperationKind.AutodeskThreeLeggedWrite);
+
+        var decision = await guard.EvaluateAsync(
+            IdentityOperationKind.AutodeskThreeLeggedWrite,
+            new IdentityOperationContext(AutodeskThreeLeggedEmail: "other@autodesk.com"));
+
         Assert.False(decision.Allowed);
+        Assert.False(decision.Snapshot.AutodeskThreeLeggedMatch);
     }
 
     [Fact]
@@ -244,7 +300,17 @@ public sealed class IdentityCoherenceAndGuardTests
         public AccHumanMembershipProbeResult? Result { get; set; }
 
         public Task<AccHumanMembershipProbeResult?> ProbeAsync(
-            string? accProjectId, string expectedEmail, CancellationToken cancellationToken = default)
+            string? accProjectId,
+            string expectedEmail,
+            bool allowReconcile = true,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(Result);
+
+        public Task<AccHumanMembershipProbeResult?> ProbeForSiProjectAsync(
+            int siProjectId,
+            string expectedEmail,
+            bool allowReconcile = true,
+            CancellationToken cancellationToken = default)
             => Task.FromResult(Result);
     }
 

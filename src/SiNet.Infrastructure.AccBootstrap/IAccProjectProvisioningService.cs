@@ -104,4 +104,19 @@ public interface IAccProjectProvisioningService
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task<IReadOnlyList<(string Id, string Name)>> ListAvailableTemplatesAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists ACC project members via Autodesk APIs (source of truth for human membership).
+    /// Never returns tokens.
+    /// </summary>
+    Task<IReadOnlyList<AccProjectMemberInfo>> ListProjectMembersAsync(
+        string accProjectId,
+        CancellationToken cancellationToken);
 }
+
+/// <summary>ACC project member projection used by identity probes (no tokens).</summary>
+public sealed record AccProjectMemberInfo(
+    string Email,
+    string? Name,
+    string? AccessLevel,
+    string? Status);

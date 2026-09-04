@@ -764,6 +764,22 @@ internal static class AccEndpoints
             return Results.NoContent();
         });
 
+        // ── List ACC project members (human identity readback; no tokens) ───
+        v1.MapGet("/projects/{accProjectId}/members", async (
+            string accProjectId,
+            IAccProjectProvisioningService svc,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(accProjectId))
+                return Results.BadRequest(new ErrorDto("accProjectId is required."));
+
+            var members = await svc.ListProjectMembersAsync(accProjectId, ct);
+            var dto = members
+                .Select(m => new AccProjectMemberDto(m.Email, m.Name, m.AccessLevel, m.Status))
+                .ToList();
+            return Results.Ok(dto);
+        });
+
         // ── Reconcile across every mapped ACC project (returns text summary) ─
         v1.MapPost("/projects/reconcile-all", async (
             IAccProjectProvisioningService svc,

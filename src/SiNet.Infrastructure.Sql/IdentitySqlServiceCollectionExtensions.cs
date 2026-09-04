@@ -25,6 +25,7 @@ public static class IdentitySqlServiceCollectionExtensions
         services.TryAddTransient<IWindowsCurrentUserAuthenticator>(sp =>
             sp.GetRequiredService<SqlWindowsCurrentUserAuthenticator>());
         services.TryAddTransient<ICurrentUserSessionRefreshService, SqlCurrentUserSessionRefreshService>();
+        services.TryAddTransient<IAccProjectIdResolver, SqlAccProjectIdResolver>();
         services.TryAddSingleton<IIdentityCoherenceService, IdentityCoherenceService>();
         services.TryAddSingleton<IIdentityOperationGuard, IdentityOperationGuard>();
         services.TryAddSingleton<IAccHumanMembershipProbe, NullAccHumanMembershipProbe>();

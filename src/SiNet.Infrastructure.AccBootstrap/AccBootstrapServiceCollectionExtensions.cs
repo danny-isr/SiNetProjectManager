@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using SiNet.Infrastructure.Autodesk;
 using SiNetSQL.Services.AccBootstrap;
@@ -49,6 +50,13 @@ public static class AccBootstrapServiceCollectionExtensions
                 sp.GetRequiredService<RemoteAccProjectProvisioningService>()));
 
         services.TryAddTransient<IProjectAccMappingProvisioner, ProjectAccMappingProvisionerAdapter>();
+
+        // Replace NullAccHumanMembershipProbe (AddSiNetIdentitySql) with ACC membership readback.
+        services.RemoveAll<IAccHumanMembershipProbe>();
+        services.AddSingleton<IAccHumanMembershipProbe>(sp =>
+            new AccHumanMembershipProbe(
+                sp.GetRequiredService<IAccProjectProvisioningService>(),
+                sp.GetService<IAccProjectIdResolver>()));
 
         return services;
     }

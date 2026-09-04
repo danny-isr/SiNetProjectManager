@@ -32,7 +32,10 @@ public sealed class EmailMoveToProjectCoordinator(
         if (_identityGuard is not null)
         {
             var decision = await _identityGuard
-                .EvaluateAsync(IdentityOperationKind.AccFileWrite, cancellationToken)
+                .EvaluateAsync(
+                    IdentityOperationKind.AccFileWrite,
+                    IdentityOperationContext.ForSiProject(command.ProjectId),
+                    cancellationToken)
                 .ConfigureAwait(false);
             if (!decision.Allowed)
             {

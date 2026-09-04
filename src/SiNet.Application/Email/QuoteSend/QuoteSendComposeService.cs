@@ -137,7 +137,7 @@ public sealed class QuoteSendComposeService : IQuoteSendComposeService
         if (_identityGuard is not null)
         {
             var decision = await _identityGuard
-                .EvaluateAsync(IdentityOperationKind.GmailWrite, cancellationToken)
+                .EvaluateAsync(IdentityOperationKind.GmailWrite, context: null, cancellationToken)
                 .ConfigureAwait(false);
             if (!decision.Allowed)
             {

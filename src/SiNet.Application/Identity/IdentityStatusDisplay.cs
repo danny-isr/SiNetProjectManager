@@ -20,6 +20,8 @@ public static class IdentityStatusDisplay
             IdentityCoherenceStatus.PendingApproval => "זהות: ממתין לאישור מנהל מערכת",
             IdentityCoherenceStatus.Match =>
                 $"זהות: תקינה | {snapshot.SiUserName ?? "?"} | {snapshot.SiUserEmail ?? "?"}",
+            IdentityCoherenceStatus.AccUnverified =>
+                FormatAccUnverified(snapshot),
             IdentityCoherenceStatus.IncompleteSiUser =>
                 $"זהות: חסרה כתובת במערכת | {snapshot.SiUserName ?? "?"}",
             IdentityCoherenceStatus.NotConnected =>
@@ -35,6 +37,15 @@ public static class IdentityStatusDisplay
         };
     }
 
+    private static string FormatAccUnverified(IdentityCoherenceSnapshot snapshot)
+    {
+        var google = snapshot.GoogleMatch == true ? "Google: תקין" : "Google: לא מאומת";
+        var acc = snapshot.AccRelevant
+            ? "ACC: טרם אומת"
+            : "ACC: לא רלוונטי / אין פרויקט פעיל";
+        return $"זהות: חלקית | {google} | {acc} | {snapshot.SiUserEmail ?? "?"}";
+    }
+
     public static string FormatGoogleMismatchDialog(string? siUserEmail, string? googleEmail) =>
         "אין התאמה בין חשבון המערכת לחשבון Google.\n" +
         $"החשבון המוגדר במערכת:\n{siUserEmail ?? "(ריק)"}\n\n" +
@@ -45,13 +56,18 @@ public static class IdentityStatusDisplay
     public static string FormatDetailsTooltip(IdentityCoherenceSnapshot s)
     {
         ArgumentNullException.ThrowIfNull(s);
+        var accLine = s.AccRelevant
+            ? $"ACC membership: {s.AccMembershipEmail} match={FormatBool(s.AccMembershipMatch)} access={s.AccAccessLevel ?? "n/a"}"
+            : "ACC membership: לא רלוונטי / אין פרויקט פעיל";
         return
             $"SIUser.Id: {s.SiUserId}\n" +
             $"LoginName: {s.SiUserLoginName}\n" +
             $"Email: {s.SiUserEmail}\n" +
             $"Google: {s.GoogleEmail} match={FormatBool(s.GoogleMatch)}\n" +
             $"Gmail/Drive/Sheets: {FormatBool(s.GmailMatch)} (shared Google session)\n" +
-            $"ACC membership: {s.AccMembershipEmail} match={FormatBool(s.AccMembershipMatch)}\n" +
+            $"SiProjectId: {s.SiProjectId?.ToString() ?? "n/a"}\n" +
+            $"AccProjectId: {s.AccProjectId ?? "n/a"}\n" +
+            $"{accLine}\n" +
             $"ACC auth mode: {s.AccAuthMode}\n" +
             $"3-legged: {s.AutodeskThreeLeggedEmail} match={FormatBool(s.AutodeskThreeLeggedMatch)}\n" +
             $"Status: {s.Status}\n" +

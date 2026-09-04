@@ -320,6 +320,39 @@ public class AccProjectProvisioningService(
         return await bim360.ListAccNativeTemplatesAsync(accountId, cancellationToken);
     }
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<AccProjectMemberInfo>> ListProjectMembersAsync(
+        string accProjectId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(accProjectId))
+            throw new ArgumentException("accProjectId is required.", nameof(accProjectId));
+
+        var bim360 = new Bim360Service(_tokenProvider);
+        Bim360Service.LogInfo = msg => AccBootstrapLog.Info(msg);
+        Bim360Service.LogWarn = msg => AccBootstrapLog.Warn(msg);
+        Bim360Service.LogError = msg => AccBootstrapLog.Error(msg);
+
+        var users = await bim360.GetProjectUsersAsync(accProjectId.Trim(), cancellationToken)
+            .ConfigureAwait(false);
+
+        return users
+            .Where(u => !string.IsNullOrWhiteSpace(u.Email))
+            .Select(u => new AccProjectMemberInfo(
+                Email: u.Email.Trim(),
+                Name: string.IsNullOrWhiteSpace(u.Name) ? null : u.Name.Trim(),
+                AccessLevel: ResolveDocsAccess(u),
+                Status: string.IsNullOrWhiteSpace(u.Status) ? null : u.Status.Trim()))
+            .ToList();
+    }
+
+    private static string? ResolveDocsAccess(ProjectUserInfo user)
+    {
+        if (user.ProductAccess.TryGetValue("docs", out var docs) && !string.IsNullOrWhiteSpace(docs))
+            return docs.Trim();
+        return string.IsNullOrWhiteSpace(user.AccessLevel) ? null : user.AccessLevel.Trim();
+    }
+
     private async Task<string> ProbeFolderPermissionsCoreAsync(string? templateName, CancellationToken cancellationToken)
     {
         var correlationId = Guid.NewGuid().ToString("N")[..8];

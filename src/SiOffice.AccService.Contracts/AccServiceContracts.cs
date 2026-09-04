@@ -36,6 +36,13 @@ public sealed record RenameFolderRequest(string NewName);
 /// <summary>Response for folder rename — folder id is stable.</summary>
 public sealed record RenameFolderResponse(string FolderId, string NewName);
 
+/// <summary>One ACC project member from <c>GET /v1/acc/projects/{accProjectId}/members</c>.</summary>
+public sealed record AccProjectMemberDto(
+    string Email,
+    string? Name = null,
+    string? AccessLevel = null,
+    string? Status = null);
+
 /// <summary>Response for endpoints that return a simple success flag.</summary>
 public sealed record BoolResultDto(bool Success);
 

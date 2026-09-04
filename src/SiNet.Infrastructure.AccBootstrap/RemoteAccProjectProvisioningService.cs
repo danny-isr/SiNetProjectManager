@@ -101,6 +101,35 @@ internal sealed class RemoteAccProjectProvisioningService(
         return list.Select(t => (t.Id, t.Name)).ToList();
     }
 
+    public async Task<IReadOnlyList<AccProjectMemberInfo>> ListProjectMembersAsync(
+        string accProjectId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(accProjectId))
+            throw new ArgumentException("accProjectId is required.", nameof(accProjectId));
+
+        var relativeUrl = $"v1/acc/projects/{Uri.EscapeDataString(accProjectId.Trim())}/members";
+        using var response = await SendAsync(
+            "ListProjectMembersAsync",
+            HttpMethod.Get,
+            relativeUrl,
+            content: null,
+            cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, "ListProjectMembersAsync", cancellationToken).ConfigureAwait(false);
+        var list = await response.Content
+            .ReadFromJsonAsync<List<AccProjectMemberDto>>(cancellationToken: cancellationToken)
+            .ConfigureAwait(false)
+            ?? [];
+        return list
+            .Where(m => !string.IsNullOrWhiteSpace(m.Email))
+            .Select(m => new AccProjectMemberInfo(
+                Email: m.Email.Trim(),
+                Name: m.Name,
+                AccessLevel: m.AccessLevel,
+                Status: m.Status))
+            .ToList();
+    }
+
     public Task<string> ProbeFolderPermissionsAsync(CancellationToken cancellationToken) =>
         throw new NotSupportedException(
             "ProbeFolderPermissionsAsync is diagnostic-only and is not exposed by SiOffice.AccService. " +

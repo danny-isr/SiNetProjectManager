@@ -33,7 +33,12 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
 
     public async ValueTask<WorkflowStartResultDto> StartAsync(StartWorkflowCommand command, CancellationToken ct)
     {
-        await EnsureIdentityAsync(ct).ConfigureAwait(false);
+        await EnsureIdentityAsync(
+                command.ProjectId is > 0
+                    ? IdentityOperationContext.ForSiProject(command.ProjectId)
+                    : null,
+                ct)
+            .ConfigureAwait(false);
 
         // TEMP WF-DEBUG
         WorkflowDebugTrace.Step("Engine.Command.Start",
@@ -58,7 +63,7 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
 
     public async ValueTask<WorkflowAdvanceResultDto> AdvanceAsync(AdvanceWorkflowCommand command, CancellationToken ct)
     {
-        await EnsureIdentityAsync(ct).ConfigureAwait(false);
+        await EnsureIdentityAsync(context: null, ct).ConfigureAwait(false);
         return await _orchestrator.AdvanceWithTasksAsync(
             command.InstanceId,
             command.TargetStageId,
@@ -67,14 +72,14 @@ internal sealed class NativeWorkflowCommandService : IWorkflowCommandService
             ct).ConfigureAwait(false);
     }
 
-    private async Task EnsureIdentityAsync(CancellationToken ct)
+    private async Task EnsureIdentityAsync(IdentityOperationContext? context, CancellationToken ct)
     {
         if (_identityGuard is null)
         {
             return;
         }
 
-        await _identityGuard.EnsureAllowedAsync(IdentityOperationKind.WorkflowMutate, ct).ConfigureAwait(false);
+        await _identityGuard.EnsureAllowedAsync(IdentityOperationKind.WorkflowMutate, context, ct).ConfigureAwait(false);
     }
 
     public ValueTask<StageCompletionResultDto?> CheckAndAutoAdvanceAsync(TaskClosedCommand command, CancellationToken ct)

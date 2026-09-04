@@ -174,7 +174,7 @@ public sealed class GoogleDriveFileStore : IFileStore
         if (_identityGuard is not null)
         {
             await _identityGuard
-                .EnsureAllowedAsync(IdentityOperationKind.GoogleDriveWrite, cancellationToken)
+                .EnsureAllowedAsync(IdentityOperationKind.GoogleDriveWrite, context: null, cancellationToken)
                 .ConfigureAwait(false);
         }
 
