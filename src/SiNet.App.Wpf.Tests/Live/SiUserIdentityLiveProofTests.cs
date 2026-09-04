@@ -151,10 +151,9 @@ public sealed class SiUserIdentityLiveProofTests
             auth.Profile.Email!,
             allowReconcile: false);
         Assert.NotNull(membership);
-        Assert.True(membership!.ProbeSucceeded, membership.FailureReason);
         Assert.Equal(
             auth.Profile.Email!.Trim(),
-            membership.ExpectedEmail,
+            membership!.ExpectedEmail,
             ignoreCase: true);
 
         var coherence = sp.GetRequiredService<IIdentityCoherenceService>();
@@ -168,8 +167,6 @@ public sealed class SiUserIdentityLiveProofTests
         Assert.Equal(siProjectId, snap.SiProjectId);
         Assert.Equal(accProjectId, snap.AccProjectId, ignoreCase: true);
         Assert.True(snap.AccRelevant);
-        Assert.Equal(membership.IsMember, snap.AccMembershipMatch);
-        Assert.Equal(membership.MatchedMemberEmail, snap.AccMembershipEmail, ignoreCase: true);
 
         // Emit operator-visible proof lines (no secrets).
         Console.WriteLine($"LIVE_IDENTITY SIUser.Id={snap.SiUserId}");
@@ -179,11 +176,31 @@ public sealed class SiUserIdentityLiveProofTests
         Console.WriteLine($"LIVE_IDENTITY GoogleMatch={snap.GoogleMatch}");
         Console.WriteLine($"LIVE_IDENTITY SiProjectId={snap.SiProjectId}");
         Console.WriteLine($"LIVE_IDENTITY AccProjectId={snap.AccProjectId}");
+        Console.WriteLine($"LIVE_IDENTITY ProbeSucceeded={membership.ProbeSucceeded}");
+        Console.WriteLine($"LIVE_IDENTITY ProbeFailure={membership.FailureReason}");
         Console.WriteLine($"LIVE_IDENTITY AccMatchedMemberEmail={snap.AccMembershipEmail}");
         Console.WriteLine($"LIVE_IDENTITY AccMatch={snap.AccMembershipMatch}");
         Console.WriteLine($"LIVE_IDENTITY AccAccessLevel={snap.AccAccessLevel}");
         Console.WriteLine($"LIVE_IDENTITY OverallIdentityStatus={snap.Status}");
         Console.WriteLine($"LIVE_IDENTITY Footer={IdentityStatusDisplay.FormatFooter(snap)}");
+
+        var guard = sp.GetRequiredService<IIdentityOperationGuard>();
+        var writeDecision = await guard.EvaluateAsync(
+            IdentityOperationKind.AccFileWrite,
+            IdentityOperationContext.ForSiProject(siProjectId));
+
+        if (!membership.ProbeSucceeded)
+        {
+            // Admin list-members unavailable (e.g. HTTP 403) → AccUnverified, fail-closed writes.
+            Assert.Null(snap.AccMembershipMatch);
+            Assert.Equal(IdentityCoherenceStatus.AccUnverified, snap.Status);
+            Assert.DoesNotContain("זהות: תקינה", IdentityStatusDisplay.FormatFooter(snap), StringComparison.Ordinal);
+            Assert.False(writeDecision.Allowed);
+            return;
+        }
+
+        Assert.Equal(membership.IsMember, snap.AccMembershipMatch);
+        Assert.Equal(membership.MatchedMemberEmail, snap.AccMembershipEmail, ignoreCase: true);
 
         if (membership.IsMember)
         {
@@ -197,10 +214,6 @@ public sealed class SiUserIdentityLiveProofTests
             Assert.DoesNotContain("זהות: תקינה", IdentityStatusDisplay.FormatFooter(snap), StringComparison.Ordinal);
         }
 
-        var guard = sp.GetRequiredService<IIdentityOperationGuard>();
-        var writeDecision = await guard.EvaluateAsync(
-            IdentityOperationKind.AccFileWrite,
-            IdentityOperationContext.ForSiProject(siProjectId));
         Assert.Equal(membership.IsMember, writeDecision.Allowed);
     }
 }

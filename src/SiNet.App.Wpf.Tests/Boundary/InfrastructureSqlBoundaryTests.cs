@@ -61,7 +61,8 @@ public sealed class InfrastructureSqlBoundaryTests
         var fileName = Path.GetFileName(relativePath);
         if (fileName is "SqlUserGroupQueryService.cs"
             or "SqlUserGroupCommandService.cs"
-            or "SqlMasterPlanMappingService.cs")
+            or "SqlMasterPlanMappingService.cs"
+            or "SqlAccProjectIdResolver.cs")
         {
             return;
         }

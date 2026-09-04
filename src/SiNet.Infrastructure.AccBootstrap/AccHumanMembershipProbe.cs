@@ -74,13 +74,14 @@ public sealed class AccHumanMembershipProbe(
                 }
                 catch (Exception ex)
                 {
+                    // Reconcile failure means membership could not be verified — not "absent".
                     return new AccHumanMembershipProbeResult(
                         ExpectedEmail: email,
                         MatchedMemberEmail: null,
                         IsMember: false,
                         ReconcileAttempted: true,
                         AccessLevel: null,
-                        ProbeSucceeded: true,
+                        ProbeSucceeded: false,
                         FailureReason: $"ACC membership reconcile failed: {ex.Message}");
                 }
 

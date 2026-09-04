@@ -24,7 +24,9 @@
 - ACC Data Management uses 2-legged application OAuth (not human). Human ACC check = ACC project membership email == `SIUser.Email` via `IAccHumanMembershipProbe` (Autodesk/AccService readback). SQL `ProjectAccMapping` only resolves AccProjectId.
 - Project-specific ACC writes (`AccFileWrite`, MoveToProject, …) require `IdentityOperationContext` with `SiProjectId` and/or `AccProjectId`, and **`AccMembershipMatch == true`**. `false` / `null` / unavailable → **deny** (fail-closed).
 - If email missing from membership: supported reconciler once, then fresh ACC readback; only readback `IsMember=true` may PASS.
+- Autodesk Admin APIs (list/add project users) require a **3-legged ACC Account Admin** token. HTTP 403 on list-members must surface as **`ProbeSucceeded=false`** (unavailable), never as empty membership / “not a member”.
 - Autodesk 3-legged (when used): Autodesk profile email == `SIUser.Email`.
+- Ops: restore Admin refresh token per [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) (`AuthOnce --force` as ACC Account Admin).
 
 ## Status bar
 
