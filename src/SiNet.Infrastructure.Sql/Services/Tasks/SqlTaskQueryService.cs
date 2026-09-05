@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.Infrastructure.Sql.Services.Tasks;
 using SiNetSQL.Data;
@@ -37,7 +38,11 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             return null;
 
         var trackByTask = await LoadTrackDisplayAsync(db, [task], ct).ConfigureAwait(false);
-        return MapTask(task, trackByTask.GetValueOrDefault(task.Id));
+        var projectById = await LoadProjectDisplayAsync(db, [task], ct).ConfigureAwait(false);
+        return MapTask(
+            task,
+            trackByTask.GetValueOrDefault(task.Id),
+            task.ProjectId is int pid ? projectById.GetValueOrDefault(pid) : null);
     }
 
     public async ValueTask<IReadOnlyList<TaskSummaryDto>> GetTasksForProjectAsync(
@@ -64,10 +69,7 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
 
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
-        var trackByTask = await LoadTrackDisplayAsync(db, tasks, ct).ConfigureAwait(false);
-        return TaskQueryOrdering.SortByQueueOrder(tasks)
-            .Select(t => MapTask(t, trackByTask.GetValueOrDefault(t.Id)))
-            .ToList();
+        return await MapTasksAsync(db, tasks, allUsersBucket: false, ct).ConfigureAwait(false);
     }
 
     public ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserAsync(
@@ -107,10 +109,7 @@ public sealed class SqlTaskQueryService : ITaskQueryService
                         && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen));
 
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
-        var trackByTask = await LoadTrackDisplayAsync(db, tasks, ct).ConfigureAwait(false);
-        return TaskQueryOrdering.SortAllUsersInBucket(tasks)
-            .Select(t => MapTask(t, trackByTask.GetValueOrDefault(t.Id)))
-            .ToList();
+        return await MapTasksAsync(db, tasks, allUsersBucket: true, ct).ConfigureAwait(false);
     }
 
     private async ValueTask<IReadOnlyList<TaskSummaryDto>> QueryOpenTasksForUserAsync(
@@ -134,9 +133,25 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
 
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
+        return await MapTasksAsync(db, tasks, allUsersBucket: false, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IReadOnlyList<TaskSummaryDto>> MapTasksAsync(
+        SiNetSQLDbContext db,
+        List<ProjectAssignment> tasks,
+        bool allUsersBucket,
+        CancellationToken ct)
+    {
         var trackByTask = await LoadTrackDisplayAsync(db, tasks, ct).ConfigureAwait(false);
-        return TaskQueryOrdering.SortByQueueOrder(tasks)
-            .Select(t => MapTask(t, trackByTask.GetValueOrDefault(t.Id)))
+        var projectById = await LoadProjectDisplayAsync(db, tasks, ct).ConfigureAwait(false);
+        var ordered = allUsersBucket
+            ? TaskQueryOrdering.SortAllUsersInBucket(tasks)
+            : TaskQueryOrdering.SortByQueueOrder(tasks);
+        return ordered
+            .Select(t => MapTask(
+                t,
+                trackByTask.GetValueOrDefault(t.Id),
+                t.ProjectId is int pid ? projectById.GetValueOrDefault(pid) : null))
             .ToList();
     }
 
@@ -184,7 +199,38 @@ public sealed class SqlTaskQueryService : ITaskQueryService
         return result;
     }
 
-    internal static TaskSummaryDto MapTask(ProjectAssignment task, TrackDisplay? track = null)
+    /// <summary>Batch-load project number/name for the task set (no N+1).</summary>
+    private static async Task<Dictionary<int, ProjectDisplay>> LoadProjectDisplayAsync(
+        SiNetSQLDbContext db,
+        IReadOnlyList<ProjectAssignment> tasks,
+        CancellationToken ct)
+    {
+        var projectIds = tasks
+            .Where(t => t.ProjectId is > 0)
+            .Select(t => t.ProjectId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (projectIds.Count == 0)
+            return new Dictionary<int, ProjectDisplay>();
+
+        var rows = await db.Projects.AsNoTracking()
+            .Where(p => projectIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Number, p.Title })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return rows.ToDictionary(
+            r => r.Id,
+            r => new ProjectDisplay(
+                ProjectNumberFormatting.Format(r.Number),
+                r.Title ?? string.Empty));
+    }
+
+    internal static TaskSummaryDto MapTask(
+        ProjectAssignment task,
+        TrackDisplay? track = null,
+        ProjectDisplay? project = null)
     {
         var bucket = WorkQueueBucketResolver.Resolve(task);
         var taskTypeCode = task.TaskType?.Code;
@@ -219,8 +265,12 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             WorkflowDefinitionName: track?.ProcessName,
             JobTypeTitle: track?.JobTypeTitle,
             CurrentStageName: track?.StageName,
-            TrackDisplayLine: trackLine);
+            TrackDisplayLine: trackLine,
+            ProjectNumber: string.IsNullOrWhiteSpace(project?.Number) ? null : project.Number,
+            ProjectName: string.IsNullOrWhiteSpace(project?.Name) ? null : project.Name);
     }
 
     internal sealed record TrackDisplay(string? ProcessName, string? JobTypeTitle, string? StageName);
+
+    internal sealed record ProjectDisplay(string Number, string Name);
 }

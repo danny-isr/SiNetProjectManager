@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Projects;
 using SiNetSQL.Data;
@@ -143,7 +142,7 @@ public sealed class ProjectQueryService : IProjectQueryService
 
     private static ProjectSummaryDto ToDto(ProjectRow row) => new(
         ProjectId: row.Id,
-        ProjectNumber: FormatNumber(row.Number),
+        ProjectNumber: ProjectNumberFormatting.Format(row.Number),
         ProjectName: row.Title ?? string.Empty,
         PlaceName: NullIfBlank(row.PlaceName),
         CompanyName: NullIfBlank(row.CompanyName),
@@ -154,24 +153,6 @@ public sealed class ProjectQueryService : IProjectQueryService
         StatusId: row.StatusId,
         JobTypeIds: row.JobTypeIds,
         ProjectLabelName: NullIfBlank(row.NameAndNumber));
-
-    /// <summary>
-    /// Formats the legacy <c>float?</c> project number as the selector's display string: an integer when
-    /// there is no fractional part (e.g. <c>1042</c>), otherwise an invariant round-trip value. Empty when
-    /// the number is missing.
-    /// </summary>
-    private static string FormatNumber(float? number)
-    {
-        if (number is not float value)
-        {
-            return string.Empty;
-        }
-
-        var rounded = Math.Round(value);
-        return Math.Abs(value - rounded) < 0.0001f
-            ? ((long)rounded).ToString(CultureInfo.InvariantCulture)
-            : value.ToString(CultureInfo.InvariantCulture);
-    }
 
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value;

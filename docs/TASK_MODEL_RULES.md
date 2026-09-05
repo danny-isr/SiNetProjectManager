@@ -112,6 +112,9 @@ Implementation: `TaskQueuePriorityEngine`, `SqlTaskQueueService`.
 - Legacy `Priority` is not shown as queue position (if shown elsewhere, label as “חשיבות”).
 - Move up/down and repair use `ITaskQueueService` only.
 - **Project selection** uses the shared `ProjectSelectorView` → `ICurrentProjectContext` (no duplicate project ComboBox).
+- Task cards show **`#TaskId`** (tooltip «מספר משימה N»); AutomationId stays `Task.{TaskId}`.
+- Project line uses **business** `ProjectNumber — ProjectName` (via `ProjectNumberFormatting`), not internal `ProjectId` as the main label (`ProjectId=…` may appear in tooltip only).
+- Card zebra uses theme brushes (`SiBackgroundBrush` / `SiSurfaceBrush`); selection Primary border remains stronger than zebra.
 
 ## Task creation flow (Task Workbench)
 

@@ -121,6 +121,7 @@ public sealed class TaskWorkbenchLayoutTests
             "Property=\"AutomationProperties.AutomationId\" Value=\"{Binding TaskId, StringFormat=Task.{0}}\"",
             xaml,
             StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding TaskIdDisplay}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

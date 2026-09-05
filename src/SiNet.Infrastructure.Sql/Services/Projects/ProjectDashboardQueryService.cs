@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Projects;
 using SiNetSQL.Data;
@@ -125,7 +124,7 @@ public sealed class ProjectDashboardQueryService : IProjectDashboardQueryService
 
                 return new ProjectDashboardRowDto(
                     ProjectId: p.Id,
-                    ProjectNumber: FormatNumber(p.Number),
+                    ProjectNumber: ProjectNumberFormatting.Format(p.Number),
                     ProjectNumberValue: p.Number,
                     ProjectName: p.Title ?? string.Empty,
                     PlaceName: NullIfBlank(p.PlaceName),
@@ -169,19 +168,6 @@ public sealed class ProjectDashboardQueryService : IProjectDashboardQueryService
         }
 
         return string.Join("; ", workflows.Select(FormatOne));
-    }
-
-    private static string FormatNumber(float? number)
-    {
-        if (number is not float value)
-        {
-            return string.Empty;
-        }
-
-        var rounded = Math.Round(value);
-        return Math.Abs(value - rounded) < 0.0001f
-            ? ((long)rounded).ToString(CultureInfo.InvariantCulture)
-            : value.ToString(CultureInfo.InvariantCulture);
     }
 
     private static string? NullIfBlank(string? value)

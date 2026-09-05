@@ -66,6 +66,11 @@
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource TaskCardBorder}">
                         <Style.Triggers>
+                            <!-- Zebra: AlternationIndex 1 uses surface brush (theme-aware). -->
+                            <DataTrigger Binding="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="1">
+                                <Setter Property="Background" Value="{DynamicResource SiSurfaceBrush}" />
+                            </DataTrigger>
+                            <!-- Selection remains stronger than zebra. -->
                             <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
                                 <Setter Property="BorderBrush" Value="{DynamicResource SiPrimaryBrush}" />
                                 <Setter Property="BorderThickness" Value="1.5" />
@@ -79,14 +84,26 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
+                    <!-- #TaskId | queue position | created -->
                     <Grid Grid.Row="0" Margin="0,0,0,2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0"
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding TaskIdDisplay}"
+                                   ToolTip="{Binding TaskIdTooltip}"
+                                   FontWeight="Bold"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0"
+                                   Foreground="{DynamicResource SiPrimaryBrush}" />
+                        <Border Grid.Column="1"
                                 Background="{DynamicResource SiSecondaryBrush}"
                                 CornerRadius="6"
                                 Padding="4,1"
@@ -94,7 +111,7 @@
                                 VerticalAlignment="Center"
                                 ToolTip="מיקום בתור">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="מיקום בתור "
+                                <TextBlock Text="מיקום "
                                            Style="{DynamicResource SiTextTinyStyle}"
                                            VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding WorkPriority}"
@@ -103,73 +120,90 @@
                                            VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
-                        <TextBlock Grid.Column="1"
+                        <TextBlock Grid.Column="2"
                                    Text="{Binding CreatedAt, StringFormat=dd/MM/yyyy HH:mm}"
                                    Style="{DynamicResource SiTextTinyStyle}"
                                    HorizontalAlignment="Left"
                                    VerticalAlignment="Center"
-                                   Opacity="0.75" />
+                                   Opacity="0.75"
+                                   ToolTip="תאריך פתיחה" />
                     </Grid>
 
+                    <!-- Title -->
                     <TextBlock Grid.Row="1"
                                Text="{Binding Title}"
                                Style="{DynamicResource SiTextSmallStyle}"
                                FontWeight="SemiBold"
-                               TextWrapping="Wrap"
+                               TextWrapping="NoWrap"
                                TextTrimming="CharacterEllipsis"
-                               MaxHeight="36"
                                ToolTip="{Binding Title}"
                                Margin="0,0,0,2" />
 
-                    <Grid Grid.Row="2" Margin="0,0,0,2">
+                    <!-- ProjectNumber — ProjectName (not internal ProjectId) -->
+                    <TextBlock Grid.Row="2"
+                               Text="{Binding ProjectDisplayLine}"
+                               Style="{DynamicResource SiTextTinyStyle}"
+                               Foreground="{DynamicResource SiPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding ProjectDisplayTooltip}"
+                               Margin="0,0,0,2" />
+
+                    <!-- assignee | status | due -->
+                    <Grid Grid.Row="3" Margin="0,0,0,2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="{Binding TaskTypeName}"
-                                       Style="{DynamicResource SiTextTinyStyle}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="{Binding TaskTypeName}" />
-                            <TextBlock Text="{Binding TrackDisplayLine}"
-                                       Style="{DynamicResource SiTextTinyStyle}"
-                                       Opacity="0.8"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="{Binding TrackDisplayLine}" />
-                        </StackPanel>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding AssignedToUserName}"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding AssignedToUserName}"
+                                   VerticalAlignment="Center" />
                         <Border Grid.Column="1"
                                 Background="{DynamicResource SiSecondaryBrush}"
                                 CornerRadius="6"
                                 Padding="4,1"
                                 Margin="6,0,0,0"
-                                VerticalAlignment="Top">
+                                VerticalAlignment="Center">
                             <TextBlock Text="{Binding StatusName}"
                                        Style="{DynamicResource SiTextTinyStyle}" />
                         </Border>
-                    </Grid>
-
-                    <Grid Grid.Row="3">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0"
-                                   Text="{Binding ProjectId, StringFormat=פרויקט {0}}"
-                                   Style="{DynamicResource SiTextTinyStyle}"
-                                   Foreground="{DynamicResource SiPrimaryBrush}"
-                                   Margin="0,0,6,0" />
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding AssignedToUserName}"
-                                   Style="{DynamicResource SiTextTinyStyle}"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding AssignedToUserName}" />
                         <TextBlock Grid.Column="2"
                                    Text="{Binding DueDate, StringFormat=יעד {0:dd/MM}}"
                                    Style="{DynamicResource SiTextTinyStyle}"
                                    Margin="6,0,0,0"
-                                   Opacity="0.8" />
+                                   Opacity="0.8"
+                                   VerticalAlignment="Center" />
                     </Grid>
+
+                    <!-- TaskTypeName only when it adds information beyond Title -->
+                    <TextBlock Grid.Row="4"
+                               Text="{Binding TaskTypeName}"
+                               Opacity="0.75"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding TaskTypeName}"
+                               Margin="0,0,0,1">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource SiTextTinyStyle}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ShowTaskTypeName}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- workflow · job type · stage -->
+                    <TextBlock Grid.Row="5"
+                               Text="{Binding TrackDisplayLine}"
+                               Style="{DynamicResource SiTextTinyStyle}"
+                               Opacity="0.8"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding TrackDisplayLine}" />
                 </Grid>
             </Border>
         </DataTemplate>
@@ -177,6 +211,7 @@
         <Style x:Key="TaskCardListBoxStyle" TargetType="ListBox">
             <Setter Property="ItemTemplate" Value="{StaticResource TaskCardTemplate}" />
             <Setter Property="ItemContainerStyle" Value="{StaticResource CardListBoxItem}" />
+            <Setter Property="AlternationCount" Value="2" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
