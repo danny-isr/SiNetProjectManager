@@ -216,11 +216,14 @@ public static class ReviewCompletionEventBehavior
                 RequestWorkflowAdvance: true,
                 ClosesAssociatedTask: true),
 
+            // ClosesAssociatedTask: same lesson as ReviewMaterialCheckCompleted — AutoCloseOnCompletion
+            // alone stalls when a stray non-report IsWorkTarget remains Pending (e.g. inherited email link).
             new(ReviewCompletionEvents.ReviewProfessionalReviewCompleted,
                 new[] { TaskTypeCodes.PerformProfessionalReview, TaskTypeCodes.FixReportPerManager },
                 new[] { TaskResultCodes.ProfessionalReviewCompleted },
                 NewProjectStatusCode: null,
-                RequestWorkflowAdvance: true),
+                RequestWorkflowAdvance: true,
+                ClosesAssociatedTask: true),
 
             new(ReviewCompletionEvents.ReviewManagerApproved,
                 new[] { TaskTypeCodes.ApproveReviewReport, TaskTypeCodes.ResubmitToManager },

@@ -253,16 +253,102 @@ public sealed class SqlInspectionReportCommandService(IDbContextFactory<SiNetSQL
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
 
-    public Task<InspectionReportCommandResult> CreateReportAsync(
+    public async Task<InspectionReportCommandResult> CreateReportAsync(
         int projectId,
         string templateUrl,
         int? seriesId = null,
         string? inspectorName = null,
         int? inspectorId = null,
         string? spreadsheetId = null,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult(InspectionReportCommandResult.Fail(
-            "יצירת דוח מחוברת רק כש-Host מספק סנכרון תבנית (Google Sheets)."));
+        CancellationToken cancellationToken = default)
+    {
+        if (projectId <= 0)
+            return InspectionReportCommandResult.Fail("לא נבחר פרויקט.");
+
+        // Standalone native create: persist report (+ optional section snapshot).
+        // Full Google Sheets template scan/sync remains on the V2 host adapter
+        // (V2InspectionReportCommandService). An empty-section report is still a valid
+        // work target for PerformProfessionalReview completion.
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            int nextNumber;
+            if (seriesId is > 0)
+            {
+                nextNumber = await db.InspectionReports
+                    .Where(r => r.SeriesId == seriesId.Value)
+                    .Select(r => (int?)r.ReportNumber)
+                    .MaxAsync(cancellationToken)
+                    .ConfigureAwait(false) ?? 0;
+            }
+            else
+            {
+                nextNumber = await db.InspectionReports
+                    .Where(r => r.ProjectId == projectId && r.SeriesId == null)
+                    .Select(r => (int?)r.ReportNumber)
+                    .MaxAsync(cancellationToken)
+                    .ConfigureAwait(false) ?? 0;
+            }
+
+            nextNumber++;
+
+            var report = new InspectionReport
+            {
+                ProjectId = projectId,
+                SeriesId = seriesId is > 0 ? seriesId : null,
+                ReportNumber = nextNumber,
+                InspectionDate = DateTime.UtcNow,
+                InspectorName = inspectorName,
+                InspectorId = inspectorId,
+                SourceFileUrn = string.IsNullOrWhiteSpace(templateUrl) ? spreadsheetId : templateUrl,
+                SourceFileVersion = nextNumber.ToString(),
+            };
+
+            db.InspectionReports.Add(report);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            var sectionQuery = db.Sections
+                .AsNoTracking()
+                .Include(s => s.Chapter)
+                .Where(s => s.IsActive);
+
+            if (seriesId is > 0)
+                sectionQuery = sectionQuery.Where(s => s.Chapter.SeriesId == seriesId.Value);
+
+            var activeSections = await sectionQuery
+                .OrderBy(s => s.Chapter.ChapterNumber)
+                .ThenBy(s => s.SectionCode)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (var section in activeSections)
+            {
+                var noteSubIndex = section.Chapter.ChapterNumber == 0
+                    ? section.SectionCode.ToString()
+                    : $"{section.FullCode}.1";
+
+                db.InspectionNotes.Add(new InspectionNote
+                {
+                    ReportId = report.ReportId,
+                    SectionId = section.SectionId,
+                    NoteSubIndex = noteSubIndex,
+                });
+            }
+
+            if (activeSections.Count > 0)
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return InspectionReportCommandResult.Ok(report.ReportId);
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return InspectionReportCommandResult.Fail($"שגיאה ביצירת דוח: {ex.Message}");
+        }
+    }
 
     public async Task<InspectionReportCommandResult> UnlockReportAsync(
         int reportId, CancellationToken cancellationToken = default)

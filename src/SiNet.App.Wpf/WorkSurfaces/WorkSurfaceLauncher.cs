@@ -223,7 +223,10 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step("Launcher.Open", $"task={context.TaskId} → routing to INSPECTION surface");
 
-            if (context.PrimaryWorkTargetEntityId is not > 0)
+            // PerformProfessionalReview may open in report-creation mode when no report is linked yet
+            // (documented product path). Follow-up report tasks still require an exact report id.
+            if (context.PrimaryWorkTargetEntityId is not > 0
+                && !AllowsInspectionReportCreationWhenMissing(context.TaskTypeCode))
             {
                 WarnMissing(
                     $"[WorkSurfaceLauncher] Inspection task {context.TaskId} has no report target; opening blocked.");
@@ -389,4 +392,11 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
 
         return null;
     }
+
+    /// <summary>
+    /// Only <c>PerformProfessionalReview</c> may open without a linked report (creation mode).
+    /// Follow-up report tasks require an exact report id — never auto-pick.
+    /// </summary>
+    private static bool AllowsInspectionReportCreationWhenMissing(string? taskTypeCode) =>
+        string.Equals(taskTypeCode, "PerformProfessionalReview", StringComparison.Ordinal);
 }

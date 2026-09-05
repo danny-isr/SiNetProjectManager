@@ -39,6 +39,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private readonly IInspectionNoteScreenshotHost? _screenshotHost;
     private readonly IInspectionNoteLinkedFileHost? _linkedFileHost;
     private readonly IInspectionFileTreePickerHost? _fileTreePicker;
+    private readonly IInspectionReportTaskLinkService? _reportTaskLinks;
 
     private WorkSurfaceContext? _taskContext;
     private int? _browseProjectId;
@@ -82,7 +83,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         IInspectionReportExportPort? exportPort = null,
         IInspectionNoteScreenshotHost? screenshotHost = null,
         IInspectionNoteLinkedFileHost? linkedFileHost = null,
-        IInspectionFileTreePickerHost? fileTreePicker = null)
+        IInspectionFileTreePickerHost? fileTreePicker = null,
+        IInspectionReportTaskLinkService? reportTaskLinks = null)
     {
         _workspace = workspace;
         _taskCompletion = taskCompletion;
@@ -97,6 +99,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         _screenshotHost = screenshotHost;
         _linkedFileHost = linkedFileHost;
         _fileTreePicker = fileTreePicker;
+        _reportTaskLinks = reportTaskLinks;
 
         CreateStrip = new InspectionCreateReportStripViewModel();
         Questionnaire = new InspectionQuestionnaireViewModel();
@@ -380,8 +383,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private bool CanCreateReport =>
         !IsBusy
         && _reportCommands is not null
-        && ResolveActiveProjectId() is > 0
-        && !string.IsNullOrWhiteSpace(SelectedTemplate?.Url);
+        && ResolveActiveProjectId() is > 0;
 
     public ICommand ToggleCollapseCommand { get; }
     public ICommand RefreshCommand { get; }
@@ -465,11 +467,38 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
         if (context.PrimaryWorkTargetEntityId is not int reportId || reportId <= 0)
         {
-            StatusMessage = $"Task #{context.TaskId} has no inspection report target.";
-            ActiveProjectDisplay = context.ProjectId > 0
-                ? $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId} (\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId})"
-                : $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId}";
-            return false;
+            if (!AllowsInspectionReportCreationWhenMissing(context.TaskTypeCode))
+            {
+                StatusMessage =
+                    "המשימה אינה מקושרת לדוח בדיקה קיים ולכן לא ניתן לפתוח אותה מתוך ה־Workflow.";
+                ActiveProjectDisplay = context.ProjectId > 0
+                    ? $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId} (\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId})"
+                    : $"\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId}";
+                return false;
+            }
+
+            if (context.ProjectId <= 0)
+            {
+                StatusMessage = "המשימה אינה מקושרת לפרויקט ולכן לא ניתן לפתוח אותה.";
+                return false;
+            }
+
+            _browseProjectId = context.ProjectId;
+            ActiveProjectDisplay =
+                $"\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId} (\u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} — יצירת דוח)";
+            AllowedResultCodes.Clear();
+            foreach (var code in context.AllowedResultCodes)
+                AllowedResultCodes.Add(code);
+            SelectedResultCode = AllowedResultCodes.Count == 1 ? AllowedResultCodes[0] : null;
+            _reportLoaded = false;
+            OnPropertyChanged(nameof(CanCompleteTask));
+            RaiseCommandStates();
+
+            await RefreshTemplatesAsync(ct).ConfigureAwait(true);
+            await LoadBrowseReportsAsync(context.ProjectId, selectReportId: null, ct).ConfigureAwait(true);
+            StatusMessage =
+                "משימת בדיקת דוח: צור או בחר דוח לטיפול. הקישור למשימה ייווצר עם יצירת הדוח.";
+            return true;
         }
 
         _browseProjectId = context.ProjectId > 0 ? context.ProjectId : null;
@@ -484,6 +513,9 @@ public sealed class InspectionWindowViewModel : ObservableObject
         await RefreshTemplatesAsync(ct).ConfigureAwait(true);
         return await LoadExactReportAsync(context.ProjectId, reportId, ct).ConfigureAwait(true);
     }
+
+    private static bool AllowsInspectionReportCreationWhenMissing(string? taskTypeCode) =>
+        string.Equals(taskTypeCode, "PerformProfessionalReview", StringComparison.Ordinal);
 
     public async Task<bool> CompleteFromTaskAsync(
         string? completionEventCode = null,
@@ -541,13 +573,25 @@ public sealed class InspectionWindowViewModel : ObservableObject
         IsBusy = true;
         try
         {
+            IReadOnlyList<int>? completedLinkIds = null;
+            if (_reportTaskLinks is not null
+                && context.PrimaryWorkTargetEntityId is int reportId
+                && reportId > 0)
+            {
+                var linkId = await _reportTaskLinks
+                    .TryGetReportWorkTargetLinkIdAsync(taskId, reportId, cancellationToken)
+                    .ConfigureAwait(true);
+                if (linkId is int id)
+                    completedLinkIds = [id];
+            }
+
             var result = await _taskCompletion
                 .CompleteAsync(
                     new CompleteTaskCommand(
                         TaskId: taskId,
                         CompletionEventCode: effectiveEventCode,
                         TaskResultCode: resolvedResultCode,
-                        CompletedTaskLinkIds: null,
+                        CompletedTaskLinkIds: completedLinkIds,
                         UserId: actingUserId.Value),
                     cancellationToken)
                 .ConfigureAwait(true);
@@ -1172,11 +1216,10 @@ public sealed class InspectionWindowViewModel : ObservableObject
         }
 
         var template = SelectedTemplate;
-        if (template is null || string.IsNullOrWhiteSpace(template.Url))
-        {
-            StatusMessage = "יש לבחור תבנית לפני יצירת דוח.";
-            return;
-        }
+        var templateUrl = !string.IsNullOrWhiteSpace(template?.Url)
+            ? template.Url!
+            : "native://empty-template";
+        var spreadsheetId = template?.SpreadsheetId;
 
         IsBusy = true;
         try
@@ -1193,11 +1236,11 @@ public sealed class InspectionWindowViewModel : ObservableObject
             var result = await _reportCommands
                 .CreateReportAsync(
                     projectId,
-                    template.Url!,
+                    templateUrl,
                     seriesId,
                     inspectorName: null,
                     inspectorId: _currentUser?.UserId,
-                    spreadsheetId: template.SpreadsheetId)
+                    spreadsheetId: spreadsheetId)
                 .ConfigureAwait(true);
 
             if (!result.Succeeded || result.ReportId is not int newReportId)
@@ -1206,8 +1249,32 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 return;
             }
 
+            if (_taskContext is { } taskCtx
+                && taskCtx.TaskId is int linkTaskId and > 0
+                && _reportTaskLinks is not null
+                && AllowsInspectionReportCreationWhenMissing(taskCtx.TaskTypeCode))
+            {
+                var userId = taskCtx.ActingUserId ?? _currentUser?.UserId;
+                if (userId is not int uid || uid <= 0)
+                {
+                    StatusMessage = $"דוח #{newReportId} נוצר, אך לא ניתן לקשר למשימה — משתמש לא ידוע.";
+                    await LoadBrowseReportsAsync(projectId, newReportId, manageBusy: false).ConfigureAwait(true);
+                    return;
+                }
+
+                await _reportTaskLinks
+                    .EnsureReportWorkTargetLinkAsync(linkTaskId, newReportId, uid)
+                    .ConfigureAwait(true);
+
+                // Re-resolve so PrimaryWorkTargetEntityId reflects the new report for completion.
+                _taskContext = taskCtx with { PrimaryWorkTargetEntityId = newReportId };
+                OnPropertyChanged(nameof(TaskContext));
+            }
+
             StatusMessage = $"דוח #{newReportId} נוצר — טוען...";
             await LoadBrowseReportsAsync(projectId, newReportId, manageBusy: false).ConfigureAwait(true);
+            if (_taskContext?.PrimaryWorkTargetEntityId == newReportId)
+                _reportLoaded = SelectedReport is not null;
         }
         catch (Exception ex)
         {
@@ -1349,6 +1416,19 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 }
             }
 
+            // Also include unscoped reports (SeriesId null) — native create without template sync.
+            var unscoped = await _workspace.GetReportsAsync(projectId, seriesId: 0, ct).ConfigureAwait(true);
+            foreach (var row in unscoped)
+            {
+                if (all.Any(r => r.ReportId == row.ReportId))
+                    continue;
+                all.Add(new InspectionReportRow(
+                    row.ReportId,
+                    row.ReportNumber,
+                    row.InspectorName ?? string.Empty,
+                    row.InspectionDate));
+            }
+
             all = all.OrderByDescending(r => r.ReportNumber).ToList();
 
             _suppressReportSelectionLoad = true;
@@ -1406,26 +1486,35 @@ public sealed class InspectionWindowViewModel : ObservableObject
             AppInspectionReportRow? found = null;
             var cardRows = new List<InspectionReportRow>();
 
+            async Task<bool> TryLoadFromSeriesAsync(int seriesId)
+            {
+                var rows = await _workspace.GetReportsAsync(projectId, seriesId, ct).ConfigureAwait(true);
+                var match = rows.FirstOrDefault(r => r.ReportId == reportId);
+                if (match.ReportId != reportId)
+                    return false;
+
+                found = match;
+                _preferredSeriesId = seriesId > 0 ? seriesId : null;
+                foreach (var row in rows)
+                {
+                    cardRows.Add(new InspectionReportRow(
+                        row.ReportId,
+                        row.ReportNumber,
+                        row.InspectorName ?? string.Empty,
+                        row.InspectionDate));
+                }
+
+                return true;
+            }
+
             foreach (var series in seriesList)
             {
-                var rows = await _workspace.GetReportsAsync(projectId, series.SeriesId, ct).ConfigureAwait(true);
-                var match = rows.FirstOrDefault(r => r.ReportId == reportId);
-                if (match.ReportId == reportId)
-                {
-                    found = match;
-                    _preferredSeriesId = series.SeriesId;
-                    foreach (var row in rows)
-                    {
-                        cardRows.Add(new InspectionReportRow(
-                            row.ReportId,
-                            row.ReportNumber,
-                            row.InspectorName ?? string.Empty,
-                            row.InspectionDate));
-                    }
-
+                if (await TryLoadFromSeriesAsync(series.SeriesId).ConfigureAwait(true))
                     break;
-                }
             }
+
+            if (found is null)
+                await TryLoadFromSeriesAsync(0).ConfigureAwait(true);
 
             if (found is null || found.Value.ReportId != reportId)
             {

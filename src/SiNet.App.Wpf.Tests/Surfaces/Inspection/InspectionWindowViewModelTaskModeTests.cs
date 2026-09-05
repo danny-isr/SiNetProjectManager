@@ -49,6 +49,45 @@ public sealed class InspectionWindowViewModelTaskModeTests
     }
 
     [Fact]
+    public async Task ApplyContextAsync_PerformProfessionalReview_without_report_enters_creation_mode()
+    {
+        var workspace = new StubInspectionWorkspace(
+            series: [new(1, "Series A")],
+            reports: [],
+            notes: []);
+
+        var sut = new InspectionWindowViewModel(workspace);
+        var context = CreateContext(taskId: 10, projectId: 5, reportId: 0) with
+        {
+            PrimaryWorkTargetEntityId = null,
+            TaskTypeCode = "PerformProfessionalReview",
+        };
+
+        var ok = await sut.ApplyContextAsync(context);
+
+        Assert.True(ok);
+        Assert.True(sut.IsTaskMode);
+        Assert.False(sut.CanCompleteTask);
+        Assert.Contains("צור או בחר דוח", sut.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ApplyContextAsync_FixReport_without_report_is_blocked()
+    {
+        var sut = new InspectionWindowViewModel(new StubInspectionWorkspace([], [], []));
+        var context = CreateContext(taskId: 10, projectId: 5, reportId: 0) with
+        {
+            PrimaryWorkTargetEntityId = null,
+            TaskTypeCode = "FixReportPerManager",
+        };
+
+        var ok = await sut.ApplyContextAsync(context);
+
+        Assert.False(ok);
+        Assert.Contains("אינה מקושרת לדוח בדיקה קיים", sut.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ApplyContextAsync_wrong_component_key_is_rejected()
     {
         var sut = new InspectionWindowViewModel(new StubInspectionWorkspace([], [], []));

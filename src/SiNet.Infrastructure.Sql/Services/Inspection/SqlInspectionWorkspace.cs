@@ -34,16 +34,20 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
     public async Task<IReadOnlyList<InspectionReportRow>> GetReportsAsync(
         int projectId, int seriesId, CancellationToken cancellationToken = default)
     {
-        if (projectId <= 0 || seriesId <= 0)
+        if (projectId <= 0)
         {
             return [];
         }
 
+        // seriesId <= 0 means reports not bound to an InspectionSeries (legacy / native empty create).
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         // Avoid SQL COALESCE across InspectorName (Hebrew_100) and SIUser.Name (Hebrew_CI_AS).
-        var raw = await db.InspectionReports
-            .AsNoTracking()
-            .Where(r => r.ProjectId == projectId && r.SeriesId == seriesId)
+        var query = db.InspectionReports.AsNoTracking().Where(r => r.ProjectId == projectId);
+        query = seriesId > 0
+            ? query.Where(r => r.SeriesId == seriesId)
+            : query.Where(r => r.SeriesId == null);
+
+        var raw = await query
             .OrderByDescending(r => r.ReportNumber)
             .Select(r => new
             {
