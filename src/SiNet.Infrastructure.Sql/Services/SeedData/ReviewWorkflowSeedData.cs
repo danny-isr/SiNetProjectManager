@@ -56,6 +56,7 @@ public static class ReviewWorkflowSeedData
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.MaterialIntake,               "קליטת חומר ובדיקת שלמות",            SortOrder: 40),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.ProfessionalReview,           "בדיקה מקצועית",                       SortOrder: 50),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.AwaitingManagerApproval,      "ממתין לאישור מנהל",                   SortOrder: 60),
+        new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.SendReportToPlanner,          "שליחת דוח למתכנן",                     SortOrder: 65),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.AwaitingPlannerCorrections,   "ממתין לתיקוני מתכנן",                 SortOrder: 70),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.RecheckRound,                 "סבב בדיקה חוזרת",                     SortOrder: 80),
         new PlanningWorkflowSeedData.StageDefinition(ReviewStageCodes.PoliceApprovalDecision,       "החלטה: נדרש אישור משטרה?",            SortOrder: 85),
@@ -93,6 +94,7 @@ public static class ReviewWorkflowSeedData
             [ReviewStageCodes.MaterialIntake]              = ReviewUserGroupCodes.Reviewers,
             [ReviewStageCodes.ProfessionalReview]          = ReviewUserGroupCodes.Reviewers,
             [ReviewStageCodes.AwaitingManagerApproval]     = ReviewUserGroupCodes.ReviewManagers,
+            [ReviewStageCodes.SendReportToPlanner]         = ReviewUserGroupCodes.Reviewers,
             [ReviewStageCodes.AwaitingPlannerCorrections]  = ReviewUserGroupCodes.Reviewers,
             [ReviewStageCodes.RecheckRound]                = ReviewUserGroupCodes.Reviewers,
             [ReviewStageCodes.PoliceApprovalDecision]      = ReviewUserGroupCodes.Reviewers,
@@ -139,6 +141,13 @@ public static class ReviewWorkflowSeedData
             IsRequired: true,
             SortOrder: 1,
             Notes: "אישור דו״ח הבדיקה ע״י מנהל"),
+        new PlanningWorkflowSeedData.StageTaskDefinition(
+            StageCode: ReviewStageCodes.SendReportToPlanner,
+            TaskTypeCode: TaskTypeCodes.SendReportToPlanner,
+            AssignedGroupCode: ReviewUserGroupCodes.Reviewers,
+            IsRequired: true,
+            SortOrder: 1,
+            Notes: "שליחת דוח/הערות הבדיקה למתכנן"),
         new PlanningWorkflowSeedData.StageTaskDefinition(
             StageCode: ReviewStageCodes.AwaitingPlannerCorrections,
             TaskTypeCode: TaskTypeCodes.TrackPlannerCorrections,
@@ -240,12 +249,16 @@ public static class ReviewWorkflowSeedData
         Conditional(ReviewStageCodes.ProfessionalReview, ReviewStageCodes.AwaitingManagerApproval,
             taskResult: TaskResultCodes.ProfessionalReviewCompleted),
 
-        // Manager.
-        Conditional(ReviewStageCodes.AwaitingManagerApproval, ReviewStageCodes.AwaitingPlannerCorrections,
-            taskResult: TaskResultCodes.ManagerApproved,
-            actions: SetStatus(ProjectStatusCodes.WaitingForClient)),
+        // Manager → outbound send (WaitingForClient only after CommentsSentToPlanner).
+        Conditional(ReviewStageCodes.AwaitingManagerApproval, ReviewStageCodes.SendReportToPlanner,
+            taskResult: TaskResultCodes.ManagerApproved),
         Conditional(ReviewStageCodes.AwaitingManagerApproval, ReviewStageCodes.ProfessionalReview,
             taskResult: TaskResultCodes.ManagerRequestedChanges),
+
+        // Outbound report/comments sent → wait for planner corrections.
+        Conditional(ReviewStageCodes.SendReportToPlanner, ReviewStageCodes.AwaitingPlannerCorrections,
+            taskResult: TaskResultCodes.CommentsSentToPlanner,
+            actions: SetStatus(ProjectStatusCodes.WaitingForClient)),
 
         // Planner corrections received → recheck (back to Active).
         Conditional(ReviewStageCodes.AwaitingPlannerCorrections, ReviewStageCodes.RecheckRound,

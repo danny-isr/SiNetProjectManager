@@ -39,6 +39,8 @@ internal static class SystemCertificationRevCorridorSupport
                 (ReviewCompletionEvents.ReviewProfessionalReviewCompleted, TaskResultCodes.ProfessionalReviewCompleted),
             [TaskTypeCodes.ApproveReviewReport] =
                 (ReviewCompletionEvents.ReviewManagerApproved, TaskResultCodes.ManagerApproved),
+            [TaskTypeCodes.SendReportToPlanner] =
+                (ReviewCompletionEvents.ReviewCommentsSentToPlanner, TaskResultCodes.CommentsSentToPlanner),
             [TaskTypeCodes.TrackPlannerCorrections] =
                 (ReviewCompletionEvents.ReviewPlannerCorrectionsReceived, TaskResultCodes.PlannerCorrectionsReceived),
             [TaskTypeCodes.RecheckPlan] =

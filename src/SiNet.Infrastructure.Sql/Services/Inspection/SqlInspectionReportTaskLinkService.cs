@@ -100,4 +100,77 @@ public sealed class SqlInspectionReportTaskLinkService(IDbContextFactory<SiNetSQ
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
     }
+
+    public async ValueTask RepairReportTaskWorkTargetsAsync(
+        int taskId,
+        int reportId,
+        int? emailSourceEntityId,
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (taskId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(taskId));
+        if (reportId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(reportId));
+
+        await EnsureReportWorkTargetLinkAsync(taskId, reportId, userId, cancellationToken)
+            .ConfigureAwait(false);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        if (emailSourceEntityId is > 0)
+        {
+            var emailId = emailSourceEntityId.Value;
+            var emailLinks = await db.TaskLinks
+                .Where(l =>
+                    l.TaskId == taskId
+                    && l.LinkedEntityType == TaskLinkEntityType.EmailInboxMessage
+                    && l.LinkedEntityId == emailId)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var source = emailLinks.FirstOrDefault(l => l.Role == TaskLinkRole.Source);
+            if (source is null)
+            {
+                db.TaskLinks.Add(new TaskLink
+                {
+                    TaskId = taskId,
+                    LinkedEntityType = TaskLinkEntityType.EmailInboxMessage,
+                    LinkedEntityId = emailId,
+                    Role = TaskLinkRole.Source,
+                    Description = $"מקור: EmailInboxMessage #{emailId}",
+                    CreatedAtUtc = DateTime.UtcNow,
+                    CreatedByUserId = userId,
+                });
+            }
+
+            foreach (var link in emailLinks.Where(l => l.Role != TaskLinkRole.Source))
+            {
+                // Incorrect primary work target for report tasks — demote or remove.
+                if (link.IsWorkTarget || link.Role == TaskLinkRole.Related)
+                {
+                    db.TaskLinks.Remove(link);
+                }
+            }
+        }
+        else
+        {
+            // No expected email source: still demote any Email IsWorkTarget on this task.
+            var strayEmailTargets = await db.TaskLinks
+                .Where(l =>
+                    l.TaskId == taskId
+                    && l.LinkedEntityType == TaskLinkEntityType.EmailInboxMessage
+                    && l.IsWorkTarget)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            foreach (var link in strayEmailTargets)
+            {
+                link.IsWorkTarget = false;
+                if (link.Role == TaskLinkRole.Related)
+                    link.Role = TaskLinkRole.Source;
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
 }

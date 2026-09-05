@@ -370,7 +370,8 @@ internal static class SystemCertificationTransitionAssertions
         {
             TaskTypeCodes.OpenReviewProject => ReviewStageCodes.MaterialIntake,
             TaskTypeCodes.PerformProfessionalReview => ReviewStageCodes.AwaitingManagerApproval,
-            TaskTypeCodes.ApproveReviewReport => ReviewStageCodes.AwaitingPlannerCorrections,
+            TaskTypeCodes.ApproveReviewReport => ReviewStageCodes.SendReportToPlanner,
+            TaskTypeCodes.SendReportToPlanner => ReviewStageCodes.AwaitingPlannerCorrections,
             TaskTypeCodes.TrackPlannerCorrections => ReviewStageCodes.RecheckRound,
             TaskTypeCodes.RecheckPlan => ReviewStageCodes.PoliceApprovalDecision,
             TaskTypeCodes.DeterminePoliceApprovalRequirement => ReviewStageCodes.Close,
@@ -383,6 +384,7 @@ internal static class SystemCertificationTransitionAssertions
         TaskTypeCodes.OpenReviewProject,
         TaskTypeCodes.PerformProfessionalReview,
         TaskTypeCodes.ApproveReviewReport,
+        TaskTypeCodes.SendReportToPlanner,
         TaskTypeCodes.TrackPlannerCorrections,
         TaskTypeCodes.RecheckPlan,
         TaskTypeCodes.DeterminePoliceApprovalRequirement,

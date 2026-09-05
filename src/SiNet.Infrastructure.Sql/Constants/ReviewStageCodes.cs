@@ -12,6 +12,8 @@ public static class ReviewStageCodes
     public const string MaterialIntake               = "REV.MaterialIntake";
     public const string ProfessionalReview           = "REV.ProfessionalReview";
     public const string AwaitingManagerApproval      = "REV.AwaitingManagerApproval";
+    /// <summary>Outbound send of the review report/comments to the planner after manager approval.</summary>
+    public const string SendReportToPlanner          = "REV.SendReportToPlanner";
     public const string AwaitingPlannerCorrections   = "REV.AwaitingPlannerCorrections";
     public const string RecheckRound                 = "REV.RecheckRound";
     // Post-recheck decision: does this plan require police/authority approval?

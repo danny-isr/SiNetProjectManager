@@ -833,6 +833,59 @@ public class SqlWorkflowSeedService
             ct: ct);
 
         await RemoveLegacyReviewCloseLoopAsync(ct);
+        await ReconcileReviewManagerApprovedSendPathAsync(ct);
+    }
+
+    /// <summary>
+    /// Removes obsolete <c>ManagerApproved → REV.AwaitingPlannerCorrections</c> rules that
+    /// predate <see cref="ReviewStageCodes.SendReportToPlanner"/>. Seed keys include ToStageId,
+    /// so changing the happy path would otherwise leave a duplicate outgoing rule.
+    /// </summary>
+    private async ValueTask ReconcileReviewManagerApprovedSendPathAsync(CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var definitionId = await db.WorkflowDefinitions
+            .AsNoTracking()
+            .Where(d => d.Code == ReviewWorkflowSeedData.Code)
+            .Select(d => (int?)d.Id)
+            .FirstOrDefaultAsync(ct);
+        if (definitionId is null)
+            return;
+
+        var stageIds = await db.WorkflowStageDefinitions
+            .AsNoTracking()
+            .Where(s => s.WorkflowDefinitionId == definitionId.Value
+                        && (s.Code == ReviewStageCodes.AwaitingManagerApproval
+                            || s.Code == ReviewStageCodes.AwaitingPlannerCorrections
+                            || s.Code == ReviewStageCodes.SendReportToPlanner))
+            .Select(s => new { s.Id, s.Code })
+            .ToListAsync(ct);
+
+        var fromId = stageIds.FirstOrDefault(s => s.Code == ReviewStageCodes.AwaitingManagerApproval)?.Id;
+        var obsoleteToId = stageIds.FirstOrDefault(s => s.Code == ReviewStageCodes.AwaitingPlannerCorrections)?.Id;
+        if (fromId is null || obsoleteToId is null)
+            return;
+
+        var obsolete = await db.WorkflowTransitionRules
+            .Include(r => r.Actions)
+            .Where(r => r.WorkflowDefinitionId == definitionId.Value
+                        && r.FromStageId == fromId.Value
+                        && r.ToStageId == obsoleteToId.Value
+                        && r.ConditionJson != null
+                        && r.ConditionJson.Contains(TaskResultCodes.ManagerApproved))
+            .ToListAsync(ct);
+
+        if (obsolete.Count == 0)
+            return;
+
+        foreach (var rule in obsolete)
+            db.WorkflowTransitionActions.RemoveRange(rule.Actions);
+        db.WorkflowTransitionRules.RemoveRange(obsolete);
+        await db.SaveChangesAsync(ct);
+
+        DevToolsLog.Info(
+            $"[WorkflowSeed] Review: removed {obsolete.Count} obsolete ManagerApproved → AwaitingPlannerCorrections rule(s).");
     }
 
     /// <summary>

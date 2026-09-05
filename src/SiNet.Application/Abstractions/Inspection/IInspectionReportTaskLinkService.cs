@@ -24,4 +24,15 @@ public interface IInspectionReportTaskLinkService
         int taskId,
         int reportId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Idempotent repair for report-based tasks: ensure InspectionReport Related/IsWorkTarget,
+    /// keep trigger Email as Source only, and demote incorrect Email work targets.
+    /// </summary>
+    ValueTask RepairReportTaskWorkTargetsAsync(
+        int taskId,
+        int reportId,
+        int? emailSourceEntityId,
+        int userId,
+        CancellationToken cancellationToken = default);
 }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Settings;
+using SiNet.Infrastructure.Sql.Constants;
 using SiNet.Infrastructure.Sql.Services.Tasks;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -339,7 +340,13 @@ internal sealed class WorkflowStageTaskProvisioningService
                     }
 
                     await db.SaveChangesAsync(ct).ConfigureAwait(false);
-                    await AddSourceLinkIfApplicableAsync(db, existingOpenTask.Id, instance, userId, ct)
+                    await AttachTaskLinksForStageTaskAsync(
+                            db,
+                            existingOpenTask.Id,
+                            instance,
+                            template.TaskType?.Code,
+                            userId,
+                            ct)
                         .ConfigureAwait(false);
 
                     createdTasks.Add(existingOpenTask);
@@ -418,7 +425,14 @@ internal sealed class WorkflowStageTaskProvisioningService
                     eventNote: template.Notes ?? $"משימה נוצרה אוטומטית מ-Workflow (Instance={instanceId})",
                     ct: ct).ConfigureAwait(false);
 
-                await AddSourceLinkIfApplicableAsync(db, task.Id, instance, userId, ct).ConfigureAwait(false);
+                await AttachTaskLinksForStageTaskAsync(
+                        db,
+                        task.Id,
+                        instance,
+                        template.TaskType?.Code,
+                        userId,
+                        ct)
+                    .ConfigureAwait(false);
 
                 createdTasks.Add(task);
                 // TEMP WF-DEBUG
@@ -590,7 +604,9 @@ internal sealed class WorkflowStageTaskProvisioningService
             eventNote: $"משימה נוצרה אוטומטית מתהליך עבודה #{instance.Id}, שלב: {stage.Name}",
             ct: ct).ConfigureAwait(false);
 
-        await AddSourceLinkIfApplicableAsync(db, task.Id, instance, userId, ct).ConfigureAwait(false);
+        // Group-based fallback has no TaskType template — provenance Email Source only.
+        await AttachTaskLinksForStageTaskAsync(db, task.Id, instance, taskTypeCode: null, userId, ct)
+            .ConfigureAwait(false);
 
         return [task];
     }
@@ -648,75 +664,236 @@ internal sealed class WorkflowStageTaskProvisioningService
         return title.Length <= 240 ? title : title[..237] + "...";
     }
 
-    private static async ValueTask AddSourceLinkIfApplicableAsync(
+    /// <summary>
+    /// Attaches provenance + declared work-target links for a newly provisioned stage task.
+    /// <list type="bullet">
+    /// <item>Workflow trigger Email → always <see cref="TaskLinkRole.Source"/> when present.</item>
+    /// <item>Email Related/IsWorkTarget only when the task interaction primary work target is email.</item>
+    /// <item>InspectionReport Related/IsWorkTarget carried from prior tasks on the same workflow instance.</item>
+    /// </list>
+    /// </summary>
+    private static async ValueTask AttachTaskLinksForStageTaskAsync(
+        SiNetSQLDbContext db,
+        int taskId,
+        WorkflowInstance instance,
+        string? taskTypeCode,
+        int userId,
+        CancellationToken ct)
+    {
+        var interaction = string.IsNullOrWhiteSpace(taskTypeCode)
+            ? null
+            : ReviewTaskInteractionRegistry.TryGet(taskTypeCode);
+
+        await EnsureEmailSourceLinkAsync(db, taskId, instance, userId, ct).ConfigureAwait(false);
+
+        if (interaction is not null
+            && IsEmailWorkTarget(interaction.PrimaryWorkTargetEntityType))
+        {
+            await EnsureEmailWorkTargetLinkAsync(db, taskId, instance, userId, ct).ConfigureAwait(false);
+        }
+
+        if (interaction is not null
+            && interaction.PrimaryWorkTargetEntityType == TaskWorkTargetEntityType.InspectionReport)
+        {
+            await AttachInspectionReportWorkTargetAsync(
+                    db,
+                    taskId,
+                    instance,
+                    taskTypeCode!,
+                    userId,
+                    ct)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private static bool IsEmailWorkTarget(TaskWorkTargetEntityType target) =>
+        target is TaskWorkTargetEntityType.EmailInboxMessage
+            or TaskWorkTargetEntityType.EmailInboxAttachment
+            or TaskWorkTargetEntityType.EmailThread;
+
+    /// <summary>
+    /// <see cref="TaskTypeCodes.PerformProfessionalReview"/> may open in creation mode with no prior report.
+    /// Other InspectionReport task types require exactly one authoritative report on the instance.
+    /// </summary>
+    private static bool AllowsMissingInspectionReport(string taskTypeCode) =>
+        string.Equals(taskTypeCode, TaskTypeCodes.PerformProfessionalReview, StringComparison.Ordinal);
+
+    private static async ValueTask EnsureEmailSourceLinkAsync(
         SiNetSQLDbContext db,
         int taskId,
         WorkflowInstance instance,
         int userId,
         CancellationToken ct)
     {
-        if (!instance.TriggerEntityId.HasValue) return;
-
-        TaskLinkEntityType? sourceType = instance.TriggerType switch
-        {
-            WorkflowTriggerType.Email => TaskLinkEntityType.EmailInboxMessage,
-            _ => null,
-        };
-
-        if (sourceType is null) return;
+        if (instance.TriggerType != WorkflowTriggerType.Email || !instance.TriggerEntityId.HasValue)
+            return;
 
         var entityId = instance.TriggerEntityId.Value;
+        var exists = await db.TaskLinks.AnyAsync(l =>
+                l.TaskId == taskId
+                && l.LinkedEntityType == TaskLinkEntityType.EmailInboxMessage
+                && l.LinkedEntityId == entityId
+                && l.Role == TaskLinkRole.Source, ct)
+            .ConfigureAwait(false);
 
+        if (exists)
+            return;
+
+        db.TaskLinks.Add(new TaskLink
+        {
+            TaskId = taskId,
+            LinkedEntityType = TaskLinkEntityType.EmailInboxMessage,
+            LinkedEntityId = entityId,
+            Role = TaskLinkRole.Source,
+            Description = $"מקור: EmailInboxMessage #{entityId}",
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedByUserId = userId,
+        });
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async ValueTask EnsureEmailWorkTargetLinkAsync(
+        SiNetSQLDbContext db,
+        int taskId,
+        WorkflowInstance instance,
+        int userId,
+        CancellationToken ct)
+    {
+        if (instance.TriggerType != WorkflowTriggerType.Email || !instance.TriggerEntityId.HasValue)
+            return;
+
+        var entityId = instance.TriggerEntityId.Value;
+        var workTargetExists = await db.TaskLinks.AnyAsync(l =>
+                l.TaskId == taskId
+                && l.LinkedEntityType == TaskLinkEntityType.EmailInboxMessage
+                && l.LinkedEntityId == entityId
+                && l.Role == TaskLinkRole.Related
+                && l.IsWorkTarget, ct)
+            .ConfigureAwait(false);
+
+        if (workTargetExists)
+            return;
+
+        db.TaskLinks.Add(new TaskLink
+        {
+            TaskId = taskId,
+            LinkedEntityType = TaskLinkEntityType.EmailInboxMessage,
+            LinkedEntityId = entityId,
+            Role = TaskLinkRole.Related,
+            IsWorkTarget = true,
+            WorkStatus = WorkTargetStatus.Pending,
+            Description = $"יעד עבודה: EmailInboxMessage #{entityId}",
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedByUserId = userId,
+        });
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async ValueTask AttachInspectionReportWorkTargetAsync(
+        SiNetSQLDbContext db,
+        int taskId,
+        WorkflowInstance instance,
+        string taskTypeCode,
+        int userId,
+        CancellationToken ct)
+    {
+        var already = await db.TaskLinks.AnyAsync(l =>
+                l.TaskId == taskId
+                && l.LinkedEntityType == TaskLinkEntityType.InspectionReport
+                && l.IsWorkTarget, ct)
+            .ConfigureAwait(false);
+        if (already)
+            return;
+
+        int? reportId;
         try
         {
-            var exists = await db.TaskLinks.AnyAsync(l =>
-                   l.TaskId == taskId
-                && l.LinkedEntityType == sourceType.Value
-                && l.LinkedEntityId == entityId
-                && l.Role == TaskLinkRole.Source, ct).ConfigureAwait(false);
-
-            if (!exists)
-            {
-                db.TaskLinks.Add(new TaskLink
-                {
-                    TaskId = taskId,
-                    LinkedEntityType = sourceType.Value,
-                    LinkedEntityId = entityId,
-                    Role = TaskLinkRole.Source,
-                    Description = $"מקור: {sourceType.Value} #{entityId}",
-                    CreatedAtUtc = DateTime.UtcNow,
-                    CreatedByUserId = userId,
-                });
-            }
-
-            var workTargetExists = await db.TaskLinks.AnyAsync(l =>
-                   l.TaskId == taskId
-                && l.LinkedEntityType == sourceType.Value
-                && l.LinkedEntityId == entityId
-                && l.Role == TaskLinkRole.Related, ct).ConfigureAwait(false);
-
-            if (!workTargetExists)
-            {
-                db.TaskLinks.Add(new TaskLink
-                {
-                    TaskId = taskId,
-                    LinkedEntityType = sourceType.Value,
-                    LinkedEntityId = entityId,
-                    Role = TaskLinkRole.Related,
-                    IsWorkTarget = true,
-                    WorkStatus = WorkTargetStatus.Pending,
-                    Description = $"יעד עבודה: {sourceType.Value} #{entityId}",
-                    CreatedAtUtc = DateTime.UtcNow,
-                    CreatedByUserId = userId,
-                });
-            }
-
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            reportId = await ResolveSingleInspectionReportIdForWorkflowAsync(db, instance.Id, ct)
+                .ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            Trace.TraceError(
-                $"[Provisioning] failed to add Source TaskLink (TaskId={taskId}, Instance={instance.Id}, SourceType={sourceType.Value}, EntityId={entityId}): {ex}");
+            throw new InvalidOperationException(
+                $"[Provisioning] Cannot attach InspectionReport work target for task #{taskId} " +
+                $"(TaskType={taskTypeCode}, WorkflowInstance={instance.Id}): {ex.Message}",
+                ex);
         }
+
+        if (reportId is null)
+        {
+            if (AllowsMissingInspectionReport(taskTypeCode))
+                return;
+
+            throw new InvalidOperationException(
+                $"[Provisioning] TaskType '{taskTypeCode}' requires an InspectionReport work target, " +
+                $"but WorkflowInstance #{instance.Id} has no prior InspectionReport TaskLink. " +
+                $"Fail closed — will not guess by ProjectId.");
+        }
+
+        db.TaskLinks.Add(new TaskLink
+        {
+            TaskId = taskId,
+            LinkedEntityType = TaskLinkEntityType.InspectionReport,
+            LinkedEntityId = reportId.Value,
+            Role = TaskLinkRole.Related,
+            IsWorkTarget = true,
+            WorkStatus = WorkTargetStatus.Pending,
+            Description = $"יעד עבודה: דוח בדיקה #{reportId.Value}",
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedByUserId = userId,
+        });
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves the single authoritative InspectionReport id linked to any task of
+    /// <paramref name="workflowInstanceId"/>. Prefer IsWorkTarget Related links; fail closed on ambiguity.
+    /// </summary>
+    internal static async ValueTask<int?> ResolveSingleInspectionReportIdForWorkflowAsync(
+        SiNetSQLDbContext db,
+        int workflowInstanceId,
+        CancellationToken ct)
+    {
+        var rows = await (
+                from tl in db.TaskLinks.AsNoTracking()
+                join wf in db.TaskLinks.AsNoTracking() on tl.TaskId equals wf.TaskId
+                where wf.LinkedEntityType == TaskLinkEntityType.WorkflowInstance
+                      && wf.LinkedEntityId == workflowInstanceId
+                      && wf.Role == TaskLinkRole.Trigger
+                      && tl.LinkedEntityType == TaskLinkEntityType.InspectionReport
+                select new
+                {
+                    tl.LinkedEntityId,
+                    tl.IsWorkTarget,
+                    tl.Role,
+                })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        if (rows.Count == 0)
+            return null;
+
+        var workTargetIds = rows
+            .Where(r => r.IsWorkTarget && r.Role == TaskLinkRole.Related)
+            .Select(r => r.LinkedEntityId)
+            .Distinct()
+            .ToList();
+
+        if (workTargetIds.Count == 1)
+            return (int)workTargetIds[0];
+        if (workTargetIds.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"WorkflowInstance #{workflowInstanceId} has {workTargetIds.Count} distinct InspectionReport " +
+                $"work targets ({string.Join(", ", workTargetIds)}). Fail closed.");
+        }
+
+        var anyIds = rows.Select(r => r.LinkedEntityId).Distinct().ToList();
+        if (anyIds.Count == 1)
+            return (int)anyIds[0];
+
+        throw new InvalidOperationException(
+            $"WorkflowInstance #{workflowInstanceId} has {anyIds.Count} distinct InspectionReport links " +
+            $"({string.Join(", ", anyIds)}) and no single Related work target. Fail closed.");
     }
 }

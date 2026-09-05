@@ -19,6 +19,8 @@ internal static class SystemCertificationRevInspectionProof
         TaskTypeCodes.RecheckPlan,
         TaskTypeCodes.ApproveReviewReport,
         TaskTypeCodes.ResubmitToManager,
+        TaskTypeCodes.SendReportToPlanner,
+        TaskTypeCodes.SendInternalApproval,
     };
 
     internal static async Task<int> EnsureSharedCertReportAsync(
