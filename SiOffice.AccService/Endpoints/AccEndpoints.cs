@@ -916,13 +916,17 @@ internal static class AccEndpoints
                 AutodeskTokenStoreOptions.AccServiceAdmin);
             var bim360 = new Bim360Service(tokenProvider);
 
+            var bootstrapAdminEmail = AccBootstrapAdminEmailResolver.ResolveForInboxProjectAdmin(
+                systemSettings.Acc.AccBootstrapAdminEmail,
+                body.AdminEmail);
+
             var bootstrap = new AccBootstrapService(
                 db, bim360,
                 inboxProjectName: projectName,
                 inboxFolderName: folderName,
                 forceCreateProject: true,
                 createPlatform: CreateProjectPlatform.AccNative,
-                bootstrapAdminEmail: body.AdminEmail ?? string.Empty,
+                bootstrapAdminEmail: bootstrapAdminEmail,
                 dryRun: body.DryRun,
                 templateName: templateName);
 

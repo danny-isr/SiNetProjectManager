@@ -52,7 +52,8 @@ public sealed class LocalAccInboxProvisioner : IAccInboxProvisioner
             inboxFolderName: inboxFolderName,
             forceCreateProject: true,
             createPlatform: CreateProjectPlatform.AccNative,
-            bootstrapAdminEmail: string.Empty,
+            bootstrapAdminEmail: AccBootstrapAdminEmailResolver.ResolveForInboxProjectAdmin(
+                settings.Acc.AccBootstrapAdminEmail),
             dryRun: false,
             templateName: templateName);
 

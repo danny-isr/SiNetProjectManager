@@ -18,8 +18,8 @@ public static class AccConstants
     /// project: regular users may view files, while writes/metadata changes are
     /// reserved for the explicit system/admin account.
     /// 
-    /// NOTE: The admin (danny@si-eng.co.il) is added separately via AssignProjectAdminAsync
-    /// with "administrator" access. Do NOT include the admin here.
+    /// NOTE: AccBootstrapAdminEmail is assigned separately via AssignProjectAdminAsync
+    /// with "administrator" access. Do NOT include that service account here.
     /// 
     /// To modify: Add or remove email addresses from this list.
     /// Future: Move to appsettings.json for runtime configuration.

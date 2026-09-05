@@ -29,6 +29,7 @@ Two independent Autodesk 3-legged identities:
 - Browser auto-login is **not** isolation — AuthOnce must still sign in as the designated Admin.
 - Interactive OAuth authorization URL includes **`prompt=login`** so Autodesk does not silently reuse an existing browser session (e.g. danny@) when AuthOnce needs AccBootstrapAdminEmail (siad@).
 - Proof of health = AccService diagnostics report **its** `tokenStoragePath` + userinfo `ActualAdminEmail` vs `AccBootstrapAdminEmail`.
+- **Office Inbox Project Admin:** `POST /v1/acc/inbox/ensure` must assign **`AccBootstrapAdminEmail`** (not a hardcoded personal mailbox) as Project Admin on the Office Inbox ACC project. AccService metadata (custom attributes / MoveToProject) returns **403** on the Inbox project when that Admin is missing from project membership.
 
 Do **not** copy the desktop generic token into the AccService store automatically — it may belong to Danny/Tair/another desktop user.
 

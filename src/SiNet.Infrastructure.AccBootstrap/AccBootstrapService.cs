@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyOffice.AutodeskConnector;
+using SiNet.Application.Settings;
 using SiNetSQL.Data;
 using SiNet.Infrastructure.Sql.Services.Email.Acc;
 using SiNetSQL.Models;
@@ -892,10 +893,11 @@ public class AccBootstrapService : IAccBootstrapService
         }
 
         // ═══════════════════════════════════════════════════════════════════════════════
-        // Step A2: ALWAYS assign ACC permissions to Dani (resolved from database)
-        // This ensures the current user has permissions even if project already existed.
+        // Step A2: ALWAYS assign AccBootstrapAdminEmail as Project Admin (idempotent).
+        // Required for AccService metadata (custom attributes) on an existing Inbox project
+        // when the Admin token identity is not the historical personal mailbox.
         // ═══════════════════════════════════════════════════════════════════════════════
-        await EnsureDaniHasAccPermissionsAsync(projectId, cancellationToken);
+        await EnsureBootstrapAdminHasAccPermissionsAsync(projectId, cancellationToken);
 
         // ═══════════════════════════════════════════════════════════════════════════════
         // Step B: Get root folder ID (with provisioning polling if project was just created)
@@ -1028,62 +1030,84 @@ public class AccBootstrapService : IAccBootstrapService
     // ═══════════════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Ensures Dani Israel has ACC project permissions.
-    /// Uses the explicit admin email (danny@si-eng.co.il) for ACC permission assignment.
-    /// 
-    /// This is called ALWAYS after project is found/created to ensure permissions exist.
-    /// The assignment API is idempotent - if already assigned, it won't fail.
-    /// 
-    /// Also ensures additional inbox members (like Lilach@si-eng.co.il) have view-only access.
+    /// Ensures AccBootstrapAdminEmail is Project Admin on the Office Inbox.
+    /// Required so AccService can list/set custom attributes (Move/Lock) on inbox items.
+    /// Also ensures <see cref="AccConstants.DefaultInboxMembers"/> as viewers.
     /// </summary>
-    private async Task EnsureDaniHasAccPermissionsAsync(string projectId, CancellationToken cancellationToken)
+    private async Task EnsureBootstrapAdminHasAccPermissionsAsync(string projectId, CancellationToken cancellationToken)
     {
-        AccBootstrapLog.Info($"[Bootstrap] ═══════════════════════════════════════════════════════════════════");
+        AccBootstrapLog.Info($"[Bootstrap] ===============================================================");
         AccBootstrapLog.Info($"[Bootstrap] AssignProjectPermissionsAsync START projectId={projectId}");
-        AccBootstrapLog.Info($"[Bootstrap] ═══════════════════════════════════════════════════════════════════");
+        AccBootstrapLog.Info($"[Bootstrap] ===============================================================");
 
         try
         {
-            // Step 1: Get the explicit admin email (always returns danny@si-eng.co.il)
-            var adminEmail = await ResolveDaniEmailAsync(cancellationToken);
+            var adminEmail = ResolveBootstrapAdminEmailForPermissions();
             AccBootstrapLog.Info($"[Bootstrap] Admin email resolved: {adminEmail}");
 
-            // Step 2: Assign Project Admin permissions
             AccBootstrapLog.Info($"[Bootstrap] Calling AssignProjectAdminAsync for project {projectId}...");
 
             var success = await _bim360Service.AssignProjectAdminAsync(projectId, adminEmail, cancellationToken);
 
             if (success)
             {
-                AccBootstrapLog.Info($"[Bootstrap] ✓ Permission assignment SUCCESS for {adminEmail}");
+                AccBootstrapLog.Info($"[Bootstrap] Permission assignment SUCCESS for {adminEmail}");
                 _adminWasAssigned = true;
             }
             else
             {
-                AccBootstrapLog.Warn($"[Bootstrap] Permission assignment returned false. User may already be assigned or API issue.");
-                AccBootstrapLog.Warn($"[Bootstrap] This is not necessarily a failure - check ACC Admin Console to verify.");
-                _adminWasAssigned = false;
+                var alreadyMember = await IsProjectMemberAsync(projectId, adminEmail, cancellationToken).ConfigureAwait(false);
+                if (alreadyMember)
+                {
+                    AccBootstrapLog.Info($"[Bootstrap] AssignProjectAdmin returned false but {adminEmail} is already a project member - treating as OK.");
+                    _adminWasAssigned = true;
+                }
+                else
+                {
+                    AccBootstrapLog.Warn($"[Bootstrap] Permission assignment returned false and {adminEmail} is not a project member.");
+                    AccBootstrapLog.Warn($"[Bootstrap] Check ACC Admin Console / AccService token scopes.");
+                    _adminWasAssigned = false;
+                }
             }
 
-            // Step 3: Ensure additional inbox members have access
             var memberEmails = AccConstants.DefaultInboxMembers?.ToList() ?? new List<string>();
             AccBootstrapLog.Info($"[Bootstrap] Calling EnsureInboxMembersAsync projectId={projectId} members={string.Join(", ", memberEmails)}");
             await EnsureInboxMembersAsync(projectId, cancellationToken);
         }
         catch (Exception ex)
         {
-            // Log detailed error but don't fail the entire bootstrap
             AccBootstrapLog.Error(ex, $"[Bootstrap] Permission assignment FAILED");
             AccBootstrapLog.Error($"[Bootstrap] Error: {ex.Message}");
-            AccBootstrapLog.Warn($"[Bootstrap] Bootstrap will continue, but admin may not have access to create folders.");
-            AccBootstrapLog.Warn($"[Bootstrap] Manual fix: Add danny@si-eng.co.il to the project in ACC Admin Console > Project Members");
+            AccBootstrapLog.Warn($"[Bootstrap] Bootstrap will continue, but AccBootstrapAdminEmail may lack Inbox metadata rights.");
+            AccBootstrapLog.Warn($"[Bootstrap] Manual fix: Add AccBootstrapAdminEmail as Project Admin on the Office Inbox ACC project.");
             _adminWasAssigned = false;
         }
 
         AccBootstrapLog.Info($"[Bootstrap] AssignProjectPermissionsAsync END");
-        AccBootstrapLog.Info($"[Bootstrap] ═══════════════════════════════════════════════════════════════════");
+        AccBootstrapLog.Info($"[Bootstrap] ===============================================================");
     }
 
+    private string ResolveBootstrapAdminEmailForPermissions() =>
+        AccBootstrapAdminEmailResolver.ResolveForInboxProjectAdmin(_bootstrapAdminEmail);
+
+    private async Task<bool> IsProjectMemberAsync(
+        string projectId,
+        string email,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var users = await _bim360Service.GetProjectUsersAsync(projectId, cancellationToken).ConfigureAwait(false);
+            return users.Any(u =>
+                !string.IsNullOrWhiteSpace(u.Email)
+                && string.Equals(u.Email.Trim(), email, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            AccBootstrapLog.Warn($"[Bootstrap] Could not verify project membership for {email}: {ex.Message}");
+            return false;
+        }
+    }
     /// <summary>
     /// Ensures additional users have access to the Office Inbox project.
     /// These users get "viewer" access to Docs. The Office Inbox project is a
@@ -1195,44 +1219,5 @@ public class AccBootstrapService : IAccBootstrapService
         }
     }
 
-    /// <summary>
-    /// Resolves the admin email for ACC permission assignment.
-    /// 
-    /// EXPLICIT OVERRIDE: Always returns "danny@si-eng.co.il" regardless of DB content.
-    /// The DB lookup is for validation/logging only - it does NOT change the target email.
-    /// 
-    /// This is the admin account that must have ACC project permissions for folder creation.
-    /// </summary>
-    private async Task<string> ResolveDaniEmailAsync(CancellationToken cancellationToken)
-    {
-        // ═══════════════════════════════════════════════════════════════════════════════
-        // CRITICAL: This exact email is required for ACC permission assignment.
-        // Do NOT change this value or derive it from database lookups.
-        // ═══════════════════════════════════════════════════════════════════════════════
-        const string TargetEmail = "danny@si-eng.co.il";
 
-        AccBootstrapLog.Info($"[AccBootstrap] Resolving admin email for ACC permissions...");
-        AccBootstrapLog.Info($"[AccBootstrap] Target email (explicit): {TargetEmail}");
-
-        // Validation: Check if user exists in Siusers table (for logging purposes only)
-        var userInDb = await _dbContext.Siusers
-            .FirstOrDefaultAsync(u =>
-                u.Email != null &&
-                u.Email.ToLower() == TargetEmail.ToLower(),
-                cancellationToken);
-
-        if (userInDb != null)
-        {
-            AccBootstrapLog.Info($"[AccBootstrap] ✓ User validated in Siusers: '{userInDb.Name}' (Id={userInDb.Id}, LoginName={userInDb.LoginName})");
-        }
-        else
-        {
-            // User not found in DB, but we still use the explicit email
-            AccBootstrapLog.Warn($"[AccBootstrap] ⚠ Email '{TargetEmail}' not found in Siusers table.");
-            AccBootstrapLog.Warn($"[AccBootstrap] ⚠ Proceeding with explicit override - this is the required admin email.");
-        }
-
-        AccBootstrapLog.Info($"[AccBootstrap] Assigning ACC permissions to: {TargetEmail}");
-        return TargetEmail;
-    }
 }
