@@ -22,6 +22,7 @@ public static class InspectionServiceCollectionExtensions
             sp.GetRequiredService<SqlInspectionReportCommandService>());
         services.AddTransient<IInspectionReportTaskLinkService, SqlInspectionReportTaskLinkService>();
         services.AddTransient<IInspectionDrawingCommandService, SqlInspectionDrawingCommandService>();
+        services.AddTransient<IInspectionReportComposeDraftService, SqlInspectionReportComposeDraftService>();
         services.TryAddTransient<IInspectionReportExportPort, UnavailableInspectionReportExportPort>();
         return services;
     }

@@ -103,6 +103,50 @@ public sealed class InspectionWindowViewModelTaskModeTests
     }
 
     [Fact]
+    public async Task SendReportToPlanner_shows_compose_strip_and_blocks_complete()
+    {
+        var draft = new InspectionReportComposeDraft(
+            ReportId: 4,
+            ReportNumber: 1,
+            ProjectId: 136,
+            Subject: "דוח בדיקה מס' 1 - בדיקה",
+            Body: "גוף",
+            ToRecipients: ["planner@example.com"],
+            SentSpreadsheetId: "sheet-id",
+            SentSpreadsheetUrl: "https://docs.google.com/spreadsheets/d/sheet-id",
+            WarningMessage: null);
+        var compose = new StubComposeDraft(draft);
+        var workspace = new StubInspectionWorkspace(
+            series: [new(1, "Series A")],
+            reports: [new(4, 1, new DateTime(2026, 9, 5), "Inspector")],
+            notes: [new(1, "1.1", "Note", "Passed")]);
+
+        var sut = new InspectionWindowViewModel(
+            workspace,
+            new RecordingCompletion(),
+            composeDraft: compose);
+        var context = CreateContext(taskId: 300, projectId: 136, reportId: 4) with
+        {
+            TaskTypeCode = "SendReportToPlanner",
+            ComponentKey = WorkSurfaceComponentKeys.InspectionReport,
+        };
+
+        var ok = await sut.ApplyContextAsync(context);
+
+        Assert.True(ok);
+        Assert.True(sut.IsPlannerSendComposeMode);
+        Assert.True(sut.ShowPlannerComposeStrip);
+        Assert.False(sut.CanCompleteTask);
+        Assert.NotNull(sut.PlannerComposeDraft);
+        Assert.Equal("planner@example.com", sut.PlannerComposeToText);
+        Assert.Contains("sheet-id", sut.PlannerComposeDraft!.SentSpreadsheetUrl, StringComparison.Ordinal);
+
+        sut.PreviewPlannerSendCommand.Execute(null);
+        Assert.Contains("STOP BEFORE SEND", sut.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("חסומה", sut.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CompleteFromTaskAsync_blocks_when_user_unknown()
     {
         var workspace = new StubInspectionWorkspace(
@@ -247,6 +291,14 @@ public sealed class InspectionWindowViewModelTaskModeTests
         public Task<IReadOnlyList<InspectionReviewedFileRow>> GetReviewedFilesAsync(
             int reportId, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<InspectionReviewedFileRow>>([]);
+    }
+
+    private sealed class StubComposeDraft(InspectionReportComposeDraft draft) : IInspectionReportComposeDraftService
+    {
+        public Task<InspectionReportComposeDraft?> BuildDraftAsync(
+            int reportId, CancellationToken cancellationToken = default)
+            => Task.FromResult<InspectionReportComposeDraft?>(
+                draft.ReportId == reportId ? draft : null);
     }
 
     private sealed class RecordingCompletion : ITaskCompletionService

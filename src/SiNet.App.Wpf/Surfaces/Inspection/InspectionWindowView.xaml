@@ -237,6 +237,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -248,8 +249,62 @@
                         <Run Text="{Binding SelectedReport.ReportNumber, Mode=OneWay}" />
                     </TextBlock>
 
+                    <!-- Task #300 / SendReportToPlanner: compose draft (STOP BEFORE SEND) -->
+                    <Border Grid.Row="1"
+                            Margin="2,0,2,4"
+                            Padding="8,6"
+                            Background="#FFF8E1"
+                            BorderBrush="#FFB300"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            AutomationProperties.AutomationId="Inspection.PlannerComposeStrip"
+                            Visibility="{Binding ShowPlannerComposeStrip, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Text="טיוטת שליחה למתכנן (ללא שליחה חיצונית)"
+                                       FontWeight="SemiBold"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                                       Foreground="#6D4C00"
+                                       Margin="0,0,0,4" />
+                            <TextBlock FontFamily="{DynamicResource SiFontFamily}" FontSize="{DynamicResource SiTextSmallFontSize}">
+                                <Run Text="אל: " FontWeight="SemiBold" />
+                                <Run Text="{Binding PlannerComposeToText, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock FontFamily="{DynamicResource SiFontFamily}" FontSize="{DynamicResource SiTextSmallFontSize}" TextWrapping="Wrap">
+                                <Run Text="נושא: " FontWeight="SemiBold" />
+                                <Run Text="{Binding PlannerComposeDraft.Subject, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock FontFamily="{DynamicResource SiFontFamily}" FontSize="{DynamicResource SiTextSmallFontSize}" TextWrapping="Wrap" Margin="0,2,0,0">
+                                <Run Text="קישור: " FontWeight="SemiBold" />
+                                <Run Text="{Binding PlannerComposeDraft.SentSpreadsheetUrl, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBox Text="{Binding PlannerComposeDraft.Body, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     Height="72"
+                                     Margin="0,4,0,4"
+                                     FontFamily="{DynamicResource SiFontFamily}"
+                                     FontSize="{DynamicResource SiTextSmallFontSize}"
+                                     VerticalScrollBarVisibility="Auto" />
+                            <TextBlock Text="{Binding PlannerComposeDraft.WarningMessage, Mode=OneWay}"
+                                       Foreground="#C62828"
+                                       FontFamily="{DynamicResource SiFontFamily}"
+                                       FontSize="{DynamicResource SiTextSmallFontSize}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,4" />
+                            <Button Content="תצוגת שליחה (חסום)"
+                                    Command="{Binding PreviewPlannerSendCommand}"
+                                    Style="{StaticResource CardActionButton}"
+                                    Padding="10,3"
+                                    HorizontalAlignment="Right"
+                                    AutomationProperties.AutomationId="Inspection.PlannerCompose.PreviewSend"
+                                    ToolTip="STOP BEFORE SEND — לא שולח מייל חיצוני" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- Report action row + metadata -->
-                    <Border Grid.Row="1" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="4"
+                    <Border Grid.Row="2" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="4"
                             BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1"
                             Padding="6,4" Margin="2,0,2,4">
                         <StackPanel Orientation="Vertical">
@@ -401,7 +456,7 @@
                     </Border>
 
                     <!-- Drawings panel (list + add/remove) -->
-                    <Border Grid.Row="2" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="4"
+                    <Border Grid.Row="3" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="4"
                             BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1"
                             Padding="6,4" Margin="2,0,2,4"
                             AutomationProperties.AutomationId="Inspection.DrawingsPanel">
@@ -460,7 +515,7 @@
                     </Border>
 
                     <!-- Notes / cards list -->
-                    <Grid Grid.Row="3">
+                    <Grid Grid.Row="4">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />

@@ -41,8 +41,10 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private readonly IInspectionFileTreePickerHost? _fileTreePicker;
     private readonly IInspectionReportTaskLinkService? _reportTaskLinks;
     private readonly IInspectionDrawingCommandService? _drawingCommands;
+    private readonly IInspectionReportComposeDraftService? _composeDraft;
 
     private WorkSurfaceContext? _taskContext;
+    private InspectionReportComposeDraft? _plannerComposeDraft;
     private int? _browseProjectId;
     private int? _preferredSeriesId;
     private string? _cachedSourceFileUrn;
@@ -86,7 +88,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         IInspectionNoteLinkedFileHost? linkedFileHost = null,
         IInspectionFileTreePickerHost? fileTreePicker = null,
         IInspectionReportTaskLinkService? reportTaskLinks = null,
-        IInspectionDrawingCommandService? drawingCommands = null)
+        IInspectionDrawingCommandService? drawingCommands = null,
+        IInspectionReportComposeDraftService? composeDraft = null)
     {
         _workspace = workspace;
         _taskCompletion = taskCompletion;
@@ -103,6 +106,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         _fileTreePicker = fileTreePicker;
         _reportTaskLinks = reportTaskLinks;
         _drawingCommands = drawingCommands;
+        _composeDraft = composeDraft;
 
         CreateStrip = new InspectionCreateReportStripViewModel();
         Questionnaire = new InspectionQuestionnaireViewModel();
@@ -159,6 +163,13 @@ public sealed class InspectionWindowViewModel : ObservableObject
         CompleteTaskCommand = new AsyncRelayCommand(
             async () => { _ = await CompleteFromTaskAsync().ConfigureAwait(true); },
             () => CanCompleteTask);
+        PreviewPlannerSendCommand = new AsyncRelayCommand(
+            () =>
+            {
+                PreviewPlannerSend();
+                return Task.CompletedTask;
+            },
+            () => ShowPlannerComposeStrip && PlannerComposeDraft is not null);
 
         CreateReportCommand = new AsyncRelayCommand(CreateReportAsync, () => CanCreateReport);
         MarkResponseReceivedCommand = Stub();
@@ -406,7 +417,39 @@ public sealed class InspectionWindowViewModel : ObservableObject
         && !IsBusy
         && _reportLoaded
         && _taskCompletion is not null
-        && _taskContext?.TaskId is > 0;
+        && _taskContext?.TaskId is > 0
+        // SendReportToPlanner must not complete via Inspection until real email send is approved.
+        && !IsPlannerSendComposeMode;
+
+    /// <summary>
+    /// Task Workbench SendReportToPlanner / EmailComposeToPlanner remap — show draft strip, block complete/send.
+    /// </summary>
+    public bool IsPlannerSendComposeMode =>
+        IsTaskMode
+        && string.Equals(_taskContext?.TaskTypeCode, "SendReportToPlanner", StringComparison.Ordinal);
+
+    public bool ShowPlannerComposeStrip => IsPlannerSendComposeMode && _reportLoaded;
+
+    public InspectionReportComposeDraft? PlannerComposeDraft
+    {
+        get => _plannerComposeDraft;
+        private set
+        {
+            if (SetField(ref _plannerComposeDraft, value))
+            {
+                OnPropertyChanged(nameof(PlannerComposeToText));
+                OnPropertyChanged(nameof(ShowPlannerComposeStrip));
+                (PreviewPlannerSendCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string PlannerComposeToText =>
+        PlannerComposeDraft is null || PlannerComposeDraft.ToRecipients.Count == 0
+            ? "(אין נמענים)"
+            : string.Join("; ", PlannerComposeDraft.ToRecipients);
+
+    public ICommand PreviewPlannerSendCommand { get; }
 
     private bool CanCreateReport =>
         !IsBusy
@@ -1678,10 +1721,13 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
             await LoadReportContentCoreAsync(reportId, ct).ConfigureAwait(true);
             _reportLoaded = true;
+            await RefreshPlannerComposeDraftAsync(reportId, ct).ConfigureAwait(true);
             StatusMessage = IsTaskMode
                 ? $"Opened inspection report #{reportId} for task #{_taskContext?.TaskId}."
                 : $"נפתח דוח #{reportId}.";
             OnPropertyChanged(nameof(CanCompleteTask));
+            OnPropertyChanged(nameof(ShowPlannerComposeStrip));
+            OnPropertyChanged(nameof(IsPlannerSendComposeMode));
             RaiseCommandStates();
             return true;
         }
@@ -1711,8 +1757,10 @@ public sealed class InspectionWindowViewModel : ObservableObject
         {
             await LoadReportContentCoreAsync(reportId, ct).ConfigureAwait(true);
             _reportLoaded = true;
+            await RefreshPlannerComposeDraftAsync(reportId, ct).ConfigureAwait(true);
             StatusMessage = $"נפתח דוח #{reportId}.";
             OnPropertyChanged(nameof(CanCompleteTask));
+            OnPropertyChanged(nameof(ShowPlannerComposeStrip));
             RaiseCommandStates();
         }
         catch (Exception ex)
@@ -1725,6 +1773,38 @@ public sealed class InspectionWindowViewModel : ObservableObject
             if (manageBusy)
                 IsBusy = false;
         }
+    }
+
+    private async Task RefreshPlannerComposeDraftAsync(int reportId, CancellationToken ct)
+    {
+        if (!IsPlannerSendComposeMode || _composeDraft is null)
+        {
+            PlannerComposeDraft = null;
+            return;
+        }
+
+        try
+        {
+            PlannerComposeDraft = await _composeDraft.BuildDraftAsync(reportId, ct).ConfigureAwait(true);
+            if (PlannerComposeDraft?.WarningMessage is { Length: > 0 } warn)
+                StatusMessage = warn;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            PlannerComposeDraft = null;
+            StatusMessage = $"טיוטת שליחה למתכנן נכשלה: {ex.Message}";
+        }
+    }
+
+    private void PreviewPlannerSend()
+    {
+        if (PlannerComposeDraft is null)
+            return;
+
+        // Certification hard stop: never invoke IInspectionReportEmailHost / Gmail / CompleteTask.
+        StatusMessage =
+            "תצוגת שליחה למתכנן מוכנה — שליחה חיצונית חסומה (STOP BEFORE SEND). " +
+            $"ReportId={PlannerComposeDraft.ReportId}; To={PlannerComposeToText}";
     }
 
     private async Task LoadReportContentCoreAsync(int reportId, CancellationToken ct)

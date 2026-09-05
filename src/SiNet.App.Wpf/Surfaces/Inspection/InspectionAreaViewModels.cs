@@ -294,6 +294,7 @@ public sealed class InspectionMetadataViewModel : ObservableObject
     private string? _reviewedVersion;
     private bool _isLocked;
     private string? _inspectorName;
+    private string? _sentSpreadsheetUrl;
 
     public string? ReviewedVersion
     {
@@ -313,6 +314,12 @@ public sealed class InspectionMetadataViewModel : ObservableObject
         set => SetField(ref _inspectorName, value);
     }
 
+    public string? SentSpreadsheetUrl
+    {
+        get => _sentSpreadsheetUrl;
+        set => SetField(ref _sentSpreadsheetUrl, value);
+    }
+
     public ObservableCollection<InspectionReviewedFileRow> ReviewedFiles { get; } = [];
 
     public void ApplyDetail(InspectionReportDetail? detail)
@@ -320,6 +327,7 @@ public sealed class InspectionMetadataViewModel : ObservableObject
         ReviewedVersion = detail?.ReviewedVersion;
         IsLocked = detail?.IsLockedAfterSend ?? false;
         InspectorName = detail?.InspectorName;
+        SentSpreadsheetUrl = detail?.SentSpreadsheetUrl;
     }
 
     public void ReplaceReviewedFiles(IEnumerable<InspectionReviewedFileRow> files)
