@@ -459,7 +459,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         if (context is null)
             return false;
 
-        if (!string.Equals(context.ComponentKey, WorkSurfaceComponentKeys.InspectionReport, StringComparison.OrdinalIgnoreCase))
+        if (!WorkSurfaceComponentKeys.IsInspectionReportSurface(context.ComponentKey))
         {
             StatusMessage = $"Task #{context.TaskId} targets '{context.ComponentKey}', which is not the Inspection surface.";
             return false;

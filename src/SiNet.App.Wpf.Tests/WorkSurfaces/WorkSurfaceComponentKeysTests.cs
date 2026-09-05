@@ -37,6 +37,27 @@ public sealed class WorkSurfaceComponentKeysTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void InspectionWindowViewModel_accepts_ManagerReviewApproval_component_key()
+    {
+        var vm = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "src",
+            "SiNet.App.Wpf",
+            "Surfaces",
+            "Inspection",
+            "InspectionWindowViewModel.cs"));
+
+        Assert.Contains(
+            "WorkSurfaceComponentKeys.IsInspectionReportSurface(context.ComponentKey)",
+            vm,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "string.Equals(context.ComponentKey, WorkSurfaceComponentKeys.InspectionReport",
+            vm,
+            StringComparison.Ordinal);
+    }
+
     private static string RepoRoot =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 }
