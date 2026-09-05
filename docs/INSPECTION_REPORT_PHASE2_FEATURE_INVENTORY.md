@@ -233,7 +233,7 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 | TM2 | `Component.ManagerReviewApproval` → Inspection + result picker | |
 | TM3 | Complete task | `CompleteTaskCommand` | |
 | TM4 | Task #300 `SendReportToPlanner` | Target: `EmailComposeToPlanner` + InspectionReport target routes to Inspection, never Email inbox | PASS (unit) |
-| TM5 | #300 opens report-compose for Report #4 | Draft strip To/Subject/Body/URL; PreviewSend blocked; CompleteTask blocked; **STOP BEFORE SEND** | FIXED + PASS (unit); live Task Workbench open pending second pass |
+| TM5 | #300 opens report-compose for Report #4 | Draft strip To/Subject/Body/URL; PreviewSend blocked; CompleteTask blocked; **STOP BEFORE SEND** | FIXED + PASS (unit + **LIVE** 2026-09-06: Task.300 → ReportId 4; subject shown; export warning; PreviewSend; SentAt NULL) |
 
 ---
 
@@ -287,7 +287,7 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 | 2026-09-05 Phase 2 code | — | Export port real; Screenshot host real; Task #300→Inspection; offline 3721 PASS | `6e6a3bb` |
 | 2026-09-06 overnight | #9 | Live UI: Project 136 → דוחות ביקורת → select ReportId 9; close/reopen | PASS — AutomationId `Inspection.Window` + `Shell.Menu.InspectionReports`; SHA `3ecfdb1` |
 | 2026-09-06 overnight | — | Hosts: linked-file + file-tree picker + drawings UI + reviewed list | FIXED composition `3ecfdb1` |
-| 2026-09-06 overnight | #4/#300 | Compose draft strip + CompleteTask blocked | FIXED unit `d205970`; live Workbench open still pending |
+| 2026-09-06 overnight | #4/#300 | Compose draft strip + CompleteTask blocked | **LIVE PASS** TaskWorkbench Task.300 → Inspection ReportId 4; PreviewSend STOP; WF/Task unchanged | SHA `d205970` / docs `e6886d0` |
 | Phase 2 live deep | #9 | Validation matrix / AI / screenshot / Export / Share | **NOT EXERCISED** overnight (time) — Ollama UP confirmed |
 
 ### Isolated dirty work (NOT in Inspection commits)
