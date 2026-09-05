@@ -47,3 +47,6 @@ Stage tasks whose interaction declares `PrimaryWorkTargetEntityType = Inspection
 `ApproveReviewReport` / `ResubmitToManager` use component key `Component.ManagerReviewApproval`.
 That key must open the **same** Inspection Report work surface as `Component.InspectionReport`
 (exact task-linked report + allowed manager result codes). It must not fall through as unsupported.
+
+When more than one allowed result exists (`ManagerApproved` / `ManagerRequestedChanges`), the Inspection
+window must expose a result ComboBox before **השלם משימה** (same contract as `InspectionShellView`).

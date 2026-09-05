@@ -167,6 +167,39 @@ public sealed class InspectionWindowViewModelTaskModeTests
         Assert.Contains("Completed task #10", sut.StatusMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ApplyContextAsync_multiple_allowed_results_exposes_picker_and_blocks_until_selected()
+    {
+        var workspace = new StubInspectionWorkspace(
+            series: [new(1, "S")],
+            reports: [new(4, 1, DateTime.UtcNow, "I")],
+            notes: []);
+        var completion = new RecordingCompletion();
+        var sut = new InspectionWindowViewModel(workspace, completion);
+        var context = CreateContext(taskId: 299, projectId: 136, reportId: 4) with
+        {
+            ComponentKey = WorkSurfaceComponentKeys.ManagerReviewApproval,
+            TaskTypeCode = "ApproveReviewReport",
+            AllowedResultCodes = ["ManagerApproved", "ManagerRequestedChanges"],
+            CompletionEventCode = null,
+        };
+
+        Assert.True(await sut.ApplyContextAsync(context));
+        Assert.True(sut.HasMultipleAllowedResultCodes);
+        Assert.Null(sut.SelectedResultCode);
+
+        Assert.False(await sut.CompleteFromTaskAsync());
+        Assert.Equal(0, completion.CallCount);
+        Assert.Contains("allows multiple results", sut.StatusMessage, StringComparison.OrdinalIgnoreCase);
+
+        sut.SelectedResultCode = "ManagerApproved";
+        Assert.True(await sut.CompleteFromTaskAsync(
+            completionEventCode: "Review.ManagerApproved"));
+        Assert.Equal(1, completion.CallCount);
+        Assert.Equal("ManagerApproved", completion.LastCommand?.TaskResultCode);
+        Assert.Equal("Review.ManagerApproved", completion.LastCommand?.CompletionEventCode);
+    }
+
     private static WorkSurfaceContext CreateContext(int taskId, int projectId, int reportId) =>
         new(
             TaskId: taskId,

@@ -299,6 +299,9 @@ public sealed class InspectionWindowViewModel : ObservableObject
     public ObservableCollection<InspectionStatusOption> StatusOptions { get; }
     public ObservableCollection<string> AllowedResultCodes { get; }
 
+    /// <summary>True when the task allows more than one completion result and the operator must choose.</summary>
+    public bool HasMultipleAllowedResultCodes => AllowedResultCodes.Count > 1;
+
     /// <summary>True when a report is selected and not locked after send.</summary>
     public bool IsReportEditable => HasSelectedReport && !Metadata.IsLocked;
 
@@ -490,6 +493,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
             foreach (var code in context.AllowedResultCodes)
                 AllowedResultCodes.Add(code);
             SelectedResultCode = AllowedResultCodes.Count == 1 ? AllowedResultCodes[0] : null;
+            OnPropertyChanged(nameof(HasMultipleAllowedResultCodes));
             _reportLoaded = false;
             OnPropertyChanged(nameof(CanCompleteTask));
             RaiseCommandStates();
@@ -509,6 +513,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         foreach (var code in context.AllowedResultCodes)
             AllowedResultCodes.Add(code);
         SelectedResultCode = AllowedResultCodes.Count == 1 ? AllowedResultCodes[0] : null;
+        OnPropertyChanged(nameof(HasMultipleAllowedResultCodes));
 
         await RefreshTemplatesAsync(ct).ConfigureAwait(true);
         return await LoadExactReportAsync(context.ProjectId, reportId, ct).ConfigureAwait(true);
