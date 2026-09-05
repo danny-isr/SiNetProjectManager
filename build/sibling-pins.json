@@ -15,7 +15,7 @@
       "url": "https://github.com/danny-isr/SiOffice.AutodeskConnector.git",
       "path": "../AutodeskIntegration/SiOffice.AutodeskConnector",
       "branch": "SiWorkNet10",
-      "sha": "f239e72465242d7aedd00f9e9117e6bd0acb661b"
+      "sha": "7cfa85b53e656b52305a41af15fb19f624097bf9"
     },
     {
       "name": "SiOffice.GoogleConnector",

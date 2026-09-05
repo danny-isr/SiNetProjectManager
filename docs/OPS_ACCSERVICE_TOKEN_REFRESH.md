@@ -27,6 +27,7 @@ Two independent Autodesk 3-legged identities:
 
 - Same Windows user on DEV is allowed **because the two files are different**.
 - Browser auto-login is **not** isolation — AuthOnce must still sign in as the designated Admin.
+- Interactive OAuth authorization URL includes **`prompt=login`** so Autodesk does not silently reuse an existing browser session (e.g. danny@) when AuthOnce needs AccBootstrapAdminEmail (siad@).
 - Proof of health = AccService diagnostics report **its** `tokenStoragePath` + userinfo `ActualAdminEmail` vs `AccBootstrapAdminEmail`.
 
 Do **not** copy the desktop generic token into the AccService store automatically — it may belong to Danny/Tair/another desktop user.
