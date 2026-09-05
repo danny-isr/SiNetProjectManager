@@ -233,7 +233,11 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
             var oldStatusId = task.StatusId;
             task.StatusId = completedStatus.Id;
             task.Status = completedStatus.Code;
-            task.WorkPriority = null;
+            // Shared-context removal: compact assignee+bucket without an independent commit so
+            // queue shifts enlist in the same SaveChanges / transaction as the close (+ advance).
+            await TaskQueuePriorityEngine.RemoveFromQueueAsync(
+                    db, task, compact: true, saveChanges: false, cancellationToken: ct)
+                .ConfigureAwait(false);
             task.Modified = DateTime.Now;
             task.EditorId = command.UserId;
 

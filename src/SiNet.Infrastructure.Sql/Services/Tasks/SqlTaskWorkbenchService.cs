@@ -276,14 +276,21 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
         try
         {
             var oldStatusId = task.StatusId;
-            var assigneeId = task.AssignedToId;
-            var bucket = WorkQueueBucketResolver.Resolve(task);
-            var removedPriority = task.WorkPriority;
-            var wasInQueue = task.AssignmentStatus?.IsActionable == true && removedPriority.HasValue;
+            var wasInQueue = task.AssignmentStatus?.IsActionable == true && task.WorkPriority.HasValue;
 
             task.StatusId = cancelledStatus.Id;
             task.Status = cancelledStatus.Code;
-            task.WorkPriority = null;
+            if (wasInQueue)
+            {
+                await TaskQueuePriorityEngine.RemoveFromQueueAsync(
+                        db, task, compact: true, saveChanges: false, cancellationToken: ct)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                task.WorkPriority = null;
+            }
+
             task.Modified = DateTime.Now;
             task.EditorId = changedByUserId;
 
@@ -301,13 +308,6 @@ public sealed class SqlTaskWorkbenchService : ITaskWorkbenchService
             });
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-            if (wasInQueue && assigneeId.HasValue)
-            {
-                await TaskQueuePriorityEngine.CompactAfterRemovalAsync(
-                        db, assigneeId.Value, bucket, removedPriority!.Value, ct)
-                    .ConfigureAwait(false);
-            }
 
             // TEMP WF-DEBUG
             WorkflowDebugTrace.Step("Workbench.Deactivate",

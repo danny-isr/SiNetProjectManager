@@ -136,7 +136,8 @@ public static class TaskQueuePriorityEngine
         SiNetSQLDbContext context,
         int employeeId,
         int bucket,
-        int removedPriority)
+        int removedPriority,
+        bool saveChanges = true)
     {
         ValidateBucket(bucket);
 
@@ -149,7 +150,7 @@ public static class TaskQueuePriorityEngine
         foreach (var task in tasksToShift)
             task.WorkPriority--;
 
-        if (tasksToShift.Count > 0)
+        if (saveChanges && tasksToShift.Count > 0)
             context.SaveChanges();
     }
 
@@ -158,7 +159,8 @@ public static class TaskQueuePriorityEngine
         int employeeId,
         int bucket,
         int removedPriority,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool saveChanges = true)
     {
         ValidateBucket(bucket);
 
@@ -172,7 +174,7 @@ public static class TaskQueuePriorityEngine
         foreach (var task in tasksToShift)
             task.WorkPriority--;
 
-        if (tasksToShift.Count > 0)
+        if (saveChanges && tasksToShift.Count > 0)
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -180,11 +182,14 @@ public static class TaskQueuePriorityEngine
     {
         ValidateBucket(bucket);
 
+        var shellIds = GetCollisionShellParentIds(context, employeeId, bucket);
+
         var openTasks = context.ProjectAssignments
             .Where(t => t.AssignedToId == employeeId
                      && t.WorkQueueBucket == bucket
                      && t.AssignmentStatus != null
-                     && t.AssignmentStatus.IsActionable)
+                     && t.AssignmentStatus.IsActionable
+                     && !shellIds.Contains(t.Id))
             .OrderBy(t => t.WorkPriority.HasValue ? 0 : 1)
             .ThenBy(t => t.WorkPriority)
             .ThenBy(t => t.Created)
@@ -228,54 +233,14 @@ public static class TaskQueuePriorityEngine
         int bucket,
         CancellationToken cancellationToken = default)
     {
-        ValidateBucket(bucket);
-
-        var openTasks = await context.ProjectAssignments
-            .Where(t => t.AssignedToId == employeeId
-                     && t.WorkQueueBucket == bucket
-                     && t.AssignmentStatus != null
-                     && t.AssignmentStatus.IsActionable)
-            .OrderBy(t => t.WorkPriority.HasValue ? 0 : 1)
-            .ThenBy(t => t.WorkPriority)
-            .ThenBy(t => t.Created)
-            .ToListAsync(cancellationToken)
+        var detail = await ValidateAndReindexDetailedAsync(context, employeeId, bucket, cancellationToken)
             .ConfigureAwait(false);
-
-        var staleClosed = await context.ProjectAssignments
-            .Where(t => t.AssignedToId == employeeId
-                     && t.WorkQueueBucket == bucket
-                     && t.WorkPriority != null
-                     && t.AssignmentStatus != null
-                     && !t.AssignmentStatus.IsActionable)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var corrected = 0;
-
-        foreach (var stale in staleClosed)
-        {
-            stale.WorkPriority = null;
-            corrected++;
-        }
-
-        for (var i = 0; i < openTasks.Count; i++)
-        {
-            var expected = i + 1;
-            if (openTasks[i].WorkPriority != expected)
-            {
-                openTasks[i].WorkPriority = expected;
-                corrected++;
-            }
-        }
-
-        if (corrected > 0)
-            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        return corrected;
+        return detail.TotalCorrected;
     }
 
     /// <summary>
-    /// Analyses queue defects, reindexes actionable tasks to 1..N, clears stale priorities on closed tasks.
+    /// Analyses queue defects, reindexes actionable queue members to 1..N, clears stale priorities on closed tasks.
+    /// Collision shells (null <c>WorkPriority</c>, parent with children) stay non-queued.
     /// </summary>
     public static async Task<TaskQueueRepairDetail> ValidateAndReindexDetailedAsync(
         SiNetSQLDbContext context,
@@ -285,11 +250,15 @@ public static class TaskQueuePriorityEngine
     {
         ValidateBucket(bucket);
 
+        var shellIds = await GetCollisionShellParentIdsAsync(context, employeeId, bucket, cancellationToken)
+            .ConfigureAwait(false);
+
         var openTasks = await context.ProjectAssignments
             .Where(t => t.AssignedToId == employeeId
                      && t.WorkQueueBucket == bucket
                      && t.AssignmentStatus != null
-                     && t.AssignmentStatus.IsActionable)
+                     && t.AssignmentStatus.IsActionable
+                     && !shellIds.Contains(t.Id))
             .OrderBy(t => t.WorkPriority.HasValue ? 0 : 1)
             .ThenBy(t => t.WorkPriority)
             .ThenBy(t => t.Created)
@@ -347,6 +316,43 @@ public static class TaskQueuePriorityEngine
             GapsClosed: gapsClosed,
             StaleClosedCleared: staleClosedCleared,
             TotalCorrected: staleClosedCleared + renumbered);
+    }
+
+    /// <summary>
+    /// Collision-shell parents: <c>ParentAssignmentId == null</c>, <c>WorkPriority == null</c>, with at least one child.
+    /// These remain open/actionable for hierarchy but are not queue members.
+    /// </summary>
+    private static HashSet<int> GetCollisionShellParentIds(
+        SiNetSQLDbContext context,
+        int employeeId,
+        int bucket)
+    {
+        return context.ProjectAssignments
+            .Where(t => t.AssignedToId == employeeId
+                     && t.WorkQueueBucket == bucket
+                     && t.WorkPriority == null
+                     && t.ParentAssignmentId == null
+                     && context.ProjectAssignments.Any(c => c.ParentAssignmentId == t.Id))
+            .Select(t => t.Id)
+            .ToHashSet();
+    }
+
+    private static async Task<HashSet<int>> GetCollisionShellParentIdsAsync(
+        SiNetSQLDbContext context,
+        int employeeId,
+        int bucket,
+        CancellationToken cancellationToken)
+    {
+        var ids = await context.ProjectAssignments
+            .Where(t => t.AssignedToId == employeeId
+                     && t.WorkQueueBucket == bucket
+                     && t.WorkPriority == null
+                     && t.ParentAssignmentId == null
+                     && context.ProjectAssignments.Any(c => c.ParentAssignmentId == t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return ids.ToHashSet();
     }
 
     public static async Task<TaskQueueRepairDetail> ValidateAndReindexAllDetailedAsync(
@@ -426,10 +432,20 @@ public static class TaskQueuePriorityEngine
         return totalCorrected;
     }
 
+    /// <summary>
+    /// Clears <see cref="ProjectAssignment.WorkPriority"/> and optionally shifts higher positions
+    /// down by 1 within the same assignee+bucket. No-op when the task was not a queue member
+    /// (<c>WorkPriority</c> null — e.g. collision shells).
+    /// </summary>
+    /// <param name="saveChanges">
+    /// When <c>false</c>, only mutates tracked entities; the caller owns <c>SaveChanges</c> /
+    /// the ambient transaction (required for atomic task-close + workflow advance).
+    /// </param>
     public static void RemoveFromQueue(
         SiNetSQLDbContext context,
         ProjectAssignment task,
-        bool compact = true)
+        bool compact = true,
+        bool saveChanges = true)
     {
         ArgumentNullException.ThrowIfNull(task);
 
@@ -441,10 +457,45 @@ public static class TaskQueuePriorityEngine
         var removedPriority = task.WorkPriority.Value;
 
         task.WorkPriority = null;
-        context.SaveChanges();
+        if (saveChanges)
+            context.SaveChanges();
 
         if (compact)
-            CompactAfterRemoval(context, employeeId, bucket, removedPriority);
+            CompactAfterRemoval(context, employeeId, bucket, removedPriority, saveChanges);
+    }
+
+    /// <inheritdoc cref="RemoveFromQueue(SiNetSQLDbContext, ProjectAssignment, bool, bool)"/>
+    public static async Task RemoveFromQueueAsync(
+        SiNetSQLDbContext context,
+        ProjectAssignment task,
+        bool compact = true,
+        bool saveChanges = true,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        if (!task.AssignedToId.HasValue || !task.WorkPriority.HasValue)
+            return;
+
+        var employeeId = task.AssignedToId.Value;
+        var bucket = WorkQueueBucketResolver.Resolve(task);
+        var removedPriority = task.WorkPriority.Value;
+
+        task.WorkPriority = null;
+        if (saveChanges)
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        if (compact)
+        {
+            await CompactAfterRemovalAsync(
+                    context,
+                    employeeId,
+                    bucket,
+                    removedPriority,
+                    cancellationToken,
+                    saveChanges)
+                .ConfigureAwait(false);
+        }
     }
 
     public static void AppendToQueueEnd(SiNetSQLDbContext context, ProjectAssignment task)

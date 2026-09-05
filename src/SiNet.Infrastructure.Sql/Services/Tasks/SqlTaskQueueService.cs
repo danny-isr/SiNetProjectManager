@@ -325,10 +325,8 @@ public sealed class SqlTaskQueueService : ITaskQueueService
 
         if (wasInQueue)
         {
-            task.WorkPriority = null;
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await TaskQueuePriorityEngine.CompactAfterRemovalAsync(
-                    db, oldUserId, oldBucket, oldPriority!.Value, ct)
+            await TaskQueuePriorityEngine.RemoveFromQueueAsync(
+                    db, task, compact: true, saveChanges: true, cancellationToken: ct)
                 .ConfigureAwait(false);
         }
 

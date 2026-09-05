@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Settings;
+using SiNet.Infrastructure.Sql.Services.Tasks;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -370,8 +371,10 @@ internal sealed class WorkflowStageTaskProvisioningService
                     Trace.TraceWarning(
                         $"[Provisioning] Releasing stale unique-open slot on closed task #{uniqueSlotOccupant.Id} "
                         + $"(Project={instance.ProjectId}, Assignee={assigneeId}, TaskType={template.TaskTypeId}).");
-                    uniqueSlotOccupant.WorkPriority = null;
-                    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                    // Closed row may still hold a WorkPriority; clear + compact so open members stay contiguous.
+                    await TaskQueuePriorityEngine.RemoveFromQueueAsync(
+                            db, uniqueSlotOccupant, compact: true, saveChanges: true, cancellationToken: ct)
+                        .ConfigureAwait(false);
                     uniqueSlotOccupant = null;
                 }
 

@@ -141,6 +141,50 @@ public sealed class TaskQueueManagementTests
     }
 
     [Fact]
+    public async Task Queue_repair_does_not_assign_priority_to_collision_shell_parents()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString("N")).Options;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            db.Siusers.Add(new Siuser { Id = 10, Name = "U", IsActive = true });
+            var open = new ProjectAssignmentStatus { Code = "Open", Name = "Open", IsOpen = true, IsActionable = true };
+            db.ProjectAssignmentStatuses.Add(open);
+            db.Projects.Add(new Project { Id = 1, Title = "P", Created = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+            db.ProjectAssignments.Add(new ProjectAssignment
+            {
+                Id = 1,
+                Title = "shell — תהליך #1",
+                ProjectId = 1,
+                AssignedToId = 10,
+                StatusId = open.Id,
+                WorkQueueBucket = WorkQueueBucketCodes.Quick,
+                WorkPriority = null,
+            });
+            db.ProjectAssignments.Add(new ProjectAssignment
+            {
+                Id = 2,
+                Title = "child",
+                ProjectId = 1,
+                AssignedToId = 10,
+                StatusId = open.Id,
+                ParentAssignmentId = 1,
+                WorkQueueBucket = WorkQueueBucketCodes.Quick,
+                WorkPriority = 5,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await new SqlTaskQueueService(new StubDbContextFactory(options))
+            .RepairQueueAsync(10, WorkQueueBucketCodes.Quick);
+
+        Assert.True(result.GapsClosed >= 1);
+        await using var verify = new SiNetSQLDbContext(options);
+        Assert.Null((await verify.ProjectAssignments.FindAsync(1))!.WorkPriority);
+        Assert.Equal(1, (await verify.ProjectAssignments.FindAsync(2))!.WorkPriority);
+    }
+
+    [Fact]
     public async Task Queue_repair_assigns_priority_to_null_open_tasks()
     {
         var options = await SeedBrokenQueueAsync(nullPriority: true);

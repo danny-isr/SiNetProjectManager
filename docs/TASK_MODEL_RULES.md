@@ -96,11 +96,11 @@ Implementation: `TaskQueuePriorityEngine`, `SqlTaskQueueService`.
 
 | Event | Queue behavior |
 |-------|----------------|
-| **Complete / close** (non-actionable) | `WorkPriority = null`; compact assignee+bucket queue |
+| **Complete / close** (non-actionable) | `TaskQueuePriorityEngine.RemoveFromQueueAsync` (shared DbContext, `saveChanges: false` on atomic close): `WorkPriority = null` + compact higher positions in assignee+bucket |
 | **Delete** | Remove row; compact queue |
 | **Reassign user** | Compact old user’s queue; append to new user’s queue end |
 | **Change bucket** | Compact old bucket; append to new bucket end |
-| **Repair queue** | Assign missing priorities, dedupe, close gaps, clear stale priorities on non-actionable rows |
+| **Repair queue** | Assign missing priorities (except collision shells), dedupe, close gaps, clear stale priorities on non-actionable rows |
 
 ## StatusId vs queue membership
 

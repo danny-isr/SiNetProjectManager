@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Actions;
 using SiNet.Infrastructure.Sql.Constants;
+using SiNet.Infrastructure.Sql.Services.Tasks;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -253,7 +254,10 @@ internal static class WorkflowActionHelpers
             var oldStatusId = task.StatusId;
             task.StatusId = completedStatus.Id;
             task.Status = completedStatus.Code;
-            task.WorkPriority = null;
+            // Caller owns ambient DbContext / transaction — do not SaveChanges here.
+            await TaskQueuePriorityEngine.RemoveFromQueueAsync(
+                    db, task, compact: true, saveChanges: false, cancellationToken: ct)
+                .ConfigureAwait(false);
             task.Modified = DateTime.Now;
             task.EditorId = userId;
 
