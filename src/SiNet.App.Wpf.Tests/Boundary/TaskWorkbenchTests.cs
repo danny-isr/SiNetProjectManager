@@ -214,8 +214,10 @@ public sealed class TaskWorkbenchTests
             await db.SaveChangesAsync();
             var openId = db.ProjectAssignmentStatuses.First(s => s.Code == TaskStatusCodes.Open).Id;
             db.ProjectAssignments.AddRange(
-                new ProjectAssignment { Title = "Q12", ProjectId = 1, AssignedToId = 12, StatusId = openId, TaskTypeId = tt.Id, WorkQueueBucket = WorkQueueBucketCodes.Quick, Created = DateTime.UtcNow },
-                new ProjectAssignment { Title = "Q99", ProjectId = 1, AssignedToId = 99, StatusId = openId, TaskTypeId = tt.Id, WorkQueueBucket = WorkQueueBucketCodes.Quick, Created = DateTime.UtcNow });
+                new ProjectAssignment { Title = "Q12", ProjectId = 1, AssignedToId = 12, StatusId = openId, TaskTypeId = tt.Id, WorkQueueBucket = WorkQueueBucketCodes.Quick, WorkPriority = 1, Created = DateTime.UtcNow },
+                new ProjectAssignment { Title = "Q99", ProjectId = 1, AssignedToId = 99, StatusId = openId, TaskTypeId = tt.Id, WorkQueueBucket = WorkQueueBucketCodes.Quick, WorkPriority = 1, Created = DateTime.UtcNow },
+                // Collision shell — open in bucket but not a queue member.
+                new ProjectAssignment { Title = "Shell", ProjectId = 1, AssignedToId = 12, StatusId = openId, TaskTypeId = tt.Id, WorkQueueBucket = WorkQueueBucketCodes.Quick, WorkPriority = null, Created = DateTime.UtcNow });
             await db.SaveChangesAsync();
         }
 
@@ -223,6 +225,7 @@ public sealed class TaskWorkbenchTests
         var quick = await svc.GetOpenTasksForAllUsersByBucketAsync(WorkQueueBucketCodes.Quick, CancellationToken.None);
 
         Assert.Equal(2, quick.Count);
+        Assert.DoesNotContain(quick, t => t.WorkPriority is null);
         Assert.Contains(quick, t => t.AssignedToUserId == 12);
         Assert.Contains(quick, t => t.AssignedToUserId == 99);
     }

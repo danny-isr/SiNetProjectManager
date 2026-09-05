@@ -1028,10 +1028,16 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         QuickTasks.Clear();
         MediumTasks.Clear();
         LongTasks.Clear();
-        foreach (var task in FilterByProject(quick, projectFilterId)) QuickTasks.Add(task);
-        foreach (var task in FilterByProject(medium, projectFilterId)) MediumTasks.Add(task);
-        foreach (var task in FilterByProject(longBucket, projectFilterId)) LongTasks.Add(task);
+        foreach (var task in FilterQueueCards(FilterByProject(quick, projectFilterId))) QuickTasks.Add(task);
+        foreach (var task in FilterQueueCards(FilterByProject(medium, projectFilterId))) MediumTasks.Add(task);
+        foreach (var task in FilterQueueCards(FilterByProject(longBucket, projectFilterId))) LongTasks.Add(task);
     }
+
+    /// <summary>
+    /// Workbench lists are queues: exclude non-queued open rows (e.g. collision shells with null WorkPriority).
+    /// </summary>
+    private static IReadOnlyList<TaskSummaryDto> FilterQueueCards(IReadOnlyList<TaskSummaryDto> tasks) =>
+        tasks.Where(t => t.WorkPriority is not null).ToList();
 
     private static IReadOnlyList<TaskSummaryDto> FilterByProject(
         IReadOnlyList<TaskSummaryDto> tasks,

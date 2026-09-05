@@ -115,6 +115,7 @@ Implementation: `TaskQueuePriorityEngine`, `SqlTaskQueueService`.
 - Task cards show **`#TaskId`** (tooltip «מספר משימה N»); AutomationId stays `Task.{TaskId}`.
 - Project line uses **business** `ProjectNumber — ProjectName` (via `ProjectNumberFormatting`), not internal `ProjectId` as the main label (`ProjectId=…` may appear in tooltip only).
 - Card zebra uses theme brushes (`SiBackgroundBrush` / `SiSurfaceBrush`); selection Primary border remains stronger than zebra.
+- **Queue cards only:** Workbench Quick/Medium/Long list rows with `WorkPriority != null`. Collision-shell parents (`WorkPriority = null`, title `… — תהליך #{id}`) remain in the model for hierarchy/isolation but are **not** shown as blank-position queue cards.
 
 ## Task creation flow (Task Workbench)
 

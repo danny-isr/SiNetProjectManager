@@ -106,6 +106,7 @@ public sealed class SqlTaskQueryService : ITaskQueryService
             .Include(t => t.LastTaskResult)
             .Include(t => t.TaskLinks)
             .Where(t => t.WorkQueueBucket == workQueueBucket
+                        && t.WorkPriority != null
                         && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen));
 
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
@@ -130,7 +131,11 @@ public sealed class SqlTaskQueryService : ITaskQueryService
                         && (t.AssignmentStatus == null || t.AssignmentStatus.IsOpen));
 
         if (workQueueBucket.HasValue)
-            query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value);
+        {
+            // Workbench bucket queues: only actual queue members (shell parents stay WorkPriority=null).
+            query = query.Where(t => t.WorkQueueBucket == workQueueBucket.Value
+                                    && t.WorkPriority != null);
+        }
 
         var tasks = await query.ToListAsync(ct).ConfigureAwait(false);
         return await MapTasksAsync(db, tasks, allUsersBucket: false, ct).ConfigureAwait(false);

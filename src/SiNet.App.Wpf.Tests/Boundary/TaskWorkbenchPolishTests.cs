@@ -119,8 +119,12 @@ public sealed class TaskWorkbenchPolishTests
     [Fact]
     public void Move_commands_disabled_when_task_not_in_active_queue()
     {
-        var vm = CreateMoveTestViewModel(SampleTask(1, workPriority: null));
-        vm.SelectedTask = vm.QuickTasks[0];
+        // Shell / non-queued rows are filtered out of Workbench lists; selection may still
+        // reference a non-queue DTO (e.g. from detail) — move must stay disabled.
+        var vm = CreateMoveTestViewModel(SampleTask(1, workPriority: 1));
+        Assert.DoesNotContain(vm.QuickTasks, t => t.WorkPriority is null);
+
+        vm.SelectedTask = SampleTask(99, workPriority: null);
 
         Assert.False(CanExecute(vm.MoveUpCommand));
         Assert.False(CanExecute(vm.MoveDownCommand));

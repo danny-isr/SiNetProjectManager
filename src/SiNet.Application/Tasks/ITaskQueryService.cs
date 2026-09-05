@@ -21,13 +21,20 @@ public interface ITaskQueryService
         int? workQueueBucket = null,
         CancellationToken ct = default);
 
-    /// <summary>Returns open tasks for one user bucket queue.</summary>
+    /// <summary>
+    /// Returns open <b>queue members</b> for one user bucket (Workbench Quick/Medium/Long).
+    /// Only rows with <c>WorkPriority != null</c> — collision shells and other non-queued open tasks
+    /// are excluded.
+    /// </summary>
     ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForUserByBucketAsync(
         int userId,
         int workQueueBucket,
         CancellationToken ct);
 
-    /// <summary>Returns open tasks for all users in one bucket queue.</summary>
+    /// <summary>
+    /// Returns open <b>queue members</b> for all users in one bucket (Workbench AllUsers scope).
+    /// Only rows with <c>WorkPriority != null</c>.
+    /// </summary>
     ValueTask<IReadOnlyList<TaskSummaryDto>> GetOpenTasksForAllUsersByBucketAsync(
         int workQueueBucket,
         CancellationToken ct);
