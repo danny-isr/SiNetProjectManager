@@ -26,6 +26,7 @@
   <ItemGroup>
 	<!-- Expose internal MIME/error-mapping seams to the deterministic test project only. -->
 	<InternalsVisibleTo Include="SiNet.Infrastructure.Google.Tests" />
+	<InternalsVisibleTo Include="SiNet.App.Wpf.Tests" />
   </ItemGroup>
 
 </Project>

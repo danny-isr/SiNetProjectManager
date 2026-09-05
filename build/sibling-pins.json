@@ -15,14 +15,14 @@
       "url": "https://github.com/danny-isr/SiOffice.AutodeskConnector.git",
       "path": "../AutodeskIntegration/SiOffice.AutodeskConnector",
       "branch": "SiWorkNet10",
-      "sha": "7cfa85b53e656b52305a41af15fb19f624097bf9"
+      "sha": "e847dade01c70fc10043bfa299d23c7077f80c33"
     },
     {
       "name": "SiOffice.GoogleConnector",
       "url": "https://github.com/danny-isr/SiOffice.GoogleConnector.git",
       "path": "../AutodeskIntegration/SiOffice.GoogleConnector",
       "branch": "SiWorkNet10",
-      "sha": "c9e4d9a214a4f796b646a74d451759a0053c8a67"
+      "sha": "c066c3205e1fe6f0a7b997084ff53d35ed33e91e"
     }
   ]
 }

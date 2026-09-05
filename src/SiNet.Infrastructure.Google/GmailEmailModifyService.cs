@@ -2,7 +2,6 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
-using SiNet.Application.Diagnostics;
 
 namespace SiNet.Infrastructure.Google;
 
@@ -28,22 +27,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
         var fullPath = $"{_provider.RootLabel}/{location}/{projectDisplayName}";
         var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
 
-        var existing = labels.Labels?.FirstOrDefault(
-            label => string.Equals(label.Name, fullPath, StringComparison.OrdinalIgnoreCase));
-
-        // #region agent log
-        var parentPrefix = $"{_provider.RootLabel}/{location}/";
-        var nearMatches = labels.Labels?
-            .Where(l => l.Name != null
-                && (l.Name.StartsWith(parentPrefix, StringComparison.OrdinalIgnoreCase)
-                    || l.Name.Contains("136", StringComparison.Ordinal)))
-            .Select(l => $"'{l.Name}'(len={l.Name!.Length},id={l.Id})")
-            .ToList() ?? [];
-        WorkflowDebugTrace.Step(
-            "Email.File.Label",
-            $"GetOrCreate fullPath='{fullPath}' len={fullPath.Length} slashes={fullPath.Count(static c => c == '/')} totalLabels={labels.Labels?.Count ?? 0} existingFound={existing?.Id != null} siblings=[{string.Join(";", nearMatches)}]");
-        // #endregion
-
+        var existing = GmailLabelIdempotency.FindExactByName(labels.Labels, fullPath);
         if (!string.IsNullOrWhiteSpace(existing?.Id))
         {
             return existing.Id;
@@ -63,14 +47,11 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
 
             return created.Id ?? throw new InvalidOperationException($"Failed to create Gmail label '{fullPath}'.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (GmailLabelIdempotency.IsLabelExistsOrConflicts(ex))
         {
-            // #region agent log
-            WorkflowDebugTrace.Step(
-                "Email.File.Label",
-                $"Create FAILED at PROJECT label fullPath='{fullPath}' ex={ex.GetType().Name}: {ex.Message}");
-            // #endregion
-            throw;
+            var relisted = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            var resolved = GmailLabelIdempotency.ResolveIntendedAfterConflict(relisted.Labels, fullPath);
+            return resolved.Id!;
         }
     }
 
@@ -325,8 +306,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
         string labelName,
         CancellationToken cancellationToken)
     {
-        var existing = existingLabels.Labels?.FirstOrDefault(
-            label => string.Equals(label.Name, labelName, StringComparison.OrdinalIgnoreCase));
+        var existing = GmailLabelIdempotency.FindExactByName(existingLabels.Labels, labelName);
         if (!string.IsNullOrWhiteSpace(existing?.Id))
         {
             return;
@@ -344,14 +324,16 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
             existingLabels.Labels ??= [];
             existingLabels.Labels.Add(created);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (GmailLabelIdempotency.IsLabelExistsOrConflicts(ex))
         {
-            // #region agent log
-            WorkflowDebugTrace.Step(
-                "Email.File.Label",
-                $"Create FAILED at PARENT label name='{labelName}' ex={ex.GetType().Name}: {ex.Message}");
-            // #endregion
-            throw;
+            var relisted = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+            var resolved = GmailLabelIdempotency.ResolveIntendedAfterConflict(relisted.Labels, labelName);
+            existingLabels.Labels = relisted.Labels;
+            if (existingLabels.Labels?.Any(l => l.Id == resolved.Id) != true)
+            {
+                existingLabels.Labels ??= [];
+                existingLabels.Labels.Add(resolved);
+            }
         }
     }
 
