@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Inspection;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
+using SiNetSQL.Services.InspectionSync;
 
 namespace SiNet.Infrastructure.Sql.Services.Inspection;
 
@@ -244,14 +245,19 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
 }
 
 /// <summary>
-/// SQL-backed report commands. Create requires a host Google/template adapter (V2);
-/// this implementation returns a clear failure for create so unlock/delete still work standalone.
+/// SQL-backed report commands: Google template scan → series sync → note snapshot (fail-closed).
 /// </summary>
-public sealed class SqlInspectionReportCommandService(IDbContextFactory<SiNetSQLDbContext> dbFactory)
+public sealed class SqlInspectionReportCommandService(
+    IDbContextFactory<SiNetSQLDbContext> dbFactory,
+    TemplateSyncService templateSync,
+    IInspectionTemplateSheetReader? templateSheetReader = null)
     : IInspectionReportCommandService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory =
         dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+    private readonly TemplateSyncService _templateSync =
+        templateSync ?? throw new ArgumentNullException(nameof(templateSync));
+    private readonly IInspectionTemplateSheetReader? _templateSheetReader = templateSheetReader;
 
     public async Task<InspectionReportCommandResult> CreateReportAsync(
         int projectId,
@@ -265,63 +271,241 @@ public sealed class SqlInspectionReportCommandService(IDbContextFactory<SiNetSQL
         if (projectId <= 0)
             return InspectionReportCommandResult.Fail("לא נבחר פרויקט.");
 
-        // Standalone native create: persist report (+ optional section snapshot).
-        // Full Google Sheets template scan/sync remains on the V2 host adapter
-        // (V2InspectionReportCommandService). An empty-section report is still a valid
-        // work target for PerformProfessionalReview completion.
+        if (string.IsNullOrWhiteSpace(templateUrl)
+            || templateUrl.StartsWith("native://", StringComparison.OrdinalIgnoreCase))
+        {
+            return InspectionReportCommandResult.Fail("יש לבחור תבנית Google תקינה לפני יצירת דוח.");
+        }
+
+        var sheetId = ResolveSpreadsheetId(spreadsheetId, templateUrl);
+        if (string.IsNullOrWhiteSpace(sheetId))
+            return InspectionReportCommandResult.Fail("לא ניתן לחלץ מזהה תבנית מהקישור שנבחר.");
+
+        if (_templateSheetReader is null)
+        {
+            return InspectionReportCommandResult.Fail(
+                "קריאת תבניות Google אינה זמינה ב-Host זה — לא ניתן ליצור דוח.");
+        }
+
+        try
+        {
+            var resolvedSeriesId = seriesId is > 0
+                ? seriesId.Value
+                : await _templateSync
+                    .EnsureSeriesAsync(projectId, sheetId, templateUrl, cancellationToken)
+                    .ConfigureAwait(false);
+
+            var prepare = await PrepareSeriesFromTemplateAsync(
+                    resolvedSeriesId, sheetId, cancellationToken)
+                .ConfigureAwait(false);
+            if (!prepare.Succeeded)
+                return InspectionReportCommandResult.Fail(prepare.ErrorMessage!);
+
+            return await InsertReportWithSectionSnapshotAsync(
+                    projectId,
+                    resolvedSeriesId,
+                    templateUrl,
+                    inspectorName,
+                    inspectorId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return InspectionReportCommandResult.Fail($"שגיאה ביצירת דוח: {ex.Message}");
+        }
+    }
+
+    public async Task<InspectionReportCommandResult> HydrateEmptyReportFromTemplateAsync(
+        int reportId,
+        CancellationToken cancellationToken = default)
+    {
+        if (reportId <= 0)
+            return InspectionReportCommandResult.Fail("מזהה דוח לא תקין.");
+
+        if (_templateSheetReader is null)
+        {
+            return InspectionReportCommandResult.Fail(
+                "קריאת תבניות Google אינה זמינה ב-Host זה — לא ניתן למלא דוח.");
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var report = await db.InspectionReports
+            .FirstOrDefaultAsync(r => r.ReportId == reportId, cancellationToken)
+            .ConfigureAwait(false);
+        if (report is null)
+            return InspectionReportCommandResult.Fail($"דוח {reportId} לא נמצא.");
+
+        if (report.SentAt is not null || report.IsLockedAfterSend)
+        {
+            return InspectionReportCommandResult.Fail(
+                "לא ניתן למלא דוח שנשלח או ננעל לאחר שליחה.");
+        }
+
+        var existingNotes = await db.InspectionNotes
+            .CountAsync(n => n.ReportId == reportId, cancellationToken)
+            .ConfigureAwait(false);
+        if (existingNotes > 0)
+            return InspectionReportCommandResult.Ok(reportId); // idempotent: already populated
+
+        var sheetId = ResolveSpreadsheetId(null, report.SourceFileUrn);
+        if (string.IsNullOrWhiteSpace(sheetId) && report.SeriesId is > 0)
+        {
+            sheetId = await db.InspectionSeries
+                .AsNoTracking()
+                .Where(s => s.SeriesId == report.SeriesId.Value)
+                .Select(s => s.TemplateSpreadsheetId)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (string.IsNullOrWhiteSpace(sheetId))
+        {
+            return InspectionReportCommandResult.Fail(
+                "לדוח אין מזהה תבנית Google — לא ניתן למלא שאלון.");
+        }
+
+        var templateUrl = report.SourceFileUrn
+            ?? $"https://docs.google.com/spreadsheets/d/{sheetId}";
+
+        try
+        {
+            var seriesId = report.SeriesId is > 0
+                ? report.SeriesId.Value
+                : await _templateSync
+                    .EnsureSeriesAsync(report.ProjectId, sheetId, templateUrl, cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (report.SeriesId is null or <= 0)
+            {
+                report.SeriesId = seriesId;
+                report.SourceFileUrn ??= templateUrl;
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var prepare = await PrepareSeriesFromTemplateAsync(seriesId, sheetId, cancellationToken)
+                .ConfigureAwait(false);
+            if (!prepare.Succeeded)
+                return InspectionReportCommandResult.Fail(prepare.ErrorMessage!);
+
+            var activeSections = await LoadActiveSectionsAsync(seriesId, cancellationToken)
+                .ConfigureAwait(false);
+            if (activeSections.Count == 0)
+            {
+                return InspectionReportCommandResult.Fail(
+                    "לא נמצאו סעיפים תקינים בתבנית ולכן הדוח לא מולא.");
+            }
+
+            foreach (var section in activeSections)
+            {
+                var noteSubIndex = section.Chapter.ChapterNumber == 0
+                    ? section.SectionCode.ToString()
+                    : $"{section.FullCode}.1";
+
+                db.InspectionNotes.Add(new InspectionNote
+                {
+                    ReportId = reportId,
+                    SectionId = section.SectionId,
+                    NoteSubIndex = noteSubIndex,
+                });
+            }
+
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return InspectionReportCommandResult.Ok(reportId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return InspectionReportCommandResult.Fail($"שגיאה במילוי דוח: {ex.Message}");
+        }
+    }
+
+    private async Task<(bool Succeeded, string? ErrorMessage)> PrepareSeriesFromTemplateAsync(
+        int seriesId,
+        string sheetId,
+        CancellationToken cancellationToken)
+    {
+        var sheetRead = await _templateSheetReader!
+            .ReadFirstSheetAsync(sheetId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!sheetRead.Succeeded)
+            return (false, sheetRead.ErrorMessage ?? "קריאת התבנית נכשלה.");
+
+        IList<IList<object>> cellRows = sheetRead.Rows
+            .Select(r => (IList<object>)r.Select(c => (object)(c ?? string.Empty)).ToList())
+            .ToList();
+
+        var scan = InspectionTemplateTagGrammar.ScanAndBuild(cellRows);
+        if (scan.HasErrors)
+        {
+            var summary = string.Join("; ", scan.ValidationErrors.Take(3).Select(e => e.Message));
+            return (false, $"שגיאות בתבנית: {summary}");
+        }
+
+        if (scan.SyncRows.Count == 0)
+        {
+            return (false, "לא נמצאו סעיפים תקינים בתבנית ולכן הדוח לא נוצר.");
+        }
+
+        var syncResult = await _templateSync
+            .SyncAsync(scan.SyncRows, seriesId, cancellationToken)
+            .ConfigureAwait(false);
+        if (syncResult.HasErrors)
+        {
+            var summary = string.Join("; ", syncResult.Errors.Take(3));
+            return (false, $"שגיאות בסנכרון תבנית: {summary}");
+        }
+
+        var activeCount = (await LoadActiveSectionsAsync(seriesId, cancellationToken).ConfigureAwait(false))
+            .Count;
+        if (activeCount == 0)
+            return (false, "לא נמצאו סעיפים תקינים בתבנית ולכן הדוח לא נוצר.");
+
+        return (true, null);
+    }
+
+    private async Task<InspectionReportCommandResult> InsertReportWithSectionSnapshotAsync(
+        int projectId,
+        int seriesId,
+        string templateUrl,
+        string? inspectorName,
+        int? inspectorId,
+        CancellationToken cancellationToken)
+    {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            int nextNumber;
-            if (seriesId is > 0)
-            {
-                nextNumber = await db.InspectionReports
-                    .Where(r => r.SeriesId == seriesId.Value)
-                    .Select(r => (int?)r.ReportNumber)
-                    .MaxAsync(cancellationToken)
-                    .ConfigureAwait(false) ?? 0;
-            }
-            else
-            {
-                nextNumber = await db.InspectionReports
-                    .Where(r => r.ProjectId == projectId && r.SeriesId == null)
-                    .Select(r => (int?)r.ReportNumber)
-                    .MaxAsync(cancellationToken)
-                    .ConfigureAwait(false) ?? 0;
-            }
-
+            var nextNumber = await db.InspectionReports
+                .Where(r => r.SeriesId == seriesId)
+                .Select(r => (int?)r.ReportNumber)
+                .MaxAsync(cancellationToken)
+                .ConfigureAwait(false) ?? 0;
             nextNumber++;
 
             var report = new InspectionReport
             {
                 ProjectId = projectId,
-                SeriesId = seriesId is > 0 ? seriesId : null,
+                SeriesId = seriesId,
                 ReportNumber = nextNumber,
                 InspectionDate = DateTime.UtcNow,
                 InspectorName = inspectorName,
                 InspectorId = inspectorId,
-                SourceFileUrn = string.IsNullOrWhiteSpace(templateUrl) ? spreadsheetId : templateUrl,
+                SourceFileUrn = templateUrl,
                 SourceFileVersion = nextNumber.ToString(),
             };
 
             db.InspectionReports.Add(report);
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-            var sectionQuery = db.Sections
-                .AsNoTracking()
-                .Include(s => s.Chapter)
-                .Where(s => s.IsActive);
-
-            if (seriesId is > 0)
-                sectionQuery = sectionQuery.Where(s => s.Chapter.SeriesId == seriesId.Value);
-
-            var activeSections = await sectionQuery
-                .OrderBy(s => s.Chapter.ChapterNumber)
-                .ThenBy(s => s.SectionCode)
-                .ToListAsync(cancellationToken)
+            var activeSections = await LoadActiveSectionsAsync(seriesId, cancellationToken)
                 .ConfigureAwait(false);
+            if (activeSections.Count == 0)
+            {
+                await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                return InspectionReportCommandResult.Fail(
+                    "לא נמצאו סעיפים תקינים בתבנית ולכן הדוח לא נוצר.");
+            }
 
             foreach (var section in activeSections)
             {
@@ -337,9 +521,7 @@ public sealed class SqlInspectionReportCommandService(IDbContextFactory<SiNetSQL
                 });
             }
 
-            if (activeSections.Count > 0)
-                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             return InspectionReportCommandResult.Ok(report.ReportId);
         }
@@ -348,6 +530,48 @@ public sealed class SqlInspectionReportCommandService(IDbContextFactory<SiNetSQL
             await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
             return InspectionReportCommandResult.Fail($"שגיאה ביצירת דוח: {ex.Message}");
         }
+    }
+
+    private async Task<List<Section>> LoadActiveSectionsAsync(
+        int seriesId,
+        CancellationToken cancellationToken)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        return await db.Sections
+            .AsNoTracking()
+            .Include(s => s.Chapter)
+            .Where(s => s.IsActive && s.Chapter.SeriesId == seriesId)
+            .OrderBy(s => s.Chapter.ChapterNumber)
+            .ThenBy(s => s.SectionCode)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static string? ResolveSpreadsheetId(string? spreadsheetId, string? templateUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(spreadsheetId))
+            return spreadsheetId.Trim();
+
+        if (string.IsNullOrWhiteSpace(templateUrl))
+            return null;
+
+        // https://docs.google.com/spreadsheets/d/{id}/...
+        const string marker = "/spreadsheets/d/";
+        var idx = templateUrl.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            return null;
+
+        var start = idx + marker.Length;
+        var end = start;
+        while (end < templateUrl.Length)
+        {
+            var ch = templateUrl[end];
+            if (ch is '/' or '?' or '#')
+                break;
+            end++;
+        }
+
+        return end > start ? templateUrl[start..end] : null;
     }
 
     public async Task<InspectionReportCommandResult> UnlockReportAsync(

@@ -191,6 +191,11 @@ public sealed class InspectionWindowViewModelBrowseCreateTests
             return Task.FromResult(InspectionReportCommandResult.Ok(NextReportId));
         }
 
+        public Task<InspectionReportCommandResult> HydrateEmptyReportFromTemplateAsync(
+            int reportId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(InspectionReportCommandResult.Ok(reportId));
+
         public Task<InspectionReportCommandResult> UnlockReportAsync(
             int reportId, CancellationToken cancellationToken = default)
         {

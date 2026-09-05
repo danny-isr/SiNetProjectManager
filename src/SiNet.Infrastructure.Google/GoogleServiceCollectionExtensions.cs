@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Abstractions.Inspection;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
 using SiNet.Application.Configuration;
@@ -73,6 +74,9 @@ public static class GoogleServiceCollectionExtensions
                 : new IdentityGuardedGmailModifyService(inner, guard);
         });
         services.AddSingleton<IGmailLabelChangeJournal, LocalGmailLabelChangeJournal>();
+
+        // Inspection template sheet reader (raw cells; tag grammar stays in SQL template sync).
+        services.AddTransient<IInspectionTemplateSheetReader, GoogleInspectionTemplateSheetReader>();
 
         // ProjectWork Google Drive: Shared Drive primitives + IFileStore over the shared session.
         services.AddSingleton<IGoogleDriveFileService, GoogleDriveFileService>();

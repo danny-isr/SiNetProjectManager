@@ -34,7 +34,8 @@ public interface IInspectionNoteCommandService
 public interface IInspectionReportCommandService
 {
     /// <summary>
-    /// Creates a new inspection report from a template URL (syncs template structure when the host supports it).
+    /// Creates a new inspection report from a Google template: ensure series → scan → sync → snapshot notes.
+    /// Fails closed when the template is missing, invalid, or yields zero sections.
     /// </summary>
     Task<InspectionReportCommandResult> CreateReportAsync(
         int projectId,
@@ -43,6 +44,14 @@ public interface IInspectionReportCommandService
         string? inspectorName = null,
         int? inspectorId = null,
         string? spreadsheetId = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Idempotent DEV/recovery: hydrate an existing empty, unsent, unlocked report from its template.
+    /// Preserves <paramref name="reportId"/> and does not duplicate notes.
+    /// </summary>
+    Task<InspectionReportCommandResult> HydrateEmptyReportFromTemplateAsync(
+        int reportId,
         CancellationToken cancellationToken = default);
 
     Task<InspectionReportCommandResult> UnlockReportAsync(

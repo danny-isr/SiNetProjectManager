@@ -157,6 +157,10 @@ internal sealed class V2InspectionReportCommandService(
         int reportId, CancellationToken cancellationToken = default) =>
         _inner.UnlockReportAsync(reportId, cancellationToken);
 
+    public Task<InspectionReportCommandResult> HydrateEmptyReportFromTemplateAsync(
+        int reportId, CancellationToken cancellationToken = default) =>
+        _inner.HydrateEmptyReportFromTemplateAsync(reportId, cancellationToken);
+
     public Task<InspectionReportCommandResult> DeleteReportAsync(
         int reportId, CancellationToken cancellationToken = default) =>
         _inner.DeleteReportAsync(reportId, cancellationToken);

@@ -386,7 +386,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private bool CanCreateReport =>
         !IsBusy
         && _reportCommands is not null
-        && ResolveActiveProjectId() is > 0;
+        && ResolveActiveProjectId() is > 0
+        && SelectedTemplate is { SpreadsheetId: { Length: > 0 } };
 
     public ICommand ToggleCollapseCommand { get; }
     public ICommand RefreshCommand { get; }
@@ -1221,31 +1222,28 @@ public sealed class InspectionWindowViewModel : ObservableObject
         }
 
         var template = SelectedTemplate;
-        var templateUrl = !string.IsNullOrWhiteSpace(template?.Url)
-            ? template.Url!
-            : "native://empty-template";
-        var spreadsheetId = template?.SpreadsheetId;
+        if (template is null
+            || string.IsNullOrWhiteSpace(template.SpreadsheetId)
+            || string.IsNullOrWhiteSpace(template.Url))
+        {
+            StatusMessage = "יש לבחור תבנית Google תקינה לפני יצירת דוח.";
+            return;
+        }
 
         IsBusy = true;
         try
         {
-            StatusMessage = "יוצר דוח ביקורת...";
-            var seriesId = _preferredSeriesId;
-            if (seriesId is null or <= 0 && _workspace is not null)
-            {
-                var series = await _workspace.GetSeriesAsync(projectId).ConfigureAwait(true);
-                if (series.Count > 0)
-                    seriesId = series[0].SeriesId;
-            }
-
+            StatusMessage = "יוצר דוח ביקורת מהתבנית...";
+            // Series is resolved inside CreateReportAsync via ProjectId + SpreadsheetId
+            // (EnsureSeries). Do not attach the new report to an arbitrary series[0].
             var result = await _reportCommands
                 .CreateReportAsync(
                     projectId,
-                    templateUrl,
-                    seriesId,
+                    template.Url!,
+                    seriesId: null,
                     inspectorName: null,
                     inspectorId: _currentUser?.UserId,
-                    spreadsheetId: spreadsheetId)
+                    spreadsheetId: template.SpreadsheetId)
                 .ConfigureAwait(true);
 
             if (!result.Succeeded || result.ReportId is not int newReportId)

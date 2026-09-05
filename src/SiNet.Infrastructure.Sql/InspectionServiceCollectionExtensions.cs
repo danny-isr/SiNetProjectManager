@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Inspection;
 using SiNet.Infrastructure.Sql.Services.Ai;
 using SiNet.Infrastructure.Sql.Services.Inspection;
+using SiNetSQL.Services.InspectionSync;
 
 namespace SiNet.Infrastructure.Sql;
 
@@ -12,6 +13,7 @@ public static class InspectionServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.AddTransient<TemplateSyncService>();
         services.AddTransient<IInspectionWorkspace, SqlInspectionWorkspace>();
         services.AddTransient<IInspectionNoteCommandService, SqlInspectionNoteCommandService>();
         services.AddTransient<SqlInspectionReportCommandService>();
