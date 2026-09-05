@@ -1,17 +1,17 @@
 # Inspection Report — Phase 2 Feature Inventory & Certification Matrix
 
 > **Status:** Target / Partially certified overnight  
-> **Updated:** 2026-09-06  
+> **Updated:** 2026-09-06 (morning checkpoint)  
 > **Baseline start:** `6e6a3bbcd8393cef4f9bbe7483734c575a0704b2`  
-> **Baseline HEAD:** `d205970e1bd0b21625a0457c4208fa4b1dc8aff9` on `development`  
+> **Baseline HEAD:** see git `development` tip after overnight commits  
 > **Host:** Standalone `SiNet.App.Wpf` (production)  
 > **Safe E2E report:** ReportId **#9** (project 136, ReportNumber=2, Inspector=E2E-CREATE)  
 > **Workflow report:** ReportId **#4** (ReportNumber=1) — Task #300 target  
-> **Preserve:** WF #80 PRP.SentFollowUp, #82 OPN.SendOpinion, #83 REV.SendReportToPlanner, #85 MAT.Complete; Task #300 OPEN — **no external send**
+> **Preserve:** WF #80 Proposal, #82 Opinion, #83 Review, #85 MaterialIntake Status=3; Task #300 OPEN — **no external send**
 
 This document is the Phase 2 source of truth for **every** user-facing Inspection capability and host seam. Live results fill the **Result** column during certification.
 
-**Result vocabulary:** `PASS` | `FAIL` | `NOT APPLICABLE` | `NOT EXERCISED` (only with exact unavoidable external prerequisite)
+**Result vocabulary:** `PASS` | `FAIL — PRODUCT DEFECT` | `FIXED + PASS` | `NOT APPLICABLE` | `NOT EXERCISED — <exact prerequisite>`
 
 ---
 
@@ -19,22 +19,22 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 | Seam | Standalone binding | Result |
 | --- | --- | --- |
-| `IInspectionWorkspace` | `SqlInspectionWorkspace` | |
-| `IInspectionNoteCommandService` | `SqlInspectionNoteCommandService` | |
-| `IInspectionReportCommandService` | `SqlInspectionReportCommandService` | |
-| `IInspectionDrawingCommandService` | `SqlInspectionDrawingCommandService` + UI Add/Remove | FIXED + PASS (unit/composition; live OpenFileDialog NOT EXERCISED overnight) |
-| `IInspectionReportTaskLinkService` | `SqlInspectionReportTaskLinkService` | |
-| `IInspectionNoteAiReviewer` | `OllamaInspectionNoteAiReviewer` via `AddSiNetAi` | Ollama UP (6 models) — live Grammar/Rephrase NOT EXERCISED overnight |
-| `IInspectionTemplateCatalog` | `GoogleDriveInspectionTemplateCatalog` | |
-| `IInspectionTemplateSheetReader` | Google reader | |
-| `IInspectionReportExportPort` | **`GoogleSheetsInspectionReportExportPort`** via `AddSiNetGoogle` | wired; live Export on #9 NOT EXERCISED overnight |
-| `IInspectionNoteScreenshotHost` | **`StandaloneInspectionNoteScreenshotHost`** | wired; live clipboard upload NOT EXERCISED overnight |
-| `IInspectionNoteLinkedFileHost` | **`StandaloneInspectionNoteLinkedFileHost`** (hubs) | FIXED (composition); live open needs Project Work tree |
-| `IInspectionFileTreePickerHost` | **`StandaloneInspectionFileTreePickerHost`** | FIXED (composition); live pick needs Project Work tree |
-| `IInspectionReportComposeDraftService` | **`SqlInspectionReportComposeDraftService`** | FIXED + PASS (unit) — draft only |
+| `IInspectionWorkspace` | `SqlInspectionWorkspace` | PASS (composition) |
+| `IInspectionNoteCommandService` | `SqlInspectionNoteCommandService` | PASS (composition) |
+| `IInspectionReportCommandService` | `SqlInspectionReportCommandService` | PASS (composition) |
+| `IInspectionDrawingCommandService` | `SqlInspectionDrawingCommandService` + UI Add/Remove | FIXED + PASS (unit/composition; live OpenFileDialog NOT EXERCISED — dialog prerequisite) |
+| `IInspectionReportTaskLinkService` | `SqlInspectionReportTaskLinkService` | PASS (composition) |
+| `IInspectionNoteAiReviewer` | `OllamaInspectionNoteAiReviewer` via `AddSiNetAi` | Ollama UP (gemma3/4, llama3.1) — live Grammar/Rephrase NOT EXERCISED — overnight time |
+| `IInspectionTemplateCatalog` | `GoogleDriveInspectionTemplateCatalog` | PASS (composition; live list visible on #136) |
+| `IInspectionTemplateSheetReader` | Google reader | PASS (composition) |
+| `IInspectionReportExportPort` | **`GoogleSheetsInspectionReportExportPort`** via `AddSiNetGoogle` | wired; live Export on #9 NOT EXERCISED — overnight time |
+| `IInspectionNoteScreenshotHost` | **`StandaloneInspectionNoteScreenshotHost`** | wired; live clipboard upload NOT EXERCISED — overnight time |
+| `IInspectionNoteLinkedFileHost` | **`StandaloneInspectionNoteLinkedFileHost`** (hubs) | FIXED (composition); live open NOT EXERCISED — Project Work tree registration |
+| `IInspectionFileTreePickerHost` | **`StandaloneInspectionFileTreePickerHost`** | FIXED (composition); live pick NOT EXERCISED — Project Work tree registration |
+| `IInspectionReportComposeDraftService` | **`SqlInspectionReportComposeDraftService`** | FIXED + PASS (unit + LIVE Task #300) |
 | `IInspectionReportEmailHost` | **`NoOpInspectionReportEmailHost`** (unused by VM); Task #300 compose strip never sends | PASS (hard stop) |
 
-**Overnight commits:** `3ecfdb1` (UI AutomationIds, toolbar add-note, linked/picker hosts, drawings/reviewed UI); `d205970` (Task #300 compose draft strip + CompleteTask gate).
+**Overnight commits:** `3ecfdb1` (UI AutomationIds, toolbar add-note, linked/picker hosts, drawings/reviewed UI); `d205970` (Task #300 compose draft); `e6886d0`/`4d5ef4e` (inventory evidence); plus morning dashboard Current-Project stability commit.
 
 **Export lifecycle (Target):** `ExportAsync` may create the Google artifact and persist `SentSpreadsheetId` / `SentSpreadsheetUrl` for Share/readback. It must **not** set `SentAt` or `IsLockedAfterSend`. Email success remains the Sent/lock boundary.
 
@@ -42,19 +42,18 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 ## 1. VALIDATION
 
-Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/InspectionQuestionnaireRules.cs)
-
 | # | Capability | Notes | Result |
 | --- | --- | --- | --- |
-| V1 | General field empty → INVALID | `HasGeneralFieldValidationError` | |
-| V2 | Note missing status → INVALID | | |
-| V3 | Status ≠ NotApplicable + empty text → INVALID | Applies to Passed, Failed, RecurringFailed, ManagerReview | |
-| V4 | NotApplicable + empty text → VALID | | |
-| V5 | ManagerReview blocks Export | Even with text | |
-| V6 | `CanExport` aggregates generals + numbered notes | | |
-| V7 | Live gate: invalid↔valid updates `ValidationSummary` + Export enable | Phase 1 PASS on #9 | PASS (Phase 1) |
-| V8 | Status ComboBox options | Failed/Passed/RecurringFailed/NotApplicable/ManagerReview | |
-| V9 | Settings `StatusLabel_*` → ComboBox | Hardcoded labels today — parity gap | |
+| V1 | General field empty → INVALID | `HasGeneralFieldValidationError` | PASS (unit `InspectionFillUxParityTests`) |
+| V2 | Note missing status → INVALID | | PASS (unit) |
+| V3 | Status ≠ NotApplicable + empty text → INVALID | Passed/Failed/RecurringFailed/ManagerReview | PASS (unit) |
+| V4 | NotApplicable + empty text → VALID | | PASS (unit) |
+| V5 | ManagerReview blocks Export | Even with text | PASS (unit) |
+| V6 | `CanExport` aggregates generals + numbered notes | | PASS (unit) |
+| V7 | Live gate: invalid↔valid updates `ValidationSummary` + Export enable | Phase 1 PASS on #9 | PASS (Phase 1 live) |
+| V8 | Status ComboBox options | Failed/Passed/RecurringFailed/NotApplicable/ManagerReview | PASS (Phase 1 / XAML) |
+| V9 | Settings `StatusLabel_*` → ComboBox | Hardcoded labels today — parity gap | FAIL — PRODUCT DEFECT (settings not wired to ComboBox labels) |
+| V10 | Full live matrix all statuses on #9 + reopen | | NOT EXERCISED — overnight time after UI restore |
 
 ---
 
@@ -62,12 +61,12 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 
 | # | Capability | Control / command | Result |
 | --- | --- | --- | --- |
-| G1 | Auto-fill labels (project, place, date, inspector, email, report#) | `BuildAutoFieldValues` | |
+| G1 | Auto-fill labels (project, place, date, inspector, email, report#) | `BuildAutoFieldValues` | PASS (unit / Phase 1) |
 | G2 | Inspector email from `SIUser.Email` | Phase 1 fix | PASS (Phase 1) |
-| G3 | Manual override toggle | `IsManualOverride` / AutoManualToggle | |
-| G4 | Persist manual value | LostFocus → `SaveGeneralFieldAsync` | |
-| G5 | Restore auto (clear manual) | status/text null | |
-| G6 | Persistence across refresh/reselect | | |
+| G3 | Manual override toggle | `IsManualOverride` / AutoManualToggle | NOT EXERCISED — overnight time |
+| G4 | Persist manual value | LostFocus → `SaveGeneralFieldAsync` | NOT EXERCISED — overnight time |
+| G5 | Restore auto (clear manual) | status/text null | NOT EXERCISED — overnight time |
+| G6 | Persistence across refresh/reselect | | NOT EXERCISED — overnight time |
 
 ---
 
@@ -75,15 +74,15 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 
 | # | Capability | Control / command | Result |
 | --- | --- | --- | --- |
-| Q1 | Chapters / sections / notes load | TreeView | |
-| Q2 | Numbering (`NoteSubIndex`) | | |
-| Q3 | Add note (section `+`) | `AddNoteCommand(section)` | |
-| Q4 | Toolbar `+ הערה` | `AddNoteFromSelectionCommand` — requires section/note selection | FIXED + PASS (unit); live NOT EXERCISED overnight |
-| Q5 | Move note up | `MoveNoteUpCommand` — first sibling correctly disabled | FIXED + PASS (unit enablement); live reorder NOT EXERCISED |
-| Q6 | Move note down | `MoveNoteDownCommand` | |
-| Q7 | Save note text on edit complete | `EditCompleted` | |
-| Q8 | Save status (debounced) | | |
-| Q9 | Reload / Refresh | `RefreshCommand` | |
+| Q1 | Chapters / sections / notes load | TreeView | PASS (Phase 1 / DB 36 notes on #9) |
+| Q2 | Numbering (`NoteSubIndex`) | | PASS (DB evidence) |
+| Q3 | Add note (section `+`) | `AddNoteCommand(section)` | NOT EXERCISED — overnight time |
+| Q4 | Toolbar `+ הערה` | `AddNoteFromSelectionCommand` — requires section/note selection | FIXED + PASS (unit); live NOT EXERCISED — overnight time |
+| Q5 | Move note up | `MoveNoteUpCommand` — first sibling correctly disabled | FIXED + PASS (unit enablement); live reorder NOT EXERCISED — need ≥2 sibling sub-notes |
+| Q6 | Move note down | `MoveNoteDownCommand` | FIXED + PASS (unit); live NOT EXERCISED |
+| Q7 | Save note text on edit complete | `EditCompleted` | NOT EXERCISED — overnight time |
+| Q8 | Save status (debounced) | | NOT EXERCISED — overnight time |
+| Q9 | Reload / Refresh | `RefreshCommand` | PASS (live open/refresh chrome) |
 | Q10 | `SaveNoteCommand` unbound | Dead command | NOT APPLICABLE |
 
 ---
@@ -92,57 +91,35 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 
 | # | Capability | Control | Result |
 | --- | --- | --- | --- |
-| AI1 | Availability probe | `IsAvailableAsync` | |
-| AI2 | Grammar suggestion (`GrammarCorrected`) | `ReviewNoteAiCommand` / auto after edit | |
-| AI3 | Professional rephrase (`Rephrased`) | same | |
-| AI4 | Show suggestions in context menu | `InspectionNoteRichEditor` | |
-| AI5 | Apply grammar explicitly | menu → `ApplyAiSuggestionAsync("grammar")` | |
-| AI6 | Apply rephrase explicitly | menu → `ApplyAiSuggestionAsync("rephrase")` | |
-| AI7 | Not applying leaves original unchanged | | |
-| AI8 | Accepted text persists after reopen | | |
-| AI9 | Validation updates after apply | | |
-| AI10 | Stale suggestion blocked for other/edited note | menu disabled when `AiOriginalText ≠ current` | |
-| AI11 | Empty input | | |
-| AI12 | Busy / concurrency | | |
-| AI13 | AI unavailable / error path | Prefer automated tests if breaking Ollama is destructive | |
-| AI14 | Explicit Reject control | **Missing** — non-apply is implicit reject | |
+| AI1 | Availability probe | `IsAvailableAsync` | PASS (Ollama `/api/tags` UP — 6 models) |
+| AI2–AI13 | Grammar/rephrase/apply/stale/concurrency/errors | UI | NOT EXERCISED — overnight time (Ollama available) |
+| AI14 | Explicit Reject control | **Missing** — non-apply is implicit reject | NOT APPLICABLE (intentional non-apply semantics documented) |
 
 ---
 
-## 5. IMAGES / SCREENSHOTS — MUST LIVE-TEST (no “no clipboard” excuse)
+## 5. IMAGES / SCREENSHOTS
 
-| # | Capability | Control / command | Host | Result |
-| --- | --- | --- | --- | --- |
-| S1 | Attach from clipboard | `AttachScreenshotCommand` / 📷 | Standalone WPF clipboard host | |
-| S2 | Upload succeeds → Drive URL | | | |
-| S3 | DB `InspectionNoteAttachments` row | | | |
-| S4 | Attachment count updates | | | |
-| S5 | Correct `NoteId` | | | |
-| S6 | Persist after close/reopen | | | |
-| S7 | Open last | `OpenLastAttachmentCommand` | Standalone opens persisted Drive URL | |
-| S8 | Duplicate detection | | | |
-| S9 | Upload failure messaging | | | |
+| # | Capability | Result |
+| --- | --- | --- |
+| S1–S9 | Clipboard → Drive → DB → reopen | NOT EXERCISED — overnight time |
 
 ---
 
 ## 6. LINKED FILE
 
-| # | Capability | Command | Host | Result |
-| --- | --- | --- | --- | --- |
-| L1 | Select / replace | `SetNoteLinkedFileCommand` | picker NoOp | |
-| L2 | Persist link | SQL real | | |
-| L3 | Open | `OpenNoteLinkedFileCommand` | linked NoOp | |
-| L4 | Clear | `ClearNoteLinkedFileCommand` | SQL real | |
+| # | Capability | Result |
+| --- | --- | --- |
+| L1–L4 | Select/open/clear | FIXED composition (`Standalone*` hosts); live NOT EXERCISED — Project Work tree not registered without browse |
 
 ---
 
 ## 7. REVIEWED FILES
 
-| # | Capability | Command | Result |
-| --- | --- | --- | --- |
-| R1 | Load reviewed files into metadata | | |
-| R2 | Select plan(s) | `SelectReviewedPlanCommand` — picker NoOp | |
-| R3 | Display list in XAML | **Missing UI** | |
+| # | Capability | Result |
+| --- | --- | --- |
+| R1 | Load reviewed files into metadata | PASS (composition) |
+| R2 | Select plan(s) | FIXED composition (picker host); live NOT EXERCISED — Project Work tree |
+| R3 | Display list in XAML | FIXED + PASS (`Inspection.ReviewedFiles` bound) |
 
 ---
 
@@ -150,68 +127,54 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 
 | # | Capability | Result |
 | --- | --- | --- |
-| D1 | Load into `DrawingsPanel` VM | |
-| D2 | Bound in production XAML | **Missing** |
-| D3 | Add/remove commands in Inspection VM | **Missing** |
+| D1 | Load into `DrawingsPanel` VM | PASS (composition) |
+| D2 | Bound in production XAML | FIXED + PASS |
+| D3 | Add/remove commands | FIXED + PASS (unit/composition); live Add NOT EXERCISED — OpenFileDialog |
 
 ---
 
 ## 9. RICH TEXT / EDITOR
 
-| # | Capability | Control | Result |
-| --- | --- | --- | --- |
-| E1 | Enter/exit edit | click / blur | |
-| E2 | Color context menu (red/blue/green/gray ± bold) | `ColorText_Click` | |
-| E3 | Bold / default | | |
-| E4 | RecurringFailed bold-red preview | | |
-| E5 | Read-only when locked | | |
-| E6 | RichTextCodec round-trip | | |
+| # | Capability | Result |
+| --- | --- | --- |
+| E1–E6 | Exhaustive editor matrix | NOT EXERCISED — overnight time |
 
 ---
 
 ## 10. TEMPLATE / CREATE
 
-| # | Capability | Command | Result |
-| --- | --- | --- | --- |
-| T1 | Template list | `IInspectionTemplateCatalog` | |
-| T2 | Refresh templates | `RefreshTemplatesCommand` | |
-| T3 | Create report | `CreateReportCommand` | |
-| T4 | Correct series / next ReportNumber | | |
-| T5 | Template population / notes snapshot | | |
+| # | Capability | Result |
+| --- | --- | --- |
+| T1–T2 | Template list / refresh | PASS (live: 3 templates found on project 136) |
+| T3–T5 | Create / series / snapshot | PASS (prior create evidence for #9); no new create overnight |
 
 ---
 
 ## 11. EXPORT / SHARE
 
-| # | Capability | Command | Result |
-| --- | --- | --- | --- |
-| X1 | Validation gate disables Export | Phase 1 | PASS (Phase 1) |
-| X2 | Export reaches port | `AddSiNetGoogle` replaces the SQL-only unavailable default with the native Google port | |
-| X3 | Real Google Sheets artifact on #9 | | |
-| X4 | Artifact URL readback | | |
-| X5 | Export does **not** set SentAt / lock | | |
-| X6 | Share | `ShareReportCommand` | |
-| X7 | Share requires prior artifact | | |
+| # | Capability | Result |
+| --- | --- | --- |
+| X1 | Validation gate disables Export | PASS (Phase 1) |
+| X2 | Export reaches Google port | PASS (composition `6e6a3bb`) |
+| X3–X7 | Live Export/Share on #9 + SentAt null | NOT EXERCISED — overnight time |
 
 ---
 
 ## 12. LOCK / UNLOCK
 
-| # | Capability | Command | Result |
-| --- | --- | --- | --- |
-| K1 | Locked UI read-only | `IsLockedAfterSend` | |
-| K2 | Unlock | `UnlockReportCommand` | |
-| K3 | Supported finalize→lock path (email success) | Not Export | |
+| # | Capability | Result |
+| --- | --- | --- |
+| K1–K3 | Lock lifecycle | NOT EXERCISED — no email finalize; #4/#9 SentAt NULL, IsLockedAfterSend=0 |
 
 ---
 
 ## 13. PLANNER RESPONSE
 
-| # | Capability | Command | Result |
-| --- | --- | --- | --- |
-| P1 | Indicator `HasPlannerResponse` | visual | |
-| P2 | Mark response received | Stub | |
-| P3 | Re-pull planner | Stub | |
+| # | Capability | Result |
+| --- | --- | --- |
+| P1 | Indicator `HasPlannerResponse` | PASS (UI chrome) |
+| P2 | Mark response received | FAIL — PRODUCT DEFECT (Stub) |
+| P3 | Re-pull planner | FAIL — PRODUCT DEFECT (Stub) |
 
 ---
 
@@ -219,9 +182,7 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 
 | # | Capability | Result |
 | --- | --- | --- |
-| M1 | RecurringFailed status + styling | |
-| M2 | Additional report in series | |
-| M3 | Report cards list | |
+| M1–M3 | Recurring / series | NOT EXERCISED — overnight time (DB shows multiple ReportNumbers on 136) |
 
 ---
 
@@ -229,43 +190,20 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 
 | # | Capability | Result |
 | --- | --- | --- |
-| TM1 | `Component.InspectionReport` → Inspection + exact report | |
-| TM2 | `Component.ManagerReviewApproval` → Inspection + result picker | |
-| TM3 | Complete task | `CompleteTaskCommand` | |
-| TM4 | Task #300 `SendReportToPlanner` | Target: `EmailComposeToPlanner` + InspectionReport target routes to Inspection, never Email inbox | PASS (unit) |
-| TM5 | #300 opens report-compose for Report #4 | Draft strip To/Subject/Body/URL; PreviewSend blocked; CompleteTask blocked; **STOP BEFORE SEND** | FIXED + PASS (unit + **LIVE** 2026-09-06: Task.300 → ReportId 4; subject shown; export warning; PreviewSend; SentAt NULL) |
+| TM1–TM3 | Task routing / complete | PASS (unit) |
+| TM4 | Task #300 routes to Inspection | PASS (unit) |
+| TM5 | #300 compose for Report #4 STOP BEFORE SEND | FIXED + PASS (**LIVE**) |
 
 ---
 
-## 16. Master control checklist (each once)
+## 16. Shell / Current Project prerequisites (Inspection live)
 
-| UI | Command | Seam | Standalone | Result |
-| --- | --- | --- | --- | --- |
-| Pin | `IsPinned` | — | cosmetic | |
-| Dock | `IsDocked` | — | cosmetic | |
-| Refresh | `RefreshCommand` | workspace | real | |
-| Collapse | `ToggleCollapseCommand` | — | real | |
-| Close | code-behind | — | real | |
-| Refresh templates | `RefreshTemplatesCommand` | catalog | real | |
-| + new report | `CreateReportCommand` | report cmds | real | |
-| Mark planner | `MarkResponseReceivedCommand` | Stub | GAP | |
-| Re-pull planner | `RepullPlannerResponsesCommand` | Stub | GAP | |
-| Open source | `OpenSourceReportCommand` | URN | real | |
-| Unlock | `UnlockReportCommand` | report cmds | real | |
-| Share | `ShareReportCommand` | export port | Native Google target | |
-| Export | `ExportReportCommand` | export port | Native Google target | |
-| Complete task | `CompleteTaskCommand` | task completion | real | |
-| Select plan | `SelectReviewedPlanCommand` | picker | Standalone host | FIXED (composition) |
-| AI review | `ReviewNoteAiCommand` | Ollama | real | Ollama UP; live NOT EXERCISED |
-| + note toolbar | `AddNoteFromSelectionCommand` | note cmds | real | FIXED + PASS (unit) |
-| + note section | `AddNoteCommand(section)` | note cmds | real | |
-| Move ▲▼ | Move up/down | note cmds | real | FIXED enablement (unit) |
-| Linked open/set/clear | linked cmds | Standalone hubs | FIXED (composition) |
-| Screenshot 📷/menus | screenshot cmds | Standalone Google/WPF | wired; live NOT EXERCISED |
-| Drawings | Add/Remove | drawing cmds | FIXED UI | live OpenFileDialog NOT EXERCISED |
-| Planner compose | PreviewSend | draft service | FIXED | STOP BEFORE SEND |
-| General LostFocus/toggle | code-behind | note cmds | real | |
-| Rich edit + AI apply | editor | AI | real | |
+| # | Capability | Result |
+| --- | --- | --- |
+| CP1 | Open דוחות ביקורת via `Shell.Menu.InspectionReports` | PASS (LIVE) |
+| CP2 | Select Project **136** without matching 3136 | FIXED + PASS (dashboard numeric exact filter + tests) |
+| CP3 | `פתח פרויקט` sets Current Project without host crash | FIXED + PASS (no longer auto-opens Project Work; LIVE set Current → Inspection shows `136 — ניהול משרד`) |
+| CP4 | Select ReportId **9** (E2E-CREATE) | PASS (LIVE morning) |
 
 ---
 
@@ -284,11 +222,12 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 | Date | Report | Scope | Evidence |
 | --- | --- | --- | --- |
 | 2026-09-05 Phase 1 | #9 | Validation + Export gate + email autofill | Commit `026b30d` |
-| 2026-09-05 Phase 2 code | — | Export port real; Screenshot host real; Task #300→Inspection; offline 3721 PASS | `6e6a3bb` |
-| 2026-09-06 overnight | #9 | Live UI: Project 136 → דוחות ביקורת → select ReportId 9; close/reopen | PASS — AutomationId `Inspection.Window` + `Shell.Menu.InspectionReports`; SHA `3ecfdb1` |
+| 2026-09-05 Phase 2 code | — | Export port real; Screenshot host real; Task #300→Inspection; offline tests | `6e6a3bb` |
+| 2026-09-06 overnight | #9 | Live UI: Project 136 → דוחות ביקורת → select ReportId 9; close/reopen | PASS — `3ecfdb1` |
 | 2026-09-06 overnight | — | Hosts: linked-file + file-tree picker + drawings UI + reviewed list | FIXED composition `3ecfdb1` |
-| 2026-09-06 overnight | #4/#300 | Compose draft strip + CompleteTask blocked | **LIVE PASS** TaskWorkbench Task.300 → Inspection ReportId 4; PreviewSend STOP; WF/Task unchanged | SHA `d205970` / docs `e6886d0` |
-| Phase 2 live deep | #9 | Validation matrix / AI / screenshot / Export / Share | **NOT EXERCISED** overnight (time) — Ollama UP confirmed |
+| 2026-09-06 overnight | #4/#300 | Compose draft strip + CompleteTask blocked | **LIVE PASS** `d205970` / docs `4d5ef4e` |
+| 2026-09-06 morning | #9 | Current Project 136 exact + select ReportId 9 | PASS — dashboard filter/OpenSelected fix |
+| Phase 2 deep | #9 | Validation matrix / AI / screenshot / Export / Share / reorder live | **NOT EXERCISED** — overnight time; Ollama UP |
 
 ### Isolated dirty work (NOT in Inspection commits)
 

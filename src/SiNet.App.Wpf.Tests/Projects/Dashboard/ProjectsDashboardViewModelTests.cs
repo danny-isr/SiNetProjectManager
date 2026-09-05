@@ -84,6 +84,45 @@ public sealed class ProjectsDashboardViewModelTests
     }
 
     [Fact]
+    public async Task Numeric_filter_prefers_exact_project_number_not_substring()
+    {
+        var rows = new[]
+        {
+            MakeRow(136, "Office", statusId: 1, place: "Ashkelon", openWf: 0, openTasks: 0),
+            MakeRow(3136, "Other", statusId: 1, place: "Ashkelon", openWf: 0, openTasks: 0),
+            MakeRow(1360, "Near", statusId: 1, place: "Ashkelon", openWf: 0, openTasks: 0),
+        };
+        var vm = CreateVm(rows);
+
+        await vm.RefreshAsync().ConfigureAwait(true);
+        vm.FilterText = "136";
+
+        Assert.Single(vm.Rows);
+        Assert.Equal(136, vm.Rows[0].ProjectId);
+    }
+
+    [Fact]
+    public async Task OpenSelected_sets_current_project_without_requiring_project_work_host()
+    {
+        var rows = new[]
+        {
+            MakeRow(136, "Office", statusId: 1, place: "Ashkelon", openWf: 0, openTasks: 0),
+        };
+        var current = new FakeCurrentProject();
+        var vm = new ProjectsDashboardViewModel(
+            new FakeDashboardQuery(rows),
+            new FakeFilterOptions(),
+            current);
+
+        await vm.RefreshAsync().ConfigureAwait(true);
+        vm.Selected = vm.Rows[0];
+        await vm.OpenSelectedAsync().ConfigureAwait(true);
+
+        Assert.NotNull(current.CurrentProject);
+        Assert.Equal(136, current.CurrentProject.ProjectId);
+    }
+
+    [Fact]
     public async Task Summary_cards_reflect_filtered_set()
     {
         var rows = new[]

@@ -66,6 +66,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         _filterOptions = filterOptions ?? throw new ArgumentNullException(nameof(filterOptions));
         _currentProject = currentProject ?? throw new ArgumentNullException(nameof(currentProject));
         _projectWorkHost = projectWorkHost;
+        // Browse host retained for a future opt-in «פתח בעבודה 2» action; OpenSelected sets Current Project only.
         _placeCatalog = placeCatalog;
         _editDialogFactory = editDialogFactory;
         _authorization = authorization;
@@ -335,26 +336,15 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
 
         try
         {
+            // Set Current Project only. Do not auto-open Project Work here: TryOpenBrowseAsync has
+            // been observed to hard-crash the host process for some projects (e.g. 136), which
+            // cannot be recovered by catch(Exception). Operators open «בעבודה 2» from the shell menu.
             await _currentProject
                 .SetCurrentProjectAsync(Selected.ToSummaryDto(), CancellationToken.None)
                 .ConfigureAwait(true);
 
-            if (_projectWorkHost is null)
-            {
-                StatusMessage = "Current Project עודכן (אין מארח בעבודה 2).";
-                return;
-            }
-
-            var opened = await _projectWorkHost.TryOpenBrowseAsync(CancellationToken.None)
-                .ConfigureAwait(true);
-            if (!opened)
-            {
-                MessageBox.Show(
-                    "לא ניתן לפתוח את סביבת העבודה בתוך המעטפת.",
-                    "ריכוז פרויקטים",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            }
+            StatusMessage =
+                $"Current Project: {Selected.ProjectNumber} — {Selected.ProjectName}. בעבודה 2: תפריט נפרד.";
         }
         catch (Exception ex)
         {
@@ -492,15 +482,34 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(FilterText))
         {
             var text = FilterText.Trim();
-            query = query.Where(r =>
-                Contains(r.ProjectNumber, text)
-                || Contains(r.ProjectName, text)
-                || Contains(r.PlaceName, text)
-                || Contains(r.CompanyName, text)
-                || Contains(r.AssignedUserName, text)
-                || Contains(r.JobTypesDisplay, text)
-                || Contains(r.Status, text)
-                || Contains(r.OpenWorkflowSummary, text));
+            // Numeric filters prefer exact ProjectNumber match so "136" does not select "3136" / "1360".
+            if (long.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _))
+            {
+                var exactNumberMatches = _allRows
+                    .Where(r => string.Equals(r.ProjectNumber, text, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                query = exactNumberMatches.Count > 0
+                    ? exactNumberMatches
+                    : query.Where(r =>
+                        Contains(r.ProjectNumber, text)
+                        || Contains(r.ProjectName, text)
+                        || Contains(r.Dto.ProjectLabelName, text)
+                        || Contains(r.PlaceName, text)
+                        || Contains(r.CompanyName, text));
+            }
+            else
+            {
+                query = query.Where(r =>
+                    Contains(r.ProjectNumber, text)
+                    || Contains(r.ProjectName, text)
+                    || Contains(r.Dto.ProjectLabelName, text)
+                    || Contains(r.PlaceName, text)
+                    || Contains(r.CompanyName, text)
+                    || Contains(r.AssignedUserName, text)
+                    || Contains(r.JobTypesDisplay, text)
+                    || Contains(r.Status, text)
+                    || Contains(r.OpenWorkflowSummary, text));
+            }
         }
 
         if (StatusFilter?.Id is int statusId)
