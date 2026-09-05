@@ -20,4 +20,7 @@ public sealed record AccServiceAdminIdentityRemoteResult(
     string? IdentityStatus,
     string? AdminApiStatus,
     string? FailureReason,
-    string? Detail);
+    string? Detail,
+    string? TokenPurpose = null,
+    string? TokenStoragePath = null,
+    bool? TokenExists = null);

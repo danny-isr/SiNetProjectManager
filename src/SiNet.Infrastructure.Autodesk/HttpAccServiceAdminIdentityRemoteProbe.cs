@@ -62,7 +62,10 @@ public sealed class HttpAccServiceAdminIdentityRemoteProbe(
                 IdentityStatus: GetString(root, "identityStatus") ?? GetString(root, "status"),
                 AdminApiStatus: GetString(root, "adminApiStatus"),
                 FailureReason: GetString(root, "failureReason"),
-                Detail: null);
+                Detail: null,
+                TokenPurpose: GetString(root, "tokenPurpose"),
+                TokenStoragePath: GetString(root, "tokenStoragePath"),
+                TokenExists: GetNullableBool(root, "tokenExists"));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -103,6 +106,21 @@ public sealed class HttpAccServiceAdminIdentityRemoteProbe(
 
     private static bool GetBool(JsonElement root, string propertyName) =>
         root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.True;
+
+    private static bool? GetNullableBool(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null,
+        };
+    }
 
     private static string? GetString(JsonElement root, string propertyName) =>
         root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String

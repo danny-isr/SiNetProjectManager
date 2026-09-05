@@ -59,7 +59,7 @@ try {
 
     $kitRoot = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
     if (-not $SourceToken) {
-        $SourceToken = Join-Path $env:LOCALAPPDATA "SiNet\Autodesk\refresh_token.json"
+        $SourceToken = Join-Path $env:LOCALAPPDATA "SiNet\Autodesk\AccService\refresh_token.json"
     }
     $tokenDir = Split-Path $SourceToken -Parent
 

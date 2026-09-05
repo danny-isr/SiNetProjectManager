@@ -93,9 +93,9 @@ if (-not $svc) {
     throw ("Windows service '{0}' was not found on this machine. Run this on SI-WIN-2K19 where AccService is installed." -f $ServiceName)
 }
 
-# Profile path for sieng (domain\user -> Users\user)
+# Dedicated AccService Admin token store (never the desktop UserContext path).
 $serviceAccountLeaf = ($ServiceUser -split '\\')[-1]
-$tokenDir = Join-Path $env:SystemDrive ("Users\{0}\AppData\Local\SiNet\Autodesk" -f $serviceAccountLeaf)
+$tokenDir = Join-Path $env:SystemDrive ("Users\{0}\AppData\Local\SiNet\Autodesk\AccService" -f $serviceAccountLeaf)
 $tokenPath = Join-Path $tokenDir "refresh_token.json"
 $okMarker = Join-Path $tokenDir "auth_once_last_ok.txt"
 

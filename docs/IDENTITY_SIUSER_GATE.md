@@ -22,6 +22,12 @@ Code default / DB bootstrap default: `SystemSettingsDefaults.AccBootstrapAdminEm
 
 Meaning of `AccBootstrapAdminEmail`: the designated Autodesk Account Admin identity used by AccService for ACC/BIM360 administrative / bootstrap / provisioning APIs (project members list/add/reconcile, industry roles, EnsureProjectMapping, custom-attribute Admin APIs, and related Admin operations).
 
+**Token store isolation:** AccService Admin refresh token lives only at  
+`%LOCALAPPDATA%\SiNet\Autodesk\AccService\refresh_token.json`  
+and must never share the desktop/user-context file  
+`%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json`.  
+See [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md).
+
 **Do not** keep a second expected-admin setting (`AccService.ExpectedAdminEmail` was a short-lived duplicate and is retired; one-time read migrates into `AccBootstrapAdminEmail` only).
 
 **Never require** AccService Account Admin email == current `SIUser.Email`.  

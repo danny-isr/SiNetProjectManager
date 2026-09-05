@@ -20,6 +20,8 @@ public sealed class AccAdminIdentityStatusContributor(
     private readonly ISystemSettingsQueryService _settings =
         settings ?? throw new ArgumentNullException(nameof(settings));
 
+    private string? _lastTokenStoragePath;
+
     public string Key => "acc-admin-identity";
 
     public string DisplayNameHe => "ACC Admin Identity";
@@ -53,7 +55,7 @@ public sealed class AccAdminIdentityStatusContributor(
             var remote = await remoteProbe.ProbeAsync(cancellationToken).ConfigureAwait(false);
             if (remote.Reachable)
             {
-                // Prefer server-evaluated fields; rebuild via Evaluate for AdminApi layering consistency.
+                _lastTokenStoragePath = remote.TokenStoragePath;
                 return AccServiceAdminIdentity.WithAdminApiStatus(
                     AccServiceAdminIdentity.Evaluate(
                         remote.ExpectedAdminEmail,
@@ -69,6 +71,8 @@ public sealed class AccAdminIdentityStatusContributor(
         var dto = await _settings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false);
         if (tokenProvider is null)
         {
+            _lastTokenStoragePath = AutodeskTokenStorePaths.GetDefaultRefreshTokenFilePath(
+                AutodeskTokenStorePurpose.AccServiceAdmin);
             return AccServiceAdminIdentity.Evaluate(
                 dto.Acc.AccBootstrapAdminEmail,
                 actualAdminEmail: null,
@@ -76,6 +80,7 @@ public sealed class AccAdminIdentityStatusContributor(
                 profileResolved: false);
         }
 
+        _lastTokenStoragePath = tokenProvider.ThreeLeggedRefreshTokenStoragePath;
         var profile = await AccServiceAdminTokenProfile.ResolveAsync(tokenProvider, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return AccServiceAdminIdentity.Evaluate(
@@ -87,7 +92,7 @@ public sealed class AccAdminIdentityStatusContributor(
             profile.DisplayName);
     }
 
-    private static SubsystemRuntimeStatus Classify(AccServiceAdminIdentityCheck check)
+    private SubsystemRuntimeStatus Classify(AccServiceAdminIdentityCheck check)
     {
         var expected = check.ExpectedAdminEmail;
         var actual = check.ActualAdminEmail ?? "(לא זמין)";
@@ -95,32 +100,35 @@ public sealed class AccAdminIdentityStatusContributor(
         var adminApi = string.IsNullOrWhiteSpace(check.AdminApiStatus)
             ? ""
             : $" | Admin API: {check.AdminApiStatus}";
+        var store = string.IsNullOrWhiteSpace(_lastTokenStoragePath)
+            ? ""
+            : $"{Environment.NewLine}Store: {_lastTokenStoragePath}";
 
         return check.Status switch
         {
             AccServiceAdminIdentityStatus.Healthy =>
-                Row(SubsystemRuntimeState.Idle, $"ACC Admin: תקין — {expected}{adminApi}"),
+                Row(SubsystemRuntimeState.Idle, $"ACC Admin: תקין — {expected}{adminApi}{store}"),
 
             AccServiceAdminIdentityStatus.AdminEmailMismatch =>
                 Row(
                     SubsystemRuntimeState.Degraded,
-                    $"ACC Admin: אי התאמה{Environment.NewLine}מוגדר: {expected}{Environment.NewLine}מחובר: {actual}"),
+                    $"ACC Admin: אי התאמה{Environment.NewLine}מוגדר: {expected}{Environment.NewLine}מחובר: {actual}{store}"),
 
             AccServiceAdminIdentityStatus.AdminApiUnauthorized =>
                 Row(
                     SubsystemRuntimeState.Degraded,
-                    "ACC Admin: החשבון נכון אך חסרות הרשאות Account Admin"),
+                    "ACC Admin: החשבון נכון אך חסרות הרשאות Account Admin" + store),
 
             AccServiceAdminIdentityStatus.TokenMissing =>
-                Row(SubsystemRuntimeState.Degraded, $"ACC Admin: חסר טוקן — מצופה {expected}"),
+                Row(SubsystemRuntimeState.Degraded, $"ACC Admin: חסר טוקן שירות — מצופה {expected}{store}"),
 
             AccServiceAdminIdentityStatus.ProfileUnavailable =>
-                Row(SubsystemRuntimeState.Degraded, $"ACC Admin: פרופיל לא זמין — מצופה {expected}"),
+                Row(SubsystemRuntimeState.Degraded, $"ACC Admin: פרופיל לא זמין — מצופה {expected}{store}"),
 
             _ =>
                 Row(
                     SubsystemRuntimeState.Degraded,
-                    $"ACC Admin: לא זמין — מצופה {expected} | מחובר: {actual}{userId}{adminApi}"),
+                    $"ACC Admin: לא זמין — מצופה {expected} | מחובר: {actual}{userId}{adminApi}{store}"),
         };
     }
 

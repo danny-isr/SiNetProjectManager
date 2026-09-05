@@ -122,7 +122,11 @@ builder.Services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
 {
     var clientId = CredentialVault.GetSecret(SecretCatalog.AutodeskClientId) ?? string.Empty;
     var clientSecret = CredentialVault.GetSecret(SecretCatalog.AutodeskClientSecret) ?? string.Empty;
-    return new MyOffice.AutodeskConnector.TokenProvider(clientId, clientSecret);
+    // Dedicated AccService Admin store — never the desktop UserContext refresh_token.json.
+    return new MyOffice.AutodeskConnector.TokenProvider(
+        clientId,
+        clientSecret,
+        MyOffice.AutodeskConnector.AutodeskTokenStoreOptions.AccServiceAdmin);
 });
 builder.Services.AddSiNetAutodeskLocalFileTransfer();
 builder.Services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
@@ -199,15 +203,13 @@ try
     }
 
     // [AccService][TokenProvider] startup diagnostics — answers the cross-process
-    // questions raised in Gap 18A/18C: which Windows user the service runs as,
-    // which %LOCALAPPDATA% it sees, and whether the Autodesk refresh_token.json is
-    // already present on disk for it. No secrets are printed (only last 4 chars of
-    // the configured client_id, and only whether the file exists — never its content).
+    // questions: which Windows user the service runs as, which dedicated AccService
+    // Autodesk token store it owns, and whether refresh_token.json exists there.
+    // Never prints token contents.
     try
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var tokenDir = System.IO.Path.Combine(localAppData, "SiNet", "Autodesk");
-        var tokenPath = System.IO.Path.Combine(tokenDir, "refresh_token.json");
+        var tokenProvider = app.Services.GetRequiredService<MyOffice.AutodeskConnector.ITokenProvider>();
+        var tokenPath = tokenProvider.ThreeLeggedRefreshTokenStoragePath;
         var clientIdRaw = CredentialVault.GetSecret(SecretCatalog.AutodeskClientId) ?? string.Empty;
         var clientIdTail = clientIdRaw.Length < 4 ? "(empty)" : "***" + clientIdRaw[^4..];
         string windowsUser;
@@ -216,15 +218,17 @@ try
         Log.Warning(
             "[AccService][TokenProvider] startup diagnostics — windowsUser={WindowsUser}, " +
             "process={Process} (pid={Pid}), environment={EnvName}, " +
+            "tokenPurpose={TokenPurpose}, " +
             "currentDirectory={Cwd}, baseDirectory={BaseDir}, localAppData={LocalAppData}, " +
             "tokenStoragePath={TokenPath}, refreshTokenFileExists={Exists}, clientIdTail={ClientIdTail}.",
             windowsUser,
             System.Diagnostics.Process.GetCurrentProcess().ProcessName,
             Environment.ProcessId,
             builder.Environment.EnvironmentName,
+            tokenProvider.TokenStorePurpose,
             Environment.CurrentDirectory,
             AppContext.BaseDirectory,
-            localAppData,
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             tokenPath,
             System.IO.File.Exists(tokenPath),
             clientIdTail);

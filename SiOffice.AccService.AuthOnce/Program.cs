@@ -5,9 +5,10 @@ using SiNet.Infrastructure.Secrets;
 namespace SiOffice.AccService.AuthOnce;
 
 /// <summary>
-/// Interactive one-shot Autodesk 3-legged auth for the Windows account that hosts
-/// AccService (typically SI-ENG\sieng). Writes refresh_token.json under that user's
-/// %LOCALAPPDATA%\SiNet\Autodesk\. Invoked by Refresh-AccService-Token.cmd via runas.
+/// Interactive one-shot Autodesk 3-legged auth for AccService Admin.
+/// Writes exclusively to the dedicated AccService token store:
+/// %LOCALAPPDATA%\SiNet\Autodesk\AccService\refresh_token.json
+/// Never writes the desktop/user-context store under %LOCALAPPDATA%\SiNet\Autodesk\.
 /// </summary>
 internal static class Program
 {
@@ -30,25 +31,28 @@ internal static class Program
         };
 
         var force = args.Any(a => string.Equals(a, "--force", StringComparison.OrdinalIgnoreCase));
-        var tokenDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SiNet",
-            "Autodesk");
-        var tokenPath = Path.Combine(tokenDir, "refresh_token.json");
+        var tokenDir = AutodeskTokenStorePaths.GetDefaultDirectory(AutodeskTokenStorePurpose.AccServiceAdmin);
+        var tokenPath = AutodeskTokenStorePaths.GetDefaultRefreshTokenFilePath(AutodeskTokenStorePurpose.AccServiceAdmin);
+        var desktopTokenPath = AutodeskTokenStorePaths.GetDefaultRefreshTokenFilePath(AutodeskTokenStorePurpose.UserContext);
 
         Console.WriteLine("==============================================================");
-        Console.WriteLine("  SiOffice AccService — Autodesk token (AuthOnce)");
+        Console.WriteLine("  SiOffice AccService — Autodesk Admin token (AuthOnce)");
         Console.WriteLine("==============================================================");
-        Console.WriteLine($"Windows user : {Environment.UserDomainName}\\{Environment.UserName}");
-        Console.WriteLine($"Token path   : {tokenPath}");
-        Console.WriteLine($"Exists now   : {File.Exists(tokenPath)}");
-        Console.WriteLine($"Force re-auth: {force}");
+        Console.WriteLine($"Windows user     : {Environment.UserDomainName}\\{Environment.UserName}");
+        Console.WriteLine($"Token purpose    : {AutodeskTokenStorePurpose.AccServiceAdmin}");
+        Console.WriteLine($"AccService path  : {tokenPath}");
+        Console.WriteLine($"Exists now       : {File.Exists(tokenPath)}");
+        Console.WriteLine($"Desktop path     : {desktopTokenPath} (NOT written by AuthOnce)");
+        Console.WriteLine($"Force re-auth    : {force}");
+        Console.WriteLine();
+        Console.WriteLine("Sign in as AccBootstrapAdminEmail (steady-state: siad@si-eng.co.il).");
+        Console.WriteLine("If the browser is already signed in as another Autodesk user, sign out first.");
         Console.WriteLine();
 
         if (force && File.Exists(tokenPath))
         {
             File.Delete(tokenPath);
-            Console.WriteLine("Deleted existing refresh_token.json (--force).");
+            Console.WriteLine("Deleted existing AccService refresh_token.json (--force).");
             Console.WriteLine();
         }
 
@@ -60,19 +64,38 @@ internal static class Program
             Console.Error.WriteLine(
                 "Autodesk ClientId/Secret are missing from THIS user's Windows Credential Manager.");
             Console.Error.WriteLine(
-                "Import SiNet.secrets as SI-ENG\\sieng first (Server\\Install-Full.cmd / SecretImport).");
+                "Import SiNet.secrets for this Windows account first (Server\\Install-Full.cmd / SecretImport).");
             Console.ResetColor();
             Pause();
             return 2;
         }
 
         Console.WriteLine("If needed, a browser will open for Autodesk login.");
-        Console.WriteLine("Sign in with an ACC Account Admin user, then return here.");
         Console.WriteLine();
 
         try
         {
-            var provider = new TokenProvider(clientId, clientSecret);
+            var provider = new TokenProvider(
+                clientId,
+                clientSecret,
+                AutodeskTokenStoreOptions.AccServiceAdmin);
+
+            if (!string.Equals(
+                    provider.ThreeLeggedRefreshTokenStoragePath,
+                    tokenPath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.Error.WriteLine(
+                    $"FAIL: TokenProvider path mismatch. Expected AccService store:{Environment.NewLine}" +
+                    $"  {tokenPath}{Environment.NewLine}" +
+                    $"Actual:{Environment.NewLine}" +
+                    $"  {provider.ThreeLeggedRefreshTokenStoragePath}");
+                Console.ResetColor();
+                Pause();
+                return 1;
+            }
+
             var accessToken = await provider.GetThreeLeggedAdminTokenAsync().ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(accessToken))
             {
@@ -92,15 +115,16 @@ internal static class Program
                 await File.WriteAllTextAsync(okMarker, DateTime.UtcNow.ToString("o")).ConfigureAwait(false);
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"OK — refresh token is on disk for {Environment.UserName}.");
+                Console.WriteLine($"OK — AccService Admin refresh token is on disk for {Environment.UserName}.");
                 Console.WriteLine($"File: {tokenPath}");
+                Console.WriteLine("Desktop token store was not modified.");
                 Console.ResetColor();
                 Pause();
                 return 0;
             }
 
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("Access token obtained, but refresh_token.json was not found on disk.");
+            Console.WriteLine("Access token obtained, but AccService refresh_token.json was not found on disk.");
             Console.WriteLine("Check TokenProvider logs above.");
             Console.ResetColor();
             Pause();

@@ -55,7 +55,7 @@ if (-not (Test-Path $dropToken)) {
     Write-Host ("Missing: {0}" -f $dropToken)
     Write-Host ""
     Write-Host "On the workstation, run Export-AccAutodeskToken-ToShare.cmd first." -ForegroundColor Yellow
-    Write-Host "That copies %LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json to the share." -ForegroundColor Yellow
+    Write-Host "That copies %LOCALAPPDATA%\SiNet\Autodesk\AccService\refresh_token.json to the share." -ForegroundColor Yellow
     exit 1
 }
 
@@ -69,7 +69,7 @@ if (Test-Path $dropMeta) {
 }
 
 $leaf = ($ServiceUser -split '\\')[-1]
-$tokenDir = Join-Path $env:SystemDrive ("Users\{0}\AppData\Local\SiNet\Autodesk" -f $leaf)
+$tokenDir = Join-Path $env:SystemDrive ("Users\{0}\AppData\Local\SiNet\Autodesk\AccService" -f $leaf)
 $targetToken = Join-Path $tokenDir "refresh_token.json"
 
 if ((Test-Path $targetToken) -and -not $Force) {

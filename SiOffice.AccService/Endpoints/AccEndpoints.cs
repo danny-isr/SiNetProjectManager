@@ -79,7 +79,11 @@ internal static class AccEndpoints
                 status = check.Status.ToString(),
                 identityStatus = check.Status.ToString(),
                 adminApiStatus = check.AdminApiStatus,
-                failureReason = check.FailureReason ?? profile.FailureReason
+                failureReason = check.FailureReason ?? profile.FailureReason,
+                tokenPurpose = tokenProvider.TokenStorePurpose.ToString(),
+                tokenStoragePath = tokenProvider.ThreeLeggedRefreshTokenStoragePath,
+                tokenExists = System.IO.File.Exists(tokenProvider.ThreeLeggedRefreshTokenStoragePath),
+                windowsIdentity = Environment.UserDomainName + "\\" + Environment.UserName
             });
         });
 
@@ -887,7 +891,10 @@ internal static class AccEndpoints
                     : systemSettings.Acc.AccProjectTemplateName);
 
             await using var db = await dbFactory.CreateDbContextAsync(ct);
-            var tokenProvider = new TokenProvider(clientId, clientSecret);
+            var tokenProvider = new TokenProvider(
+                clientId,
+                clientSecret,
+                AutodeskTokenStoreOptions.AccServiceAdmin);
             var bim360 = new Bim360Service(tokenProvider);
 
             var bootstrap = new AccBootstrapService(
