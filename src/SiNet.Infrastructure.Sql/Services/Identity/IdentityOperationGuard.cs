@@ -1,12 +1,16 @@
 using SiNet.Application.Identity;
+using SiNet.Application.Settings;
 
 namespace SiNet.Infrastructure.Sql.Services.Identity;
 
 /// <summary>Fail-closed identity gate before connector / business writes.</summary>
-public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) : IIdentityOperationGuard
+public sealed class IdentityOperationGuard(
+    IIdentityCoherenceService coherence,
+    ISystemSettingsQueryService? systemSettings = null) : IIdentityOperationGuard
 {
     private readonly IIdentityCoherenceService _coherence =
         coherence ?? throw new ArgumentNullException(nameof(coherence));
+    private readonly ISystemSettingsQueryService? _systemSettings = systemSettings;
 
     /// <inheritdoc />
     public async Task EnsureAllowedAsync(
@@ -35,6 +39,12 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
             or IdentityOperationKind.AccFileWrite
             or IdentityOperationKind.CrossSystemWorkflow;
 
+        var threeLeggedPurpose = kind is IdentityOperationKind.AutodeskThreeLeggedWrite
+            ? AutodeskCredentialPurpose.UserContext
+            : kind is IdentityOperationKind.AccProjectMembershipWrite
+                ? AutodeskCredentialPurpose.AccServiceAdmin
+                : context.AutodeskCredentialPurpose;
+
         var snapshot = await _coherence.EvaluateAsync(
                 new IdentityCoherenceEvaluateOptions(
                     DisconnectGoogleOnMismatch: kind is IdentityOperationKind.GmailWrite
@@ -44,7 +54,10 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
                     ProbeAccMembership: needsAcc,
                     SiProjectId: context.SiProjectId,
                     AccProjectId: context.AccProjectId,
-                    AutodeskThreeLeggedEmail: context.AutodeskThreeLeggedEmail,
+                    AutodeskThreeLeggedEmail: threeLeggedPurpose == AutodeskCredentialPurpose.UserContext
+                        ? context.AutodeskThreeLeggedEmail
+                        : null,
+                    AutodeskCredentialPurpose: threeLeggedPurpose,
                     AllowAccMembershipReconcile: needsAcc,
                     HasActiveProject: needsAcc
                         || context.SiProjectId is > 0
@@ -66,6 +79,19 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
             || string.IsNullOrWhiteSpace(snapshot.SiUserEmail))
         {
             return Deny(snapshot, "SIUser.Email is required before connector operations.");
+        }
+
+        if (kind is IdentityOperationKind.AccProjectMembershipWrite)
+        {
+            var adminDeny = await TryDenyWrongAccServiceAdminAsync(
+                    snapshot,
+                    context.AutodeskThreeLeggedEmail,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (adminDeny is not null)
+            {
+                return adminDeny;
+            }
         }
 
         return kind switch
@@ -92,6 +118,32 @@ public sealed class IdentityOperationGuard(IIdentityCoherenceService coherence) 
 
             _ => Deny(snapshot, $"Unknown identity operation kind '{kind}'."),
         };
+    }
+
+    private async Task<IdentityGuardDecision?> TryDenyWrongAccServiceAdminAsync(
+        IdentityCoherenceSnapshot snapshot,
+        string? connectedAdminEmail,
+        CancellationToken cancellationToken)
+    {
+        if (_systemSettings is null)
+        {
+            return null;
+        }
+
+        var settings = await _systemSettings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false);
+        var check = AccServiceAdminIdentity.Evaluate(
+            settings.Acc.AccServiceExpectedAdminEmail,
+            connectedAdminEmail);
+
+        if (!AccServiceAdminIdentity.IsKnownWrongAdmin(check))
+        {
+            return null;
+        }
+
+        return Deny(
+            snapshot,
+            check.WarningMessage
+            ?? "AccService Autodesk admin account mismatch.");
     }
 
     private static IdentityGuardDecision RequireAuthorized(IdentityCoherenceSnapshot snapshot)

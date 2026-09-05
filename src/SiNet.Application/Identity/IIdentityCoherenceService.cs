@@ -29,6 +29,11 @@ public sealed record IdentityCoherenceEvaluateOptions(
     int? SiProjectId = null,
     string? AccProjectId = null,
     string? AutodeskThreeLeggedEmail = null,
+    /// <summary>
+    /// When <see cref="AutodeskCredentialPurpose.UserContext"/>, <see cref="AutodeskThreeLeggedEmail"/>
+    /// is compared to SIUser.Email. AccServiceAdmin never participates in operator MATCH.
+    /// </summary>
+    AutodeskCredentialPurpose AutodeskCredentialPurpose = AutodeskCredentialPurpose.UserContext,
     bool AllowAccMembershipReconcile = true,
     /// <summary>When true (or when Si/Acc project ids are set), ACC is relevant for overall MATCH.</summary>
     bool? HasActiveProject = null);

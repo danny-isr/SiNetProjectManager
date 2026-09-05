@@ -31,7 +31,9 @@
             <TextBlock Grid.Row="1" Text="{Binding ProjectNumberDisplay}" Style="{DynamicResource SiTextNormalStyle}" Margin="0,0,0,12"/>
 
             <TextBlock Grid.Row="2" Text="שם פרויקט" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
-            <TextBox Grid.Row="3" Text="{Binding ProjectName, UpdateSourceTrigger=PropertyChanged}"
+            <TextBox Grid.Row="3"
+                     AutomationProperties.AutomationId="ProjectCreate.ProjectName"
+                     Text="{Binding ProjectName, UpdateSourceTrigger=PropertyChanged}"
                      Style="{DynamicResource SiTextBoxStyle}" MaxLength="24" Margin="0,0,0,12"/>
 
             <TextBlock Grid.Row="4" Text="מקום" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
@@ -40,7 +42,8 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <ComboBox ItemsSource="{Binding Places}"
+                <ComboBox AutomationProperties.AutomationId="ProjectCreate.Place"
+                          ItemsSource="{Binding Places}"
                           SelectedItem="{Binding SelectedPlace}"
                           DisplayMemberPath="DisplayLabel"
                           Style="{DynamicResource SiComboBoxStyle}"/>
@@ -55,7 +58,8 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <ComboBox ItemsSource="{Binding Companies}"
+                <ComboBox AutomationProperties.AutomationId="ProjectCreate.Company"
+                          ItemsSource="{Binding Companies}"
                           SelectedItem="{Binding SelectedCompany}"
                           DisplayMemberPath="Title"
                           Style="{DynamicResource SiComboBoxStyle}"/>
@@ -66,6 +70,7 @@
 
             <TextBlock Grid.Row="8" Text="איש קשר" Style="{DynamicResource SiTextNormalStyle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
             <ComboBox Grid.Row="9"
+                      AutomationProperties.AutomationId="ProjectCreate.Contact"
                       ItemsSource="{Binding Contacts}"
                       SelectedItem="{Binding SelectedContact}"
                       DisplayMemberPath="DisplayName"
@@ -121,12 +126,14 @@
                        Margin="0,0,0,8"/>
 
             <StackPanel Grid.Row="17" Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button Content="{Binding PrimaryActionLabel}"
+                <Button AutomationProperties.AutomationId="ProjectCreate.Submit"
+                        Content="{Binding PrimaryActionLabel}"
                         Command="{Binding CreateCommand}"
                         Style="{DynamicResource SiPrimaryButtonStyle}"
                         MinWidth="120" Margin="0,0,8,0"
                         IsDefault="True"/>
-                <Button Content="ביטול"
+                <Button AutomationProperties.AutomationId="ProjectCreate.Cancel"
+                        Content="ביטול"
                         Command="{Binding CancelCommand}"
                         MinWidth="80"
                         IsCancel="True"/>

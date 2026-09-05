@@ -217,17 +217,23 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
             }
         }
 
+        // AccService Admin 3-legged credential is never compared to SIUser.Email.
+        // Only UserContext 3-legged (operator acting as themselves) participates in MATCH.
         bool? threeLeggedMatch = null;
-        var threeLeggedEmail = IdentityEmailComparer.Normalize(options.AutodeskThreeLeggedEmail);
-        if (threeLeggedEmail is not null)
+        string? threeLeggedEmail = null;
+        if (options.AutodeskCredentialPurpose == AutodeskCredentialPurpose.UserContext)
         {
-            threeLeggedMatch = IdentityEmailComparer.EqualsNormalized(siEmail, threeLeggedEmail);
-            if (threeLeggedMatch == false)
+            threeLeggedEmail = IdentityEmailComparer.Normalize(options.AutodeskThreeLeggedEmail);
+            if (threeLeggedEmail is not null)
             {
-                status = IdentityCoherenceStatus.Mismatch;
-                failure = failure is null
-                    ? "Autodesk 3-legged email does not match SIUser.Email."
-                    : failure + " Autodesk 3-legged mismatch.";
+                threeLeggedMatch = IdentityEmailComparer.EqualsNormalized(siEmail, threeLeggedEmail);
+                if (threeLeggedMatch == false)
+                {
+                    status = IdentityCoherenceStatus.Mismatch;
+                    failure = failure is null
+                        ? "Autodesk 3-legged email does not match SIUser.Email."
+                        : failure + " Autodesk 3-legged mismatch.";
+                }
             }
         }
 

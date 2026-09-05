@@ -27,6 +27,12 @@ public static class SystemSettingKeys
     /// </summary>
     public const string AccServicePinnedCertificateThumbprints = "AccService.PinnedCertificateThumbprints";
 
+    /// <summary>
+    /// Expected Autodesk profile email for the AccService 3-legged Account Admin token
+    /// (steady-state: <c>siad@si-eng.co.il</c>). Not inferred from SIUser.
+    /// </summary>
+    public const string AccServiceExpectedAdminEmail = "AccService.ExpectedAdminEmail";
+
     public const string AccProjectTemplateName = "AccProjectTemplateName";
     public const string AccBootstrapAdminEmail = "AccBootstrapAdminEmail";
     public const string StatusLabelPassed = "StatusLabel_Passed";
@@ -99,6 +105,7 @@ public static class SystemSettingKeys
         EmailAutoSyncProjectLabelNames,
         AccServiceBaseUrl,
         AccServicePinnedCertificateThumbprints,
+        AccServiceExpectedAdminEmail,
         AccProjectTemplateName,
         AccBootstrapAdminEmail,
         StatusLabelPassed,

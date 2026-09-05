@@ -23,6 +23,22 @@ public enum AccAuthMode
 }
 
 /// <summary>
+/// Purpose of an Autodesk 3-legged credential presented to identity evaluation.
+/// AccService Admin must not be compared to <c>SIUser.Email</c>.
+/// </summary>
+public enum AutodeskCredentialPurpose
+{
+    /// <summary>Current operator acts as themselves via Autodesk 3-legged OAuth.</summary>
+    UserContext = 0,
+
+    /// <summary>
+    /// Central AccService ACC Account Admin credential (list/add members, provision, attribute defs).
+    /// Not compared to SIUser.Email.
+    /// </summary>
+    AccServiceAdmin = 1,
+}
+
+/// <summary>
 /// Snapshot for shell status + service guards. Never includes tokens or secrets.
 /// See <c>docs/IDENTITY_SIUSER_GATE.md</c>.
 /// </summary>

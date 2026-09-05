@@ -234,6 +234,64 @@ try
         Log.Warning("[AccService][TokenProvider] startup diagnostics failed: {Error}", diagEx.Message);
     }
 
+    // [AccService][AdminIdentity] — expected vs connected Autodesk Admin profile (emails only; never tokens).
+    try
+    {
+        string? expectedAdmin = null;
+        try
+        {
+            var settings = app.Services.GetRequiredService<SiNet.Application.Settings.ISystemSettingsQueryService>()
+                .GetSystemSettingsAsync()
+                .GetAwaiter()
+                .GetResult();
+            expectedAdmin = settings.Acc.AccServiceExpectedAdminEmail;
+        }
+        catch (Exception settingsEx)
+        {
+            Log.Warning("[AccService][AdminIdentity] SystemSettings read failed: {Error}", settingsEx.Message);
+        }
+
+        expectedAdmin = string.IsNullOrWhiteSpace(expectedAdmin)
+            ? builder.Configuration["AccService:ExpectedAdminEmail"]
+            : expectedAdmin;
+
+        string? connectedEmail = null;
+        try
+        {
+            var tokenProvider = app.Services.GetRequiredService<MyOffice.AutodeskConnector.ITokenProvider>();
+            var accessToken = tokenProvider.GetThreeLeggedAdminTokenAsync().GetAwaiter().GetResult();
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.userprofile.autodesk.com/userinfo");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+            using var resp = http.Send(req);
+            var body = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var m = System.Text.RegularExpressions.Regex.Match(body, "\"email\"\\s*:\\s*\"([^\"]+)\"");
+            if (m.Success)
+            {
+                connectedEmail = m.Groups[1].Value;
+            }
+        }
+        catch (Exception profileEx)
+        {
+            Log.Warning("[AccService][AdminIdentity] Autodesk profile resolve failed: {Error}", profileEx.Message);
+        }
+
+        var check = SiNet.Application.Identity.AccServiceAdminIdentity.Evaluate(expectedAdmin, connectedEmail);
+        Log.Warning(
+            "[AccService][AdminIdentity] expected={Expected}, connected={Connected}, status={Status}",
+            check.ExpectedAdminEmail ?? "(unset)",
+            check.ConnectedProfileEmail ?? "(unavailable)",
+            check.Status);
+        if (check.WarningMessage is not null)
+        {
+            Log.Warning("{Warning}", check.WarningMessage);
+        }
+    }
+    catch (Exception adminIdEx)
+    {
+        Log.Warning("[AccService][AdminIdentity] startup diagnostics failed: {Error}", adminIdEx.Message);
+    }
+
     // Hook the host lifetime so we get explicit started / stopping / stopped lines.
     var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
     lifetime.ApplicationStarted.Register(() =>

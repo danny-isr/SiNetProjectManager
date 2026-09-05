@@ -18,7 +18,9 @@ public sealed record AccSystemSettingsDto(
     string AccServicePinnedCertificateThumbprints,
     string AccBootstrapAdminEmail,
     string AccProjectTemplateName,
-    string AccManualUploadAllowedExtensions);
+    string AccManualUploadAllowedExtensions,
+    /// <summary>Expected AccService 3-legged Admin Autodesk email (<c>AccService.ExpectedAdminEmail</c>).</summary>
+    string AccServiceExpectedAdminEmail = "");
 
 /// <summary>Google Drive folder IDs for inspection.</summary>
 public sealed record InspectionSystemSettingsDto(

@@ -222,6 +222,7 @@ public sealed class SettingsViewModel : ObservableObject
     private string _accServiceBaseUrl = string.Empty;
     private string _accServicePinnedCertificateThumbprints = string.Empty;
     private string _accBootstrapAdminEmail = string.Empty;
+    private string _accServiceExpectedAdminEmail = string.Empty;
     private string _accProjectTemplateName = string.Empty;
     private string _accManualUploadAllowedExtensions = SystemSettingsDefaults.AccManualUploadAllowedExtensions;
     private string _projectWorkScanExclusionRules = SystemSettingsDefaults.ProjectWorkScanExclusionRules;
@@ -537,6 +538,12 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get => _accBootstrapAdminEmail;
         set => SetField(ref _accBootstrapAdminEmail, value);
+    }
+
+    public string AccServiceExpectedAdminEmail
+    {
+        get => _accServiceExpectedAdminEmail;
+        set => SetField(ref _accServiceExpectedAdminEmail, value);
     }
 
     public string AccProjectTemplateName
@@ -1209,7 +1216,8 @@ public sealed class SettingsViewModel : ObservableObject
             NormalizePinnedCertificateThumbprints(AccServicePinnedCertificateThumbprints),
             AccBootstrapAdminEmail.Trim(),
             AccProjectTemplateName.Trim(),
-            AccManualUploadAllowedExtensions.Trim()),
+            AccManualUploadAllowedExtensions.Trim(),
+            AccServiceExpectedAdminEmail.Trim()),
         new InspectionSystemSettingsDto(
             InspectionTemplatesFolderId.Trim(),
             InspectionReportsFolderId.Trim(),
@@ -1291,6 +1299,7 @@ public sealed class SettingsViewModel : ObservableObject
         AccServiceBaseUrl = system.Acc.AccServiceBaseUrl;
         AccServicePinnedCertificateThumbprints = system.Acc.AccServicePinnedCertificateThumbprints;
         AccBootstrapAdminEmail = system.Acc.AccBootstrapAdminEmail;
+        AccServiceExpectedAdminEmail = system.Acc.AccServiceExpectedAdminEmail;
         AccProjectTemplateName = system.Acc.AccProjectTemplateName;
         AccManualUploadAllowedExtensions = system.Acc.AccManualUploadAllowedExtensions;
         ProjectWorkScanExclusionRules = system.ProjectWork.ScanExclusionRules;

@@ -13,7 +13,30 @@ Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md),
 
 ---
 
+## DEV workstation AccService (local)
+
+On the DEV machine, AccService typically runs under the interactive Windows user (`dannyisrael`).
+The Admin refresh token is then:
+
+`%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json` of **that** Windows user.
+
+```powershell
+cd D:\repos2026\SiNetProjectManager_GitHub
+dotnet run --project SiOffice.AccService.AuthOnce\SiOffice.AccService.AuthOnce.csproj -c Release -- --force
+# Browser: sign in specifically as AccService Admin = siad@si-eng.co.il
+# (SystemSetting AccService.ExpectedAdminEmail; must NOT be SIUser / Tair / random Autodesk user)
+# Then restart AccService so it reloads the token.
+```
+
+**Steady-state AccService Admin identity:** `siad@si-eng.co.il`  
+Configured via `dbo.SystemSettings` key **`AccService.ExpectedAdminEmail`**.  
+Do **not** require AccService Admin Autodesk email == current SIUser.Email (see [`IDENTITY_SIUSER_GATE.md`](./IDENTITY_SIUSER_GATE.md)).  
+After AuthOnce, verify userinfo email == `siad@si-eng.co.il` before treating Admin APIs as healthy.
+
+---
+
 ## 1. What broke (symptom → cause)
+
 
 | Symptom | Likely cause |
 | --- | --- |

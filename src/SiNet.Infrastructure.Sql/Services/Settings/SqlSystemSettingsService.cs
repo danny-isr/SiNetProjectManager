@@ -126,7 +126,8 @@ public sealed class SqlSystemSettingsService
                 Get(SystemSettingKeys.AccServicePinnedCertificateThumbprints, string.Empty),
                 Get(SystemSettingKeys.AccBootstrapAdminEmail, string.Empty),
                 Get(SystemSettingKeys.AccProjectTemplateName, string.Empty),
-                Get(SystemSettingKeys.AccManualUploadAllowedExtensions, SystemSettingsDefaults.AccManualUploadAllowedExtensions)),
+                Get(SystemSettingKeys.AccManualUploadAllowedExtensions, SystemSettingsDefaults.AccManualUploadAllowedExtensions),
+                Get(SystemSettingKeys.AccServiceExpectedAdminEmail, string.Empty)),
             new InspectionSystemSettingsDto(
                 Get(SystemSettingKeys.InspectionTemplatesFolderId, string.Empty),
                 Get(SystemSettingKeys.InspectionReportsFolderId, string.Empty),
@@ -210,6 +211,7 @@ public sealed class SqlSystemSettingsService
             (SystemSettingKeys.AccServiceBaseUrl, settings.Acc.AccServiceBaseUrl.Trim()),
             (SystemSettingKeys.AccServicePinnedCertificateThumbprints, settings.Acc.AccServicePinnedCertificateThumbprints.Trim()),
             (SystemSettingKeys.AccBootstrapAdminEmail, settings.Acc.AccBootstrapAdminEmail.Trim()),
+            (SystemSettingKeys.AccServiceExpectedAdminEmail, settings.Acc.AccServiceExpectedAdminEmail.Trim()),
             (SystemSettingKeys.AccProjectTemplateName, settings.Acc.AccProjectTemplateName.Trim()),
             (SystemSettingKeys.AccManualUploadAllowedExtensions, settings.Acc.AccManualUploadAllowedExtensions.Trim()),
             (SystemSettingKeys.InspectionTemplatesFolderId, settings.Inspection.InspectionTemplatesFolderId.Trim()),

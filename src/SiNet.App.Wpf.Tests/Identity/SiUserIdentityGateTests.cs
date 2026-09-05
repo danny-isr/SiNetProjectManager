@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
 using SiNet.Application.Identity;
+using SiNet.Application.Settings;
 using SiNet.Infrastructure.Sql.Data;
 using SiNet.Infrastructure.Sql.Entities;
 using SiNet.Infrastructure.Sql.Services.Identity;
@@ -189,7 +190,8 @@ public sealed class IdentityCoherenceAndGuardTests
 
     private static (IdentityOperationGuard Guard, StubAccProbe Probe) CreateAccGuard(
         bool? member,
-        bool probeSucceeded = true)
+        bool probeSucceeded = true,
+        string? expectedAccServiceAdminEmail = null)
     {
         var session = new AuthenticatedUserSession();
         session.SetAuthenticated(new CurrentUserProfileDto(
@@ -210,7 +212,28 @@ public sealed class IdentityCoherenceAndGuardTests
                     ProbeSucceeded: true);
         var probe = new StubAccProbe { Result = result };
         var coherence = new IdentityCoherenceService(session, new NoOpRefresh(session), auth, probe);
-        return (new IdentityOperationGuard(coherence), probe);
+        ISystemSettingsQueryService? settings = expectedAccServiceAdminEmail is null
+            ? null
+            : new StubExpectedAdminSettings(expectedAccServiceAdminEmail);
+        return (new IdentityOperationGuard(coherence, settings), probe);
+    }
+
+    private sealed class StubExpectedAdminSettings(string expectedAdminEmail) : ISystemSettingsQueryService
+    {
+        public Task<SystemSettingsDto> GetSystemSettingsAsync(CancellationToken cancellationToken = default)
+        {
+            var dto = new SystemSettingsDto(
+                new EmailOfficeSystemSettingsDto("", "", "", "", null, 10),
+                new AccSystemSettingsDto("", "", "", "", "", expectedAdminEmail),
+                new InspectionSystemSettingsDto("", "", "", ""),
+                new InspectionStatusLabelsDto("", "", "", ""),
+                new AiSystemSettingsDto("", "", new AiModelLevelSelectionDto("", ""), new AiModelLevelSelectionDto("", ""), new AiModelLevelSelectionDto("", ""), new AiModelLevelSelectionDto("", ""), ""),
+                new CentralLoggingSettingsDto(null, 14, 90, new AppLogLevelsDto(LogLevelDto.Error, LogLevelDto.Warning), new AppLogLevelsDto(LogLevelDto.Information, LogLevelDto.Warning), new AppLogLevelsDto(LogLevelDto.Information, LogLevelDto.Warning), false),
+                new WorkflowSystemSettingsDto(5, false, "", ""),
+                new ProjectWorkSystemSettingsDto(""),
+                new DiagnosticsSystemSettingsDto("", "", 7, 30));
+            return Task.FromResult(dto);
+        }
     }
 
     [Fact]
@@ -230,6 +253,57 @@ public sealed class IdentityCoherenceAndGuardTests
 
         Assert.False(decision.Allowed);
         Assert.False(decision.Snapshot.AutodeskThreeLeggedMatch);
+    }
+
+    [Fact]
+    public async Task AccServiceAdmin_email_differs_from_SIUser_does_not_break_operator_match()
+    {
+        // Operator: user@si.co.il (SIUser + Google + ACC member)
+        // AccService Admin credential equals ExpectedAdminEmail (different from SIUser) — operator MATCH preserved.
+        var (guard, _) = CreateAccGuard(member: true, expectedAccServiceAdminEmail: "different-admin@company");
+
+        var membershipWrite = await guard.EvaluateAsync(
+            IdentityOperationKind.AccProjectMembershipWrite,
+            new IdentityOperationContext(
+                AccProjectId: "acc-1",
+                AutodeskThreeLeggedEmail: "different-admin@company",
+                AutodeskCredentialPurpose: AutodeskCredentialPurpose.AccServiceAdmin));
+
+        Assert.True(membershipWrite.Allowed);
+        Assert.Equal(IdentityCoherenceStatus.Match, membershipWrite.Snapshot.Status);
+        Assert.True(membershipWrite.Snapshot.AccMembershipMatch);
+        Assert.Null(membershipWrite.Snapshot.AutodeskThreeLeggedMatch);
+
+        var fileWrite = await guard.EvaluateAsync(
+            IdentityOperationKind.AccFileWrite,
+            IdentityOperationContext.ForAccProject("acc-1"));
+        Assert.True(fileWrite.Allowed);
+        Assert.Equal(IdentityCoherenceStatus.Match, fileWrite.Snapshot.Status);
+
+        // User-context 3-legged with a different Autodesk email still denies.
+        var userThreeLegged = await guard.EvaluateAsync(
+            IdentityOperationKind.AutodeskThreeLeggedWrite,
+            IdentityOperationContext.ForUserThreeLegged("different-admin@company"));
+        Assert.False(userThreeLegged.Allowed);
+    }
+
+    [Fact]
+    public async Task AccServiceAdmin_known_wrong_admin_fail_closed_on_membership_write()
+    {
+        var (guard, _) = CreateAccGuard(member: true, expectedAccServiceAdminEmail: "siad@si-eng.co.il");
+
+        var decision = await guard.EvaluateAsync(
+            IdentityOperationKind.AccProjectMembershipWrite,
+            new IdentityOperationContext(
+                AccProjectId: "acc-1",
+                AutodeskThreeLeggedEmail: "danny@si-eng.co.il",
+                AutodeskCredentialPurpose: AutodeskCredentialPurpose.AccServiceAdmin));
+
+        Assert.False(decision.Allowed);
+        Assert.Contains("siad@si-eng.co.il", decision.Reason ?? "", StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("danny@si-eng.co.il", decision.Reason ?? "", StringComparison.OrdinalIgnoreCase);
+        // Operator coherence itself remains Match — denial is AccService Admin identity, not SIUser.
+        Assert.Equal(IdentityCoherenceStatus.Match, decision.Snapshot.Status);
     }
 
     [Fact]
