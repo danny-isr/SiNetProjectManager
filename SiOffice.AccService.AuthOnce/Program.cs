@@ -212,6 +212,21 @@ internal static class Program
                 Console.Error.WriteLine($"Actual:   {profile.Email}");
                 Console.Error.WriteLine("Do NOT export this token. Sign in as the configured Admin and retry.");
                 Console.ResetColor();
+
+                // Fail-closed: do not leave a wrong-identity AccService refresh token on disk.
+                try
+                {
+                    if (File.Exists(tokenPath))
+                    {
+                        File.Delete(tokenPath);
+                        Console.WriteLine($"Deleted mismatched AccService token: {tokenPath}");
+                    }
+                }
+                catch (Exception delEx)
+                {
+                    Console.Error.WriteLine($"WARNING: could not delete mismatched token: {delEx.Message}");
+                }
+
                 Pause(noPause);
                 return 3;
             }
