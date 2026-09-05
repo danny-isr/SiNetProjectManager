@@ -1,9 +1,9 @@
 # AccService — refreshing the Autodesk 3-legged token (ops)
 
 > **Title:** AccService Autodesk refresh-token refresh  
-> **Date:** 05.09.2026 (token-store isolation)  
+> **Date:** 05.09.2026 (token distribution finalize)  
 > **Status:** Active  
-> **Scope:** How an operator restores Autodesk OAuth for `SiOffice.AccService`. AccService owns a **dedicated** Autodesk token store, independent of the SiNet desktop user-context token.
+> **Scope:** How an operator restores Autodesk OAuth for `SiOffice.AccService`. AccService owns a **dedicated** Autodesk token store, independent of the SiNet desktop user-context token. PROD uses **workstation AuthOnce → export → server install** because the server has no interactive browser.
 
 Related: [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md),
 [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md),
@@ -89,9 +89,27 @@ There is **no Device Auth** flow. Interactive browser OAuth (`TokenProvider` →
 
 ---
 
-## 2. Procedure now (PROD server `SI-WIN-2K19`)
+## 2. Production operating model (server has no browser)
 
-> **Note:** This DEV slice does **not** migrate PROD. Before a future production rollout, plan a controlled migration: either re-run AuthOnce/install into the AccService store, or a one-time known-good copy of the existing service token into `\Autodesk\AccService\`. Do not silently copy a workstation desktop token.
+**PROD server does NOT require or assume a usable browser.** Interactive AuthOnce on the server is only an optional fallback.
+
+### Preferred production procedure
+
+1. **Workstation** — `SiOffice.AccService.AuthOnce` into dedicated AccService store  
+2. **Verify** Actual Autodesk identity == `AccBootstrapAdminEmail` (Export refuses mismatch)  
+3. **Export** validated token + non-secret `export_meta.txt` to drop share  
+4. **Secure transfer** (UNC drop)  
+5. **Server install** into the **Windows service account** dedicated store  
+   (`…\SiNet\Autodesk\AccService\refresh_token.json`, never the desktop UserContext path)  
+6. **Restart** AccService  
+7. **Runtime proof** — `GET /v1/acc/admin-identity` (authoritative)  
+8. **System Health** — ACC Admin Identity green (store + identity; Admin API separate)
+
+Metadata fields (no secrets): `TokenPurpose`, `ExpectedAdminEmail`, `ActualAdminEmail`, `ExportedUtc`, `SourceMachine`, optional `AutodeskUserId`.
+
+After successful install the drop token is moved under `used\` (do not leave live refresh tokens on the share).
+
+> **Note:** This DEV slice does **not** perform PROD installation. Before a future production rollout, migrate the existing server token into `\Autodesk\AccService\` via this export/install flow (or a controlled one-time copy of a known-good **AccService** token). Never copy a workstation desktop UserContext token.
 
 ### 2.1 Confirm the gap
 
@@ -102,18 +120,22 @@ Get-Content "\\si-win-2k19\AutoCAD Data\log\AccService\SI-WIN-2K19\sieng\AccServ
 #           refreshTokenFileExists=false|true
 ```
 
-### 2.2 Preferred when the server has no usable browser (drop + install)
+### 2.2 Preferred: workstation Export → server Install
 
 | Step | Where | Double-click |
 | --- | --- | --- |
-| 1. Export (+ new Autodesk login) | Workstation | `\\SI-WIN-2K19\AppFolder\AppNet\Server\Export-AccAutodeskToken-ToShare.cmd` |
-| 2. Install | `SI-WIN-2K19` as Administrator | `\\SI-WIN-2K19\AppFolder\AppNet\Server\Install-AccAutodeskToken-FromShare.cmd` |
+| 1. Export (+ AuthOnce + identity gate) | Workstation | `Export-AccAutodeskToken-ToShare.cmd` |
+| 2. Install (metadata pre-check + AccService store) | `SI-WIN-2K19` as Administrator | `Install-AccAutodeskToken-FromShare.cmd` |
 
-**What Export does:** AuthOnce writes `%LOCALAPPDATA%\SiNet\Autodesk\AccService\refresh_token.json`, then copies **that** AccService file to the drop folder.
+**Export:** only `%LOCALAPPDATA%\SiNet\Autodesk\AccService\refresh_token.json`.  
+Refuses the desktop path `%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json`.  
+Refuses export when ActualAdminEmail ≠ ExpectedAdminEmail.
 
-**What Install does:** places the drop file into `C:\Users\sieng\AppData\Local\SiNet\Autodesk\AccService\refresh_token.json` and restarts AccService.
+**Install:** resolves the AccService Windows service account when possible; installs into that account’s AccService store; does not touch the desktop UserContext file. Metadata must say `TokenPurpose=AccServiceAdmin` and Actual == configured Expected.
 
-### 2.3 Optional: AuthOnce on the server (often blocked)
+**Authoritative proof after restart:** AccService runtime `/v1/acc/admin-identity` + System Health — not the export metadata alone.
+
+### 2.3 Optional: AuthOnce on the server (fallback only)
 
 Prefer §2.2. Kit files:
 
@@ -151,9 +173,21 @@ Vault problem — see [`SECRETS-MANAGEMENT.md`](../SECRETS-MANAGEMENT.md). Fixin
 ## 3. Aftercare checklist
 
 - [ ] AccService log: `tokenPurpose=AccServiceAdmin`, AccService `tokenStoragePath`, `refreshTokenFileExists=true`
-- [ ] `admin-identity`: Expected/Actual match (`siad@si-eng.co.il`)
+- [ ] `admin-identity`: Expected/Actual match (`siad@si-eng.co.il`), EmailMatch=true
+- [ ] System Health «ACC Admin Identity»: מחסן AccService + זהות תקינה; Admin API separately תקין / 403
 - [ ] Client Jumbo → stage reaches "הושלם"
-- [ ] Optional: «מצב מערכת» — ACC Admin Identity row healthy
+- [ ] Drop folder: live `refresh_token.json` removed (moved under `used\`)
+
+### System Health classifications (permanent)
+
+| Condition | Display |
+| --- | --- |
+| Store + identity OK | `ACC Admin` / חשבון מוגדר+מחובר / מחסן: AccService / זהות: תקינה / Admin API |
+| Wrong Autodesk user | `ACC Admin — שגיאת זהות` |
+| Wrong token store/purpose | `ACC Admin — מחסן טוקן שגוי` |
+| Identity OK, Admin API 403 | `ACC Admin — החשבון נכון, אך חסרות הרשאות Account Admin` |
+
+Runtime `/v1/acc/admin-identity` is authoritative over export metadata.
 
 ---
 

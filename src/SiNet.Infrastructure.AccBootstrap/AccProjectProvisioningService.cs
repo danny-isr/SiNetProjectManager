@@ -1247,6 +1247,17 @@ public class AccProjectProvisioningService(
             .ResolveAsync(_tokenProvider, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
+        if (_tokenProvider.TokenStorePurpose != AutodeskTokenStorePurpose.AccServiceAdmin
+            || !AccServiceTokenPackageMeta.IsDedicatedAccServiceTokenPath(
+                _tokenProvider.ThreeLeggedRefreshTokenStoragePath))
+        {
+            AccBootstrapLog.Warn(
+                $"[AccProvision:{correlationId}] Admin mutation blocked: wrong token store " +
+                $"purpose={_tokenProvider.TokenStorePurpose}, path={_tokenProvider.ThreeLeggedRefreshTokenStoragePath}");
+            throw new InvalidOperationException(
+                "ACC Admin mutation blocked: AccService must use the dedicated AccService Autodesk token store.");
+        }
+
         var check = AccServiceAdminIdentity.Evaluate(
             expected,
             profile.Email,

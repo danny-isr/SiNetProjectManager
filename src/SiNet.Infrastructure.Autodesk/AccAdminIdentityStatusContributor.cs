@@ -21,6 +21,8 @@ public sealed class AccAdminIdentityStatusContributor(
         settings ?? throw new ArgumentNullException(nameof(settings));
 
     private string? _lastTokenStoragePath;
+    private string? _lastTokenPurpose;
+    private bool _wrongStore;
 
     public string Key => "acc-admin-identity";
 
@@ -50,12 +52,22 @@ public sealed class AccAdminIdentityStatusContributor(
 
     private async Task<AccServiceAdminIdentityCheck> ResolveAsync(CancellationToken cancellationToken)
     {
+        _wrongStore = false;
+        _lastTokenPurpose = null;
+        _lastTokenStoragePath = null;
+
         if (remoteProbe is not null)
         {
             var remote = await remoteProbe.ProbeAsync(cancellationToken).ConfigureAwait(false);
             if (remote.Reachable)
             {
                 _lastTokenStoragePath = remote.TokenStoragePath;
+                _lastTokenPurpose = remote.TokenPurpose;
+                if (!IsDedicatedAccServiceStore(remote.TokenPurpose, remote.TokenStoragePath))
+                {
+                    _wrongStore = true;
+                }
+
                 return AccServiceAdminIdentity.WithAdminApiStatus(
                     AccServiceAdminIdentity.Evaluate(
                         remote.ExpectedAdminEmail,
@@ -73,6 +85,7 @@ public sealed class AccAdminIdentityStatusContributor(
         {
             _lastTokenStoragePath = AutodeskTokenStorePaths.GetDefaultRefreshTokenFilePath(
                 AutodeskTokenStorePurpose.AccServiceAdmin);
+            _lastTokenPurpose = AutodeskTokenStorePurpose.AccServiceAdmin.ToString();
             return AccServiceAdminIdentity.Evaluate(
                 dto.Acc.AccBootstrapAdminEmail,
                 actualAdminEmail: null,
@@ -81,6 +94,12 @@ public sealed class AccAdminIdentityStatusContributor(
         }
 
         _lastTokenStoragePath = tokenProvider.ThreeLeggedRefreshTokenStoragePath;
+        _lastTokenPurpose = tokenProvider.TokenStorePurpose.ToString();
+        if (!IsDedicatedAccServiceStore(_lastTokenPurpose, _lastTokenStoragePath))
+        {
+            _wrongStore = true;
+        }
+
         var profile = await AccServiceAdminTokenProfile.ResolveAsync(tokenProvider, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return AccServiceAdminIdentity.Evaluate(
@@ -96,40 +115,91 @@ public sealed class AccAdminIdentityStatusContributor(
     {
         var expected = check.ExpectedAdminEmail;
         var actual = check.ActualAdminEmail ?? "(לא זמין)";
-        var userId = string.IsNullOrWhiteSpace(check.AutodeskUserId) ? "" : $" | UserId: {check.AutodeskUserId}";
-        var adminApi = string.IsNullOrWhiteSpace(check.AdminApiStatus)
-            ? ""
-            : $" | Admin API: {check.AdminApiStatus}";
-        var store = string.IsNullOrWhiteSpace(_lastTokenStoragePath)
-            ? ""
-            : $"{Environment.NewLine}Store: {_lastTokenStoragePath}";
+
+        if (_wrongStore)
+        {
+            return Row(
+                SubsystemRuntimeState.Degraded,
+                "ACC Admin — מחסן טוקן שגוי" + Environment.NewLine +
+                $"מחסן: {_lastTokenStoragePath ?? "(לא ידוע)"}" + Environment.NewLine +
+                $"Purpose: {_lastTokenPurpose ?? "(לא ידוע)"}");
+        }
 
         return check.Status switch
         {
             AccServiceAdminIdentityStatus.Healthy =>
-                Row(SubsystemRuntimeState.Idle, $"ACC Admin: תקין — {expected}{adminApi}{store}"),
+                Row(
+                    SubsystemRuntimeState.Idle,
+                    "ACC Admin" + Environment.NewLine +
+                    $"חשבון מוגדר: {expected}" + Environment.NewLine +
+                    $"חשבון מחובר: {actual}" + Environment.NewLine +
+                    "מחסן: AccService" + Environment.NewLine +
+                    "זהות: תקינה" + Environment.NewLine +
+                    FormatAdminApiLine(check.AdminApiStatus)),
 
             AccServiceAdminIdentityStatus.AdminEmailMismatch =>
                 Row(
                     SubsystemRuntimeState.Degraded,
-                    $"ACC Admin: אי התאמה{Environment.NewLine}מוגדר: {expected}{Environment.NewLine}מחובר: {actual}{store}"),
+                    "ACC Admin — שגיאת זהות" + Environment.NewLine +
+                    $"מוגדר: {expected}" + Environment.NewLine +
+                    $"מחובר: {actual}"),
 
             AccServiceAdminIdentityStatus.AdminApiUnauthorized =>
                 Row(
                     SubsystemRuntimeState.Degraded,
-                    "ACC Admin: החשבון נכון אך חסרות הרשאות Account Admin" + store),
+                    "ACC Admin — החשבון נכון, אך חסרות הרשאות Account Admin"),
 
             AccServiceAdminIdentityStatus.TokenMissing =>
-                Row(SubsystemRuntimeState.Degraded, $"ACC Admin: חסר טוקן שירות — מצופה {expected}{store}"),
+                Row(
+                    SubsystemRuntimeState.Degraded,
+                    $"ACC Admin: חסר טוקן שירות — מצופה {expected}" + Environment.NewLine +
+                    "מחסן: AccService"),
 
             AccServiceAdminIdentityStatus.ProfileUnavailable =>
-                Row(SubsystemRuntimeState.Degraded, $"ACC Admin: פרופיל לא זמין — מצופה {expected}{store}"),
+                Row(
+                    SubsystemRuntimeState.Degraded,
+                    $"ACC Admin: פרופיל לא זמין — מצופה {expected}"),
 
             _ =>
                 Row(
                     SubsystemRuntimeState.Degraded,
-                    $"ACC Admin: לא זמין — מצופה {expected} | מחובר: {actual}{userId}{adminApi}{store}"),
+                    $"ACC Admin: לא זמין — מצופה {expected} | מחובר: {actual}"),
         };
+    }
+
+    private static string FormatAdminApiLine(string? adminApiStatus)
+    {
+        if (string.IsNullOrWhiteSpace(adminApiStatus))
+        {
+            return "Admin API: (לא נבדק)";
+        }
+
+        if (string.Equals(adminApiStatus, "OK", StringComparison.OrdinalIgnoreCase)
+            || adminApiStatus.StartsWith("2", StringComparison.Ordinal))
+        {
+            return "Admin API: תקין";
+        }
+
+        return $"Admin API: {adminApiStatus}";
+    }
+
+    internal static bool IsDedicatedAccServiceStore(string? tokenPurpose, string? tokenStoragePath)
+    {
+        if (!string.IsNullOrWhiteSpace(tokenPurpose)
+            && !string.Equals(tokenPurpose, AutodeskTokenStorePurpose.AccServiceAdmin.ToString(), StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(tokenPurpose, AccServiceTokenPackageMeta.TokenPurposeValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(tokenStoragePath))
+        {
+            // Purpose AccServiceAdmin without path still acceptable for local default construction.
+            return string.IsNullOrWhiteSpace(tokenPurpose)
+                || string.Equals(tokenPurpose, AutodeskTokenStorePurpose.AccServiceAdmin.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        return AccServiceTokenPackageMeta.IsDedicatedAccServiceTokenPath(tokenStoragePath);
     }
 
     private static SubsystemRuntimeStatus Row(SubsystemRuntimeState state, string summary) =>

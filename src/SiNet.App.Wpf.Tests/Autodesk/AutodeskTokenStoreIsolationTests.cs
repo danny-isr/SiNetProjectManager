@@ -177,6 +177,28 @@ public sealed class AutodeskTokenStoreIsolationTests
             Assert.True(File.Exists(path), $"Missing: {path}");
             var text = File.ReadAllText(path);
             Assert.Contains("AccService", text, StringComparison.OrdinalIgnoreCase);
+
+            // Export may name the desktop path only to refuse it; other scripts must not target it.
+            if (path.EndsWith("Export-AccAutodeskToken-ToShare.ps1", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.Contains("Autodesk\\AccService", text, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("Test-IsGenericDesktopTokenPath", text, StringComparison.Ordinal);
+                Assert.Contains("desktopForbidden", text, StringComparison.Ordinal);
+                Assert.Contains(
+                    "Join-Path $env:LOCALAPPDATA \"SiNet\\Autodesk\\AccService\\refresh_token.json\"",
+                    text,
+                    StringComparison.Ordinal);
+                continue;
+            }
+
+            if (path.EndsWith("Program.cs", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.Contains("AutodeskTokenStoreOptions.AccServiceAdmin", text, StringComparison.Ordinal);
+                Assert.Contains("AutodeskTokenStorePurpose.AccServiceAdmin", text, StringComparison.Ordinal);
+                continue;
+            }
+
+            Assert.Contains("Autodesk\\AccService", text, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(
                 "Join-Path $env:LOCALAPPDATA \"SiNet\\Autodesk\\refresh_token.json\"",
                 text,
