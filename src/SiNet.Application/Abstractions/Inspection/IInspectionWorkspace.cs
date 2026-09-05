@@ -56,7 +56,9 @@ public sealed record InspectionReportDetail(
     DateTime? SentAt,
     string? SentSpreadsheetUrl,
     string? SourceFileUrn,
-    string? SourceFileVersion);
+    string? SourceFileVersion,
+    /// <summary>Inspector <c>SIUser.Email</c> for auto general fields (כתובת מייל / Email).</summary>
+    string? InspectorEmail = null);
 
 public sealed record InspectionChapterNode(
     int ChapterId,

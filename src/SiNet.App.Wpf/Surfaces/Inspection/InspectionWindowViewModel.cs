@@ -165,7 +165,10 @@ public sealed class InspectionWindowViewModel : ObservableObject
         ShareReportCommand = new AsyncRelayCommand(ShareReportAsync, () => SelectedReport is not null && _exportPort is not null && !IsBusy);
         ExportReportCommand = new AsyncRelayCommand(
             ExportReportAsync,
-            () => SelectedReport is not null && _exportPort is not null && !IsBusy);
+            () => SelectedReport is not null
+                && _exportPort is not null
+                && !IsBusy
+                && Questionnaire.CanExport);
         SelectReviewedPlanCommand = new AsyncRelayCommand(
             SelectReviewedPlansAsync,
             () => SelectedReport is not null
@@ -1669,8 +1672,9 @@ public sealed class InspectionWindowViewModel : ObservableObject
             auto["ממלא דוח"] = userName;
             auto["User"] = userName;
             auto["מספר דוח"] = reportNum;
-            auto["כתובת מייל"] = string.Empty;
-            auto["Email"] = string.Empty;
+            var email = detail.InspectorEmail ?? string.Empty;
+            auto["כתובת מייל"] = email;
+            auto["Email"] = email;
         }
 
         return auto;
@@ -1740,6 +1744,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ValidationSummary));
         OnPropertyChanged(nameof(HasValidationBlockingExport));
         OnPropertyChanged(nameof(ExportTooltip));
+        (ExportReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ShareReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private bool TryResolveEffectiveCompletionEventCode(

@@ -113,6 +113,30 @@ public sealed class InspectionFillUxParityTests
     }
 
     [Fact]
+    public void MapGeneralFields_email_auto_label_uses_inspector_email_auto_value()
+    {
+        var rows = new[]
+        {
+            new InspectionGeneralFieldRow(16, 36, "Email", Text: null, IsManualOverride: false),
+            new InspectionGeneralFieldRow(15, 35, "כתובת מייל", Text: null, IsManualOverride: false),
+        };
+        var auto = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Email"] = "shirly@si-eng.co.il",
+            ["כתובת מייל"] = "shirly@si-eng.co.il",
+        };
+
+        var chapter = InspectionQuestionnaireViewModel.MapGeneralFields(rows, auto);
+        Assert.NotNull(chapter);
+        Assert.All(chapter!.Fields, f =>
+        {
+            Assert.True(f.IsAutomatic);
+            Assert.Equal("shirly@si-eng.co.il", f.Value);
+            Assert.False(f.HasValidationError);
+        });
+    }
+
+    [Fact]
     public void MapGeneralFields_keeps_stored_text_when_manual_override()
     {
         var rows = new[]
@@ -205,6 +229,90 @@ public sealed class InspectionFillUxParityTests
         var q = new InspectionQuestionnaireViewModel();
         q.ReplaceTree(general: null, [chapter]);
         Assert.False(q.CanExport);
+    }
+
+    [Fact]
+    public void Questionnaire_CanExport_true_when_general_and_notes_complete()
+    {
+        var general = new InspectionGeneralChapterItem();
+        general.Fields.Add(new InspectionGeneralFieldItem { Label = "הערות", Value = "ממולא" });
+
+        var chapter = new InspectionChapterItem("1", "כללי");
+        var section = new InspectionSectionItem(1, "1.1", "סעיף");
+        var note = new InspectionNoteItem
+        {
+            NoteNumber = "1.1.1",
+            NoteId = 1,
+            SectionId = 1,
+            StatusText = InspectionQuestionnaireRules.Failed,
+        };
+        note.SetNoteTextWithoutStatusSync("ממצא");
+        section.Notes.Add(note);
+        var na = new InspectionNoteItem
+        {
+            NoteNumber = "1.1.2",
+            NoteId = 2,
+            SectionId = 1,
+            StatusText = InspectionQuestionnaireRules.NotApplicable,
+        };
+        na.SetNoteTextWithoutStatusSync("");
+        section.Notes.Add(na);
+        chapter.Sections.Add(section);
+
+        var q = new InspectionQuestionnaireViewModel();
+        q.ReplaceTree(general, [chapter]);
+        Assert.Equal(0, q.CountEmptyGeneralFields());
+        Assert.Equal(0, q.CountInvalidNotes());
+        Assert.True(string.IsNullOrEmpty(q.ValidationSummary));
+        Assert.True(q.CanExport);
+    }
+
+    [Fact]
+    public void ExportReportCommand_CanExecute_agrees_with_CanExport_and_button_gate()
+    {
+        var sut = new InspectionWindowViewModel(
+            workspace: null,
+            exportPort: new StubInspectionExportPort());
+
+        Assert.NotNull(sut.SelectedReport);
+        Assert.NotNull(sut.ExportReportCommand);
+
+        var chapter = new InspectionChapterItem("1", "כללי");
+        var section = new InspectionSectionItem(1, "1.1", "סעיף");
+        var invalid = new InspectionNoteItem
+        {
+            NoteNumber = "1.1.1",
+            NoteId = 1,
+            SectionId = 1,
+            StatusText = InspectionQuestionnaireRules.Failed,
+        };
+        invalid.SetNoteTextWithoutStatusSync("");
+        section.Notes.Add(invalid);
+        chapter.Sections.Add(section);
+        sut.Questionnaire.ReplaceTree(general: null, [chapter]);
+
+        Assert.False(sut.Questionnaire.CanExport);
+        Assert.True(sut.HasValidationBlockingExport);
+        Assert.False(sut.ExportReportCommand.CanExecute(null));
+
+        invalid.NoteText = "[E2E] ok";
+        Assert.True(sut.Questionnaire.CanExport);
+        Assert.False(sut.HasValidationBlockingExport);
+        Assert.True(sut.ExportReportCommand.CanExecute(null));
+    }
+
+    private sealed class StubInspectionExportPort : IInspectionReportExportPort
+    {
+        public Task<InspectionExportResult> ExportAsync(
+            int reportId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(InspectionExportResult.NotAvailable());
+
+        public Task<InspectionExportResult> ShareAsync(
+            int reportId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(InspectionExportResult.NotAvailable());
+
+        public Task OpenTemplateAsync(int seriesId, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     [Fact]

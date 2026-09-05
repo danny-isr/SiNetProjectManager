@@ -125,6 +125,7 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
                 r.InspectionDate,
                 r.InspectorName,
                 InspectorUserName = r.Inspector != null ? r.Inspector.Name : null,
+                InspectorEmail = r.Inspector != null ? r.Inspector.Email : null,
                 r.ReviewedVersion,
                 r.IsLockedAfterSend,
                 r.SentAt,
@@ -152,7 +153,8 @@ internal sealed class SqlInspectionWorkspace(IDbContextFactory<SiNetSQLDbContext
             raw.SentAt,
             raw.SentSpreadsheetUrl,
             raw.SourceFileUrn,
-            raw.SourceFileVersion);
+            raw.SourceFileVersion,
+            string.IsNullOrWhiteSpace(raw.InspectorEmail) ? null : raw.InspectorEmail.Trim());
     }
 
     public async Task<IReadOnlyList<InspectionChapterNode>> GetQuestionnaireTreeAsync(
