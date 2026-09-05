@@ -218,13 +218,15 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             return true;
         }
 
-        if (string.Equals(context.ComponentKey, WorkSurfaceComponentKeys.InspectionReport, StringComparison.OrdinalIgnoreCase))
+        if (WorkSurfaceComponentKeys.IsInspectionReportSurface(context.ComponentKey))
         {
             // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step("Launcher.Open", $"task={context.TaskId} → routing to INSPECTION surface");
+            WorkflowDebugTrace.Step("Launcher.Open",
+                $"task={context.TaskId} → routing to INSPECTION surface (key={context.ComponentKey})");
 
             // PerformProfessionalReview may open in report-creation mode when no report is linked yet
-            // (documented product path). Follow-up report tasks still require an exact report id.
+            // (documented product path). Follow-up report tasks (incl. ManagerReviewApproval) still
+            // require an exact report id.
             if (context.PrimaryWorkTargetEntityId is not > 0
                 && !AllowsInspectionReportCreationWhenMissing(context.TaskTypeCode))
             {

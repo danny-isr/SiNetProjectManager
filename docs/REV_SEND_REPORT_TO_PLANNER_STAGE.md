@@ -41,3 +41,9 @@ Stage tasks whose interaction declares `PrimaryWorkTargetEntityType = Inspection
 ## Existing instances
 
 `#83` already at `REV.AwaitingManagerApproval` continues from there. Re-seed adds the new stage/rules and removes the obsolete `ManagerApproved → AwaitingPlannerCorrections` rule; it must not reset `CurrentStageId`.
+
+## Manager approval surface
+
+`ApproveReviewReport` / `ResubmitToManager` use component key `Component.ManagerReviewApproval`.
+That key must open the **same** Inspection Report work surface as `Component.InspectionReport`
+(exact task-linked report + allowed manager result codes). It must not fall through as unsupported.

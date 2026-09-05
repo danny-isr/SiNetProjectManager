@@ -26,6 +26,14 @@ public static class WorkSurfaceComponentKeys
         || string.Equals(componentKey, EmailComposeToPlanner, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// True when the key should open the Inspection Report work surface (professional review,
+    /// manager approval of the same report, and other report-bound review tasks).
+    /// </summary>
+    public static bool IsInspectionReportSurface(string? componentKey) =>
+        string.Equals(componentKey, InspectionReport, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(componentKey, ManagerReviewApproval, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// True when the key should open the native ProjectWork task surface. Groups the project-scoped
     /// task keys that legacy routed to <c>ProjectWorkView</c> (<c>ShowProjectWork</c>): project work,
     /// material checklist, and police submission tasks.
