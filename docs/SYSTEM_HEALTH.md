@@ -31,6 +31,9 @@ Surfaces: `SystemHealthIndicator` (popup) and `SystemHealthWindow` (detail), bot
 `src\SiNet.App.Wpf\Runtime\RuntimeSubsystemStatusService.cs` builds four built-in rows —
 `acc`, `gmail`, `acc-ingest`, `workflow-assignees` — plus transient rows from
 `IStartupTaskRegistry`, plus legacy rows if and only if an `IExternalHealthCheckSource` is present.
+Standalone also registers permanent `ISubsystemStatusContributor` rows including **`ACC Admin Identity`**
+(`acc-admin-identity`): Expected = `AccBootstrapAdminEmail`, Connected = AccService 3-legged token
+profile email, Identity MATCH/MISMATCH, Admin API when probed. Never shows tokens/secrets.
 
 Surface: `SystemStatusWindow` / `SystemStatusView`, plus the footer indicator in `NewShellWindow`.
 

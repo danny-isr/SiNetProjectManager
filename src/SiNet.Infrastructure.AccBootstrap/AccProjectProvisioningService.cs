@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MyOffice.AutodeskConnector;
+using SiNet.Application.Identity;
 using SiNet.Application.Settings;
+using SiNet.Infrastructure.Autodesk;
 using SiNetSQL.Data;
 using SiNet.Infrastructure.Sql.Services.Email.Acc;
 using SiNetSQL.Models;
@@ -58,6 +60,8 @@ public class AccProjectProvisioningService(
         var correlationId = Guid.NewGuid().ToString("N")[..8];
         AccBootstrapLog.Info($"[AccProvision:{correlationId}] ═══════════════════════════════════════════════");
         AccBootstrapLog.Info($"[AccProvision:{correlationId}] EnsureProjectMappingAsync START ProjectId={projectId}");
+
+        await EnsureAccServiceAdminIdentityAllowsMutationAsync(correlationId, cancellationToken).ConfigureAwait(false);
 
         // Step 1: Check existing mapping (DB as source of truth)
         await using (var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken))
@@ -327,6 +331,8 @@ public class AccProjectProvisioningService(
     {
         if (string.IsNullOrWhiteSpace(accProjectId))
             throw new ArgumentException("accProjectId is required.", nameof(accProjectId));
+
+        await EnsureAccServiceAdminIdentityAllowsMutationAsync("list-members", cancellationToken).ConfigureAwait(false);
 
         var bim360 = new Bim360Service(_tokenProvider);
         Bim360Service.LogInfo = msg => AccBootstrapLog.Info(msg);
@@ -635,6 +641,8 @@ public class AccProjectProvisioningService(
         var correlationId = Guid.NewGuid().ToString("N")[..8];
         AccBootstrapLog.Info($"[AccReconcile:{correlationId}] ReconcileProjectMembersAsync START AccProjectId={accProjectId}");
 
+        await EnsureAccServiceAdminIdentityAllowsMutationAsync(correlationId, cancellationToken).ConfigureAwait(false);
+
         var bim360 = new Bim360Service(_tokenProvider);
         Bim360Service.LogInfo = msg => AccBootstrapLog.Info(msg);
         Bim360Service.LogWarn = msg => AccBootstrapLog.Warn(msg);
@@ -682,6 +690,8 @@ public class AccProjectProvisioningService(
         var correlationId = Guid.NewGuid().ToString("N")[..8];
         AccBootstrapLog.Info($"[AccReconcileAll:{correlationId}] ═══════════════════════════════════════════════");
         AccBootstrapLog.Info($"[AccReconcileAll:{correlationId}] ReconcileAllProjectsAsync START");
+
+        await EnsureAccServiceAdminIdentityAllowsMutationAsync(correlationId, cancellationToken).ConfigureAwait(false);
 
         // Load AccProjectId + best-available display name (AccProjectName, falling back
         // to the SI Project.Name) so the final summary can list the actual projects that
@@ -773,6 +783,8 @@ public class AccProjectProvisioningService(
 
         var correlationId = Guid.NewGuid().ToString("N")[..8];
         AccBootstrapLog.Info($"[AccAttrDef:{correlationId}] EnsureCustomAttributeDefinitionsAsync AccProjectId={accProjectId}");
+
+        await EnsureAccServiceAdminIdentityAllowsMutationAsync(correlationId, cancellationToken).ConfigureAwait(false);
 
         var bim360 = new Bim360Service(_tokenProvider);
         Bim360Service.LogInfo = msg => AccBootstrapLog.Info(msg);
@@ -1204,6 +1216,61 @@ public class AccProjectProvisioningService(
         }
 
         return nameAndNumber.FixDirectoryName() ?? nameAndNumber;
+    }
+
+    /// <summary>
+    /// Fail-closed before ACC Admin mutations when AccService token identity ≠ AccBootstrapAdminEmail.
+    /// </summary>
+    private async Task EnsureAccServiceAdminIdentityAllowsMutationAsync(
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        string expected = SystemSettingsDefaults.AccBootstrapAdminEmail;
+        if (_settingsService is not null)
+        {
+            try
+            {
+                var settings = await _settingsService.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(settings.Acc.AccBootstrapAdminEmail))
+                {
+                    expected = settings.Acc.AccBootstrapAdminEmail.Trim();
+                }
+            }
+            catch (Exception ex)
+            {
+                AccBootstrapLog.Warn(
+                    $"[AccProvision:{correlationId}] AccBootstrapAdminEmail read failed: {ex.Message}; using default.");
+            }
+        }
+
+        var profile = await AccServiceAdminTokenProfile
+            .ResolveAsync(_tokenProvider, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        var check = AccServiceAdminIdentity.Evaluate(
+            expected,
+            profile.Email,
+            profile.TokenAvailable,
+            profile.ProfileResolved,
+            profile.AutodeskUserId,
+            profile.DisplayName);
+
+        AccBootstrapLog.Info(
+            $"[AccProvision:{correlationId}] AdminIdentity expected={check.ExpectedAdminEmail}, " +
+            $"actual={check.ActualAdminEmail ?? "(unavailable)"}, status={check.Status}");
+
+        if (!AccServiceAdminIdentity.ShouldBlockAdminMutation(check))
+        {
+            return;
+        }
+
+        var message = check.OperatorMessageHe
+            ?? AccServiceAdminIdentity.FormatMismatchMessageHe(
+                check.ExpectedAdminEmail,
+                check.ActualAdminEmail ?? "(unavailable)");
+
+        AccBootstrapLog.Warn($"[AccProvision:{correlationId}] Admin mutation blocked: {check.Status}");
+        throw new InvalidOperationException(message);
     }
 
     private static ProjectAccTargets ToTargets(ProjectAccMapping m) => new()

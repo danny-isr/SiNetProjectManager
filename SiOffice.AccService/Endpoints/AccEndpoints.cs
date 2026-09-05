@@ -36,6 +36,53 @@ internal static class AccEndpoints
             utcNow = DateTime.UtcNow
         }));
 
+        // ── Admin identity (requires API key; emails/ids only — never tokens) ─
+        // Read-only diagnostics remain available during AdminEmailMismatch.
+        v1.MapGet("/admin-identity", async (
+            ITokenProvider tokenProvider,
+            ISystemSettingsQueryService settingsQuery,
+            CancellationToken ct) =>
+        {
+            string expected;
+            try
+            {
+                var settings = await settingsQuery.GetSystemSettingsAsync(ct);
+                expected = string.IsNullOrWhiteSpace(settings.Acc.AccBootstrapAdminEmail)
+                    ? SystemSettingsDefaults.AccBootstrapAdminEmail
+                    : settings.Acc.AccBootstrapAdminEmail.Trim();
+            }
+            catch
+            {
+                expected = SystemSettingsDefaults.AccBootstrapAdminEmail;
+            }
+
+            var profile = await SiNet.Infrastructure.Autodesk.AccServiceAdminTokenProfile
+                .ResolveAsync(tokenProvider, cancellationToken: ct);
+
+            var check = SiNet.Application.Identity.AccServiceAdminIdentity.Evaluate(
+                expected,
+                profile.Email,
+                profile.TokenAvailable,
+                profile.ProfileResolved,
+                profile.AutodeskUserId,
+                profile.DisplayName);
+
+            return Results.Ok(new
+            {
+                expectedAdminEmail = check.ExpectedAdminEmail,
+                actualAdminEmail = check.ActualAdminEmail,
+                tokenAvailable = check.TokenAvailable,
+                profileResolved = check.ProfileResolved,
+                autodeskUserId = check.AutodeskUserId,
+                displayName = check.DisplayName,
+                emailMatch = check.EmailMatch,
+                status = check.Status.ToString(),
+                identityStatus = check.Status.ToString(),
+                adminApiStatus = check.AdminApiStatus,
+                failureReason = check.FailureReason ?? profile.FailureReason
+            });
+        });
+
         // ── Diagnostics (requires X-AccService-Key — see ApiKeyMiddleware) ───
         // Safe metadata for cross-machine API key and integration checks.
         // NEVER returns the actual key value, hash, or length.

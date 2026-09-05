@@ -221,8 +221,7 @@ public sealed class SettingsViewModel : ObservableObject
     private string _pilotAllowedWorkflowCodes = SystemSettingsDefaults.PilotAllowedWorkflowCodes;
     private string _accServiceBaseUrl = string.Empty;
     private string _accServicePinnedCertificateThumbprints = string.Empty;
-    private string _accBootstrapAdminEmail = string.Empty;
-    private string _accServiceExpectedAdminEmail = string.Empty;
+    private string _accBootstrapAdminEmail = SystemSettingsDefaults.AccBootstrapAdminEmail;
     private string _accProjectTemplateName = string.Empty;
     private string _accManualUploadAllowedExtensions = SystemSettingsDefaults.AccManualUploadAllowedExtensions;
     private string _projectWorkScanExclusionRules = SystemSettingsDefaults.ProjectWorkScanExclusionRules;
@@ -538,12 +537,6 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get => _accBootstrapAdminEmail;
         set => SetField(ref _accBootstrapAdminEmail, value);
-    }
-
-    public string AccServiceExpectedAdminEmail
-    {
-        get => _accServiceExpectedAdminEmail;
-        set => SetField(ref _accServiceExpectedAdminEmail, value);
     }
 
     public string AccProjectTemplateName
@@ -1159,6 +1152,21 @@ public sealed class SettingsViewModel : ObservableObject
             return false;
         }
 
+        var bootstrapAdmin = AccBootstrapAdminEmail.Trim();
+        if (string.IsNullOrWhiteSpace(bootstrapAdmin))
+        {
+            error = "נא להזין חשבון Autodesk Admin של AccService.";
+            return false;
+        }
+
+        if (!IsValidEmailAddress(bootstrapAdmin))
+        {
+            error = "חשבון Autodesk Admin של AccService חייב להיות כתובת אימייל תקינה.";
+            return false;
+        }
+
+        AccBootstrapAdminEmail = bootstrapAdmin;
+
         if (LocalRetentionDays <= 0 || CentralRetentionDays <= 0)
         {
             error = "ימי שמירת לוג חייבים להיות מספרים חיוביים.";
@@ -1216,8 +1224,7 @@ public sealed class SettingsViewModel : ObservableObject
             NormalizePinnedCertificateThumbprints(AccServicePinnedCertificateThumbprints),
             AccBootstrapAdminEmail.Trim(),
             AccProjectTemplateName.Trim(),
-            AccManualUploadAllowedExtensions.Trim(),
-            AccServiceExpectedAdminEmail.Trim()),
+            AccManualUploadAllowedExtensions.Trim()),
         new InspectionSystemSettingsDto(
             InspectionTemplatesFolderId.Trim(),
             InspectionReportsFolderId.Trim(),
@@ -1299,7 +1306,6 @@ public sealed class SettingsViewModel : ObservableObject
         AccServiceBaseUrl = system.Acc.AccServiceBaseUrl;
         AccServicePinnedCertificateThumbprints = system.Acc.AccServicePinnedCertificateThumbprints;
         AccBootstrapAdminEmail = system.Acc.AccBootstrapAdminEmail;
-        AccServiceExpectedAdminEmail = system.Acc.AccServiceExpectedAdminEmail;
         AccProjectTemplateName = system.Acc.AccProjectTemplateName;
         AccManualUploadAllowedExtensions = system.Acc.AccManualUploadAllowedExtensions;
         ProjectWorkScanExclusionRules = system.ProjectWork.ScanExclusionRules;
@@ -1604,6 +1610,19 @@ public sealed class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(PreviewMediumFontSize));
         OnPropertyChanged(nameof(PreviewLargeFontSize));
         OnPropertyChanged(nameof(PreviewHugeFontSize));
+    }
+
+    private static bool IsValidEmailAddress(string email)
+    {
+        try
+        {
+            var parsed = new System.Net.Mail.MailAddress(email);
+            return string.Equals(parsed.Address, email, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
 }

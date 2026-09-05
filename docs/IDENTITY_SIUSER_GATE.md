@@ -17,7 +17,12 @@
 | **AccService Admin principal** | Configured Autodesk **ACC Account Admin** email | Admin APIs: list/add members, industry roles, EnsureProjectMapping, custom-attribute defs |
 
 **Designated AccService Admin (DEV/office steady-state):** `siad@si-eng.co.il`  
-Stored as SystemSetting **`AccService.ExpectedAdminEmail`** (not inferred from `SIUser`).
+Stored as the **single** SystemSetting **`AccBootstrapAdminEmail`** (not inferred from `SIUser`).  
+Code default / DB bootstrap default: `SystemSettingsDefaults.AccBootstrapAdminEmail` = `siad@si-eng.co.il` (insert if missing; never overwrite an existing value).
+
+Meaning of `AccBootstrapAdminEmail`: the designated Autodesk Account Admin identity used by AccService for ACC/BIM360 administrative / bootstrap / provisioning APIs (project members list/add/reconcile, industry roles, EnsureProjectMapping, custom-attribute Admin APIs, and related Admin operations).
+
+**Do not** keep a second expected-admin setting (`AccService.ExpectedAdminEmail` was a short-lived duplicate and is retired; one-time read migrates into `AccBootstrapAdminEmail` only).
 
 **Never require** AccService Account Admin email == current `SIUser.Email`.  
 **Always require** operator ACC project membership email == `SIUser.Email` before project-bound ACC writes.
@@ -25,27 +30,40 @@ Stored as SystemSetting **`AccService.ExpectedAdminEmail`** (not inferred from `
 Credential purpose enum (code): `AutodeskCredentialPurpose.UserContext` vs `AutodeskCredentialPurpose.AccServiceAdmin`.
 
 - **UserContext** 3-legged: Autodesk profile email **must** equal `SIUser.Email` (`AutodeskThreeLeggedWrite`).
-- **AccServiceAdmin** 3-legged: used by AccService/bootstrap; **not** compared to `SIUser.Email`; must match **`AccService.ExpectedAdminEmail`** (fail-closed when configured and mismatched). Does not flip operator MATCH/Mismatch.
+- **AccServiceAdmin** 3-legged: used by AccService/bootstrap; **not** compared to `SIUser.Email`; must match **`AccBootstrapAdminEmail`** (fail-closed when mismatched). Does not flip operator MATCH/Mismatch.
 
 ### AccService Admin identity check
 
-On AccService startup / health diagnostics (no tokens logged):
+Contract: **database stores EXPECTED** (`AccBootstrapAdminEmail`); **AccService reports ACTUAL** (3-legged token userinfo). Client / System Health compares them (trim, OrdinalIgnoreCase). No tokens/secrets in logs or UI.
+
+AccService exposes read-only identity (e.g. `GET /v1/acc/admin-identity` or health/diag integration): `TokenAvailable`, `ProfileResolved`, `AutodeskUserId`, `Email`, `DisplayName` when available.
+
+On AccService startup / System Health (no tokens logged):
 
 | Field | Meaning |
 | --- | --- |
 | Connected Autodesk profile email | From userinfo of the 3-legged Admin token |
-| Expected admin email | `AccService.ExpectedAdminEmail` |
-| Match / Mismatch | Case-insensitive equality |
+| Expected admin email | `AccBootstrapAdminEmail` |
+| Identity MATCH / MISMATCH | Case-insensitive equality |
+| Admin API | Probed **after** identity MATCH (`OK` / `403` / unavailable) |
 
-Mismatch warning (ops):
+Statuses: `Healthy`, `TokenMissing`, `ProfileUnavailable`, `AdminEmailMismatch`, `AdminApiUnauthorized`, `ServiceUnavailable`.
+
+Mismatch operator message (Hebrew UI):
 
 ```text
-AccService Autodesk admin account mismatch.
-Expected: siad@si-eng.co.il
-Connected: <actual email>
+חשבון ה-Autodesk של AccService אינו תואם להגדרת המערכת.
+
+החשבון המוגדר:
+siad@si-eng.co.il
+
+החשבון המחובר:
+<actual email>
+
+יש להתחבר מחדש ל-AccService באמצעות החשבון המוגדר.
 ```
 
-Wrong connected identity → Admin API operations **fail closed**. If the connected email **is** the expected admin but Admin APIs still return 403, classify as ACC Account Admin / hub / app permission configuration — not “wrong token user”.
+Wrong connected identity → Admin API mutations **fail closed** (read-only identity/health remain available). If identity MATCH but Admin APIs return 403 → `AdminApiUnauthorized` (hub/account permissions), not “wrong token user”.
 
 ## Startup outcomes
 

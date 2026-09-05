@@ -3,19 +3,16 @@ using SiNet.Application.Settings;
 
 namespace SiNet.Infrastructure.Sql.Services.Identity;
 
-/// <summary>
-/// Resolves AccService Admin expected email (SystemSettings) vs connected Autodesk profile.
-/// Used to fail-closed Admin API ops when a known wrong Autodesk account is connected.
-/// </summary>
 public interface IAccServiceAdminIdentityProbe
 {
     Task<AccServiceAdminIdentityCheck> EvaluateAsync(CancellationToken cancellationToken = default);
+
+    AccServiceAdminIdentityCheck EvaluateWithConnected(string? connectedProfileEmail, SystemSettingsDto settingsDto);
 }
 
 /// <summary>
-/// Settings-only probe: when connected profile email is supplied via options/context elsewhere,
-/// callers can use <see cref="AccServiceAdminIdentity.Evaluate"/>. This probe returns expected
-/// from SystemSettings and leaves connected unknown unless an optional connected email is passed.
+/// Resolves expected AccService Admin from <see cref="SystemSettingKeys.AccBootstrapAdminEmail"/>.
+/// Callers that know the connected Autodesk profile use <see cref="EvaluateWithConnected"/>.
 /// </summary>
 public sealed class SystemSettingsAccServiceAdminIdentityProbe(
     ISystemSettingsQueryService settings) : IAccServiceAdminIdentityProbe
@@ -26,9 +23,22 @@ public sealed class SystemSettingsAccServiceAdminIdentityProbe(
     public async Task<AccServiceAdminIdentityCheck> EvaluateAsync(CancellationToken cancellationToken = default)
     {
         var dto = await _settings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false);
-        return AccServiceAdminIdentity.Evaluate(dto.Acc.AccServiceExpectedAdminEmail, connectedProfileEmail: null);
+        return AccServiceAdminIdentity.Evaluate(
+            dto.Acc.AccBootstrapAdminEmail,
+            actualAdminEmail: null,
+            tokenAvailable: true,
+            profileResolved: false);
     }
 
-    public AccServiceAdminIdentityCheck EvaluateWithConnected(string? connectedProfileEmail, SystemSettingsDto settingsDto) =>
-        AccServiceAdminIdentity.Evaluate(settingsDto.Acc.AccServiceExpectedAdminEmail, connectedProfileEmail);
+    public AccServiceAdminIdentityCheck EvaluateWithConnected(
+        string? connectedProfileEmail,
+        SystemSettingsDto settingsDto)
+    {
+        ArgumentNullException.ThrowIfNull(settingsDto);
+        return AccServiceAdminIdentity.Evaluate(
+            settingsDto.Acc.AccBootstrapAdminEmail,
+            connectedProfileEmail,
+            tokenAvailable: true,
+            profileResolved: !string.IsNullOrWhiteSpace(connectedProfileEmail));
+    }
 }

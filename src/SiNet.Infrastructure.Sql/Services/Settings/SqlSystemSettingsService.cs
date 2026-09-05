@@ -31,6 +31,8 @@ public sealed class SqlSystemSettingsService
     {
         await using var context = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
+        await EnsureAccBootstrapAdminEmailCanonicalizedAsync(context, cancellationToken).ConfigureAwait(false);
+
         var rows = await context.SystemSettings
             .AsNoTracking()
             .Where(s => SystemSettingKeys.AllManaged.Contains(s.SettingKey))
@@ -124,10 +126,9 @@ public sealed class SqlSystemSettingsService
             new AccSystemSettingsDto(
                 Get(SystemSettingKeys.AccServiceBaseUrl, string.Empty),
                 Get(SystemSettingKeys.AccServicePinnedCertificateThumbprints, string.Empty),
-                Get(SystemSettingKeys.AccBootstrapAdminEmail, string.Empty),
+                Get(SystemSettingKeys.AccBootstrapAdminEmail, SystemSettingsDefaults.AccBootstrapAdminEmail),
                 Get(SystemSettingKeys.AccProjectTemplateName, string.Empty),
-                Get(SystemSettingKeys.AccManualUploadAllowedExtensions, SystemSettingsDefaults.AccManualUploadAllowedExtensions),
-                Get(SystemSettingKeys.AccServiceExpectedAdminEmail, string.Empty)),
+                Get(SystemSettingKeys.AccManualUploadAllowedExtensions, SystemSettingsDefaults.AccManualUploadAllowedExtensions)),
             new InspectionSystemSettingsDto(
                 Get(SystemSettingKeys.InspectionTemplatesFolderId, string.Empty),
                 Get(SystemSettingKeys.InspectionReportsFolderId, string.Empty),
@@ -211,7 +212,6 @@ public sealed class SqlSystemSettingsService
             (SystemSettingKeys.AccServiceBaseUrl, settings.Acc.AccServiceBaseUrl.Trim()),
             (SystemSettingKeys.AccServicePinnedCertificateThumbprints, settings.Acc.AccServicePinnedCertificateThumbprints.Trim()),
             (SystemSettingKeys.AccBootstrapAdminEmail, settings.Acc.AccBootstrapAdminEmail.Trim()),
-            (SystemSettingKeys.AccServiceExpectedAdminEmail, settings.Acc.AccServiceExpectedAdminEmail.Trim()),
             (SystemSettingKeys.AccProjectTemplateName, settings.Acc.AccProjectTemplateName.Trim()),
             (SystemSettingKeys.AccManualUploadAllowedExtensions, settings.Acc.AccManualUploadAllowedExtensions.Trim()),
             (SystemSettingKeys.InspectionTemplatesFolderId, settings.Inspection.InspectionTemplatesFolderId.Trim()),
@@ -325,6 +325,58 @@ public sealed class SqlSystemSettingsService
                 .ConfigureAwait(false))
         {
             throw new UnauthorizedAccessException("Administrator access required for system settings.");
+        }
+    }
+
+    /// <summary>
+    /// Ensures <see cref="SystemSettingKeys.AccBootstrapAdminEmail"/> exists (default siad).
+    /// Never overwrites an existing configured value. One-time: migrates legacy
+    /// <see cref="SystemSettingKeys.LegacyAccServiceExpectedAdminEmail"/> into AccBootstrap when
+    /// AccBootstrap is missing, then removes the legacy row so only one editable setting remains.
+    /// </summary>
+    internal static async Task EnsureAccBootstrapAdminEmailCanonicalizedAsync(
+        SiNetSQLDbContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var bootstrap = await context.SystemSettings
+            .FirstOrDefaultAsync(s => s.SettingKey == SystemSettingKeys.AccBootstrapAdminEmail, cancellationToken)
+            .ConfigureAwait(false);
+
+        var legacy = await context.SystemSettings
+            .FirstOrDefaultAsync(
+                s => s.SettingKey == SystemSettingKeys.LegacyAccServiceExpectedAdminEmail,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        var dirty = false;
+
+        if (bootstrap is null)
+        {
+            var seed = !string.IsNullOrWhiteSpace(legacy?.SettingValue)
+                ? legacy!.SettingValue.Trim()
+                : SystemSettingsDefaults.AccBootstrapAdminEmail;
+
+            context.SystemSettings.Add(new SystemSetting
+            {
+                SettingKey = SystemSettingKeys.AccBootstrapAdminEmail,
+                SettingValue = seed,
+                Description = "חשבון Autodesk Admin של AccService",
+                LastUpdated = DateTime.UtcNow,
+            });
+            dirty = true;
+        }
+
+        if (legacy is not null)
+        {
+            context.SystemSettings.Remove(legacy);
+            dirty = true;
+        }
+
+        if (dirty)
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 

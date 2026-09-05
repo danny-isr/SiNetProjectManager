@@ -165,6 +165,7 @@ public sealed class StandaloneHostCompositionTests
                 [
                     "InspectionReportsFolderId",
                     "InspectionTemplatesFolderId",
+                    "acc-admin-identity",
                     "acc-service",
                     "autodesk-acc",
                     "database",

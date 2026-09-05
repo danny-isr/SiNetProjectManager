@@ -24,14 +24,15 @@ The Admin refresh token is then:
 cd D:\repos2026\SiNetProjectManager_GitHub
 dotnet run --project SiOffice.AccService.AuthOnce\SiOffice.AccService.AuthOnce.csproj -c Release -- --force
 # Browser: sign in specifically as AccService Admin = siad@si-eng.co.il
-# (SystemSetting AccService.ExpectedAdminEmail; must NOT be SIUser / Tair / random Autodesk user)
+# (SystemSetting AccBootstrapAdminEmail; must NOT be SIUser / Tair / random Autodesk user)
+# If the browser is already signed in as danny@ / Tair@ — sign out / choose another account first.
 # Then restart AccService so it reloads the token.
 ```
 
 **Steady-state AccService Admin identity:** `siad@si-eng.co.il`  
-Configured via `dbo.SystemSettings` key **`AccService.ExpectedAdminEmail`**.  
+Configured via the **single** `dbo.SystemSettings` key **`AccBootstrapAdminEmail`** (bootstrap inserts default if missing; never overwrites an existing value). Changing the DB setting updates which token identity is **expected**; it does **not** replace the Autodesk refresh token.  
 Do **not** require AccService Admin Autodesk email == current SIUser.Email (see [`IDENTITY_SIUSER_GATE.md`](./IDENTITY_SIUSER_GATE.md)).  
-After AuthOnce, verify userinfo email == `siad@si-eng.co.il` before treating Admin APIs as healthy.
+After AuthOnce, independently read AccService token profile (`GET /v1/acc/admin-identity`) and require Actual == `siad@si-eng.co.il` before Admin mutations. Then probe Admin APIs; 403 with matching identity means Account Admin rights, not wrong login.
 
 ---
 

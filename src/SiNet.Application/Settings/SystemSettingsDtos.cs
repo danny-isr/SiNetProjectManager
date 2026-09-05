@@ -16,11 +16,10 @@ public sealed record EmailOfficeSystemSettingsDto(
 public sealed record AccSystemSettingsDto(
     string AccServiceBaseUrl,
     string AccServicePinnedCertificateThumbprints,
+    /// <summary>Designated AccService Autodesk Admin (<c>AccBootstrapAdminEmail</c>).</summary>
     string AccBootstrapAdminEmail,
     string AccProjectTemplateName,
-    string AccManualUploadAllowedExtensions,
-    /// <summary>Expected AccService 3-legged Admin Autodesk email (<c>AccService.ExpectedAdminEmail</c>).</summary>
-    string AccServiceExpectedAdminEmail = "");
+    string AccManualUploadAllowedExtensions);
 
 /// <summary>Google Drive folder IDs for inspection.</summary>
 public sealed record InspectionSystemSettingsDto(
@@ -98,6 +97,13 @@ public static class SystemSettingsDefaults
     public const string InboxFolderNameFallback = "_Inbox";
     public const bool EmailAutoSyncProjectLabelNames = false;
     public const string AccManualUploadAllowedExtensions = ".pdf,.dwf,.dwg";
+
+    /// <summary>
+    /// Designated Autodesk Account Admin for AccService Admin APIs. Not a secret.
+    /// DB bootstrap inserts this when the <c>AccBootstrapAdminEmail</c> row is missing.
+    /// </summary>
+    public const string AccBootstrapAdminEmail = "siad@si-eng.co.il";
+
     public const string ProjectWorkScanExclusionRules = ProjectWorkScanExclusions.DefaultRulesCsv;
     public const string OllamaBaseUrl = "http://localhost:11434";
     public const string OllamaModel = "gemma3:4b";

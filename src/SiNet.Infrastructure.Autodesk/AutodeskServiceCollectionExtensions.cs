@@ -45,6 +45,10 @@ public static class AutodeskServiceCollectionExtensions
             .ConfigurePrimaryHttpMessageHandler(sp =>
                 AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
 
+        services.AddHttpClient<SiNet.Application.Abstractions.Autodesk.IAccServiceAdminIdentityRemoteProbe, HttpAccServiceAdminIdentityRemoteProbe>()
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                AccServiceHttpClientConfigurator.CreateHandler(sp.GetRequiredService<AccServiceControlPlaneOptions>()));
+
         services.AddSiNetAutodeskLocalFileTransfer();
         services.AddTransient<IAccFolderItemsReader>(sp =>
             new Bim360AccFolderItemsReader(sp.GetService<ITokenProvider>()));

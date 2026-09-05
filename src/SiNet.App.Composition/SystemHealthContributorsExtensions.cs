@@ -41,6 +41,7 @@ public static class SystemHealthContributorsExtensions
 
         services.AddSingleton<ISubsystemStatusContributor, AutodeskTokenStatusContributor>();
         services.AddSingleton<ISubsystemStatusContributor, AccServiceStatusContributor>();
+        services.AddSingleton<ISubsystemStatusContributor, AccAdminIdentityStatusContributor>();
 
         return services;
     }

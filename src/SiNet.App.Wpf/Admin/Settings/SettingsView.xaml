@@ -277,10 +277,14 @@
                             <autodesk:AccReadOnlyDocumentBrowserView DataContext="{Binding AccBrowser}"/>
                         </StackPanel>
                     </Border>
-                    <TextBlock Text="Bootstrap Admin Email"
+                    <TextBlock Text="חשבון Autodesk Admin של AccService"
                                FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextSmallFontSize}"/>
-                    <TextBox Text="{Binding AccBootstrapAdminEmail, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12"/>
+                    <TextBox Text="{Binding AccBootstrapAdminEmail, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4"/>
+                    <TextBlock Text="חשבון Autodesk שבו AccService צריך להיות מחובר לצורך פעולות ניהול ACC. שינוי ההגדרה מעדכן את הזהות הצפויה בלבד — לא מחליף את הטוקן."
+                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12"
+                               FontFamily="{DynamicResource SiFontFamily}"
+                               FontSize="{DynamicResource SiTextTinyFontSize}"/>
                     <TextBlock Text="שם תבנית פרויקט ACC (stored — ללא refresh מ-ACC)"
                                FontFamily="{DynamicResource SiFontFamily}"
                                FontSize="{DynamicResource SiTextSmallFontSize}"/>

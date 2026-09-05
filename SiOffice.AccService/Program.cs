@@ -244,7 +244,7 @@ try
                 .GetSystemSettingsAsync()
                 .GetAwaiter()
                 .GetResult();
-            expectedAdmin = settings.Acc.AccServiceExpectedAdminEmail;
+            expectedAdmin = settings.Acc.AccBootstrapAdminEmail;
         }
         catch (Exception settingsEx)
         {
@@ -252,39 +252,40 @@ try
         }
 
         expectedAdmin = string.IsNullOrWhiteSpace(expectedAdmin)
-            ? builder.Configuration["AccService:ExpectedAdminEmail"]
+            ? SiNet.Application.Settings.SystemSettingsDefaults.AccBootstrapAdminEmail
             : expectedAdmin;
 
-        string? connectedEmail = null;
+        AccServiceAdminTokenProfileResult profile;
         try
         {
             var tokenProvider = app.Services.GetRequiredService<MyOffice.AutodeskConnector.ITokenProvider>();
-            var accessToken = tokenProvider.GetThreeLeggedAdminTokenAsync().GetAwaiter().GetResult();
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.userprofile.autodesk.com/userinfo");
-            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-            using var resp = http.Send(req);
-            var body = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            var m = System.Text.RegularExpressions.Regex.Match(body, "\"email\"\\s*:\\s*\"([^\"]+)\"");
-            if (m.Success)
-            {
-                connectedEmail = m.Groups[1].Value;
-            }
+            profile = SiNet.Infrastructure.Autodesk.AccServiceAdminTokenProfile
+                .ResolveAsync(tokenProvider)
+                .GetAwaiter()
+                .GetResult();
         }
         catch (Exception profileEx)
         {
             Log.Warning("[AccService][AdminIdentity] Autodesk profile resolve failed: {Error}", profileEx.Message);
+            profile = AccServiceAdminTokenProfileResult.Unavailable(profileEx.Message);
         }
 
-        var check = SiNet.Application.Identity.AccServiceAdminIdentity.Evaluate(expectedAdmin, connectedEmail);
+        var check = SiNet.Application.Identity.AccServiceAdminIdentity.Evaluate(
+            expectedAdmin,
+            profile.Email,
+            profile.TokenAvailable,
+            profile.ProfileResolved,
+            profile.AutodeskUserId,
+            profile.DisplayName);
         Log.Warning(
-            "[AccService][AdminIdentity] expected={Expected}, connected={Connected}, status={Status}",
-            check.ExpectedAdminEmail ?? "(unset)",
-            check.ConnectedProfileEmail ?? "(unavailable)",
-            check.Status);
-        if (check.WarningMessage is not null)
+            "[AccService][AdminIdentity] expected={Expected}, connected={Connected}, identityStatus={IdentityStatus}, adminApiStatus={AdminApiStatus}",
+            check.ExpectedAdminEmail,
+            check.ActualAdminEmail ?? "(unavailable)",
+            check.Status,
+            check.AdminApiStatus ?? "(not-checked)");
+        if (check.OperatorMessageHe is not null)
         {
-            Log.Warning("{Warning}", check.WarningMessage);
+            Log.Warning("{Warning}", check.OperatorMessageHe);
         }
     }
     catch (Exception adminIdEx)

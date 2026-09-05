@@ -132,8 +132,10 @@ public sealed class IdentityOperationGuard(
 
         var settings = await _systemSettings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false);
         var check = AccServiceAdminIdentity.Evaluate(
-            settings.Acc.AccServiceExpectedAdminEmail,
-            connectedAdminEmail);
+            settings.Acc.AccBootstrapAdminEmail,
+            connectedAdminEmail,
+            tokenAvailable: true,
+            profileResolved: !string.IsNullOrWhiteSpace(connectedAdminEmail));
 
         if (!AccServiceAdminIdentity.IsKnownWrongAdmin(check))
         {
@@ -142,7 +144,8 @@ public sealed class IdentityOperationGuard(
 
         return Deny(
             snapshot,
-            check.WarningMessage
+            check.OperatorMessageHe
+            ?? check.WarningMessage
             ?? "AccService Autodesk admin account mismatch.");
     }
 

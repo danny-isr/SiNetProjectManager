@@ -27,14 +27,20 @@ public static class SystemSettingKeys
     /// </summary>
     public const string AccServicePinnedCertificateThumbprints = "AccService.PinnedCertificateThumbprints";
 
-    /// <summary>
-    /// Expected Autodesk profile email for the AccService 3-legged Account Admin token
-    /// (steady-state: <c>siad@si-eng.co.il</c>). Not inferred from SIUser.
-    /// </summary>
-    public const string AccServiceExpectedAdminEmail = "AccService.ExpectedAdminEmail";
-
     public const string AccProjectTemplateName = "AccProjectTemplateName";
+
+    /// <summary>
+    /// Designated Autodesk Account Admin email used by AccService for ACC/BIM360
+    /// administrative / bootstrap / provisioning APIs (steady-state: <c>siad@si-eng.co.il</c>).
+    /// Not inferred from SIUser. Sole expected-admin SystemSetting.
+    /// </summary>
     public const string AccBootstrapAdminEmail = "AccBootstrapAdminEmail";
+
+    /// <summary>
+    /// Obsolete duplicate key from a short-lived dual-setting mistake. Used only for
+    /// one-time migration into <see cref="AccBootstrapAdminEmail"/>; never independently editable.
+    /// </summary>
+    public const string LegacyAccServiceExpectedAdminEmail = "AccService.ExpectedAdminEmail";
     public const string StatusLabelPassed = "StatusLabel_Passed";
     public const string StatusLabelFailed = "StatusLabel_Failed";
     public const string StatusLabelRecurringFailed = "StatusLabel_RecurringFailed";
@@ -105,7 +111,6 @@ public static class SystemSettingKeys
         EmailAutoSyncProjectLabelNames,
         AccServiceBaseUrl,
         AccServicePinnedCertificateThumbprints,
-        AccServiceExpectedAdminEmail,
         AccProjectTemplateName,
         AccBootstrapAdminEmail,
         StatusLabelPassed,

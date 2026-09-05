@@ -224,7 +224,7 @@ public sealed class IdentityCoherenceAndGuardTests
         {
             var dto = new SystemSettingsDto(
                 new EmailOfficeSystemSettingsDto("", "", "", "", null, 10),
-                new AccSystemSettingsDto("", "", "", "", "", expectedAdminEmail),
+                new AccSystemSettingsDto("", "", expectedAdminEmail, "", ""),
                 new InspectionSystemSettingsDto("", "", "", ""),
                 new InspectionStatusLabelsDto("", "", "", ""),
                 new AiSystemSettingsDto("", "", new AiModelLevelSelectionDto("", ""), new AiModelLevelSelectionDto("", ""), new AiModelLevelSelectionDto("", ""), new AiModelLevelSelectionDto("", ""), ""),
@@ -259,7 +259,7 @@ public sealed class IdentityCoherenceAndGuardTests
     public async Task AccServiceAdmin_email_differs_from_SIUser_does_not_break_operator_match()
     {
         // Operator: user@si.co.il (SIUser + Google + ACC member)
-        // AccService Admin credential equals ExpectedAdminEmail (different from SIUser) — operator MATCH preserved.
+        // AccService Admin credential equals AccBootstrapAdminEmail (different from SIUser) — operator MATCH preserved.
         var (guard, _) = CreateAccGuard(member: true, expectedAccServiceAdminEmail: "different-admin@company");
 
         var membershipWrite = await guard.EvaluateAsync(
