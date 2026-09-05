@@ -5,6 +5,7 @@ using SiNet.App.Composition;
 using SiNet.App.Wpf.Admin.Security;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Inspection;
+using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.App.Wpf.Theme;
 using SiNet.Application.Abstractions.Inspection;
 using SiNet.Application.Configuration;
@@ -70,6 +71,9 @@ public static class StandaloneHostServiceCollectionExtensions
         services.AddSingleton<IInspectionTemplateCatalog, GoogleDriveInspectionTemplateCatalog>();
 
         services.AddSiNetNewSystemWpf();
+        services.Replace(ServiceDescriptor.Singleton<
+            IInspectionNoteScreenshotHost,
+            StandaloneInspectionNoteScreenshotHost>());
 
         // DEBUG Inspection harness (menu item gated in NewShellFactory).
         services.TryAddSingleton<InspectionTreeViewModel>();

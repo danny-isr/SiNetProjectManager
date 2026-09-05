@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.App.Wpf.Shell;
 using SiNet.App.Wpf.Surfaces.Email;
+using SiNet.App.Wpf.Surfaces.Inspection;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Inspection;
@@ -13,6 +14,7 @@ using SiNet.Application.MasterPlan.Reports;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Runtime;
 using SiNet.Application.Settings;
+using SiNet.Infrastructure.Google.Inspection;
 using Xunit;
 
 namespace SiNet.App.Wpf.Tests.Composition;
@@ -53,6 +55,10 @@ public sealed class StandaloneHostCompositionTests
             Assert.NotNull(sp.GetRequiredService<IAuthorizationQueryService>());
             Assert.NotNull(sp.GetRequiredService<ISystemSettingsQueryService>());
             Assert.NotNull(sp.GetRequiredService<IInspectionTemplateCatalog>());
+            Assert.IsType<GoogleSheetsInspectionReportExportPort>(
+                sp.GetRequiredService<IInspectionReportExportPort>());
+            Assert.IsType<StandaloneInspectionNoteScreenshotHost>(
+                sp.GetRequiredService<IInspectionNoteScreenshotHost>());
             Assert.NotNull(sp.GetRequiredService<IProjectWorkSurfaceHost>());
             Assert.NotNull(sp.GetRequiredService<ILoggingRuntimeApplier>());
             Assert.NotNull(sp.GetRequiredService<IDirectoryUserLookupService>());

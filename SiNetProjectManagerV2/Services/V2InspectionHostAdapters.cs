@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using SiNet.Application.Abstractions.Inspection;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Settings;
+using SiNet.Infrastructure.Google.Inspection;
 using SiNet.Infrastructure.Sql.Services.Inspection;
 using SiNetSQL.Data;
 using SiNetSQL.Services.InspectionSync;
@@ -641,7 +642,11 @@ internal sealed class V2InspectionReportExportPort(
     {
         var dto = await _settings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false);
         var logger = _loggerFactory?.CreateLogger<GoogleReportExportService>();
-        return new GoogleReportExportService(_authService, _dbContextFactory, logger)
+        return new GoogleReportExportService(
+            new LegacyGoogleDriveSheetsSession(_authService),
+            _dbContextFactory,
+            _settings,
+            logger)
         {
             ReportsFolderId = dto.Inspection.InspectionReportsFolderId,
         };

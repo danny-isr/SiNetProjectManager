@@ -465,6 +465,19 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (string.Equals(
+                context.PrimaryWorkTargetEntityType,
+                WorkSurfaceComponentKeys.InspectionReportEntityType,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            _workSurfaceContext = null;
+            EmailList.ClearPendingTaskSelection();
+            EmailDetail.ApplyWorkSurfaceContext(null);
+            StatusMessage =
+                "המשימה מקושרת לדוח בדיקה ולא למייל. פתיחת מזהה הדוח כמזהה Inbox נחסמה.";
+            return;
+        }
+
         if (!WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
         {
             StatusMessage = $"ההקשר אינו מתאים למסך דואר ({context.ComponentKey}).";

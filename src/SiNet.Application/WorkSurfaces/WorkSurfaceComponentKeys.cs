@@ -6,6 +6,7 @@ namespace SiNet.Application.WorkSurfaces;
 /// </summary>
 public static class WorkSurfaceComponentKeys
 {
+    public const string InspectionReportEntityType = "InspectionReport";
     public const string ProjectCreationFromEmail = "Component.ProjectCreationFromEmail";
     public const string ReviewProjectSetupFromEmail = "Component.ReviewProjectSetupFromEmail";
     public const string EmailFiling = "Component.EmailFiling";
@@ -32,6 +33,22 @@ public static class WorkSurfaceComponentKeys
     public static bool IsInspectionReportSurface(string? componentKey) =>
         string.Equals(componentKey, InspectionReport, StringComparison.OrdinalIgnoreCase)
         || string.Equals(componentKey, ManagerReviewApproval, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// EmailComposeToPlanner is currently a workflow intent, not permission to treat the target id
+    /// as an inbox id. Report-bound send tasks open Inspection at the safe pre-send boundary.
+    /// </summary>
+    public static bool ShouldRouteEmailComposeToInspection(
+        string? componentKey,
+        string? primaryWorkTargetEntityType,
+        string? taskTypeCode) =>
+        string.Equals(componentKey, EmailComposeToPlanner, StringComparison.OrdinalIgnoreCase)
+        && (string.Equals(
+                primaryWorkTargetEntityType,
+                InspectionReportEntityType,
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(taskTypeCode, "SendReportToPlanner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(taskTypeCode, "SendInternalApproval", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// True when the key should open the native ProjectWork task surface. Groups the project-scoped

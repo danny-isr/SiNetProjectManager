@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SiNet.Infrastructure.Google.Inspection;
 using SiNetProjectManagerV2.Services;
 using SiNetProjectManagerV2.Services.Stamping;
 using SiNetSQL.MVVM;
@@ -452,7 +453,13 @@ public partial class FloatingInspectionView : FloatingWindowBase
                 .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<SiNetSQL.Data.SiNetSQLDbContext>>();
             var loggerFactory = App.ServiceProvider.GetService<Microsoft.Extensions.Logging.ILoggerFactory>();
             var exportLogger = loggerFactory?.CreateLogger<GoogleReportExportService>();
-            var exportService = new GoogleReportExportService(authService, dbContextFactory, exportLogger);
+            var settingsQuery = App.ServiceProvider
+                .GetRequiredService<SiNet.Application.Settings.ISystemSettingsQueryService>();
+            var exportService = new GoogleReportExportService(
+                new LegacyGoogleDriveSheetsSession(authService),
+                dbContextFactory,
+                settingsQuery,
+                exportLogger);
 
             // ?? Read admin-configured folder IDs from centralized DB settings ??
             var settingsService = App.ServiceProvider.GetRequiredService<SystemSettingsService>();
@@ -488,7 +495,7 @@ public partial class FloatingInspectionView : FloatingWindowBase
 
             // ?? Inject into ViewModel ??
             viewModel.SetTemplateProvider(provider, folderId);
-            viewModel.SetExportService(exportService);
+            viewModel.SetExportService(new LegacyInspectionReportExportServiceAdapter(exportService));
 
             // ?? Planner Response Import Service ??
             var importLogger = loggerFactory?.CreateLogger<GooglePlannerResponseImportService>();

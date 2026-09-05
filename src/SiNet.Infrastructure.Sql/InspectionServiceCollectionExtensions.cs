@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Abstractions.Inspection;
 using SiNet.Infrastructure.Sql.Services.Ai;
 using SiNet.Infrastructure.Sql.Services.Inspection;
@@ -21,7 +22,7 @@ public static class InspectionServiceCollectionExtensions
             sp.GetRequiredService<SqlInspectionReportCommandService>());
         services.AddTransient<IInspectionReportTaskLinkService, SqlInspectionReportTaskLinkService>();
         services.AddTransient<IInspectionDrawingCommandService, SqlInspectionDrawingCommandService>();
-        services.AddTransient<IInspectionReportExportPort, UnavailableInspectionReportExportPort>();
+        services.TryAddTransient<IInspectionReportExportPort, UnavailableInspectionReportExportPort>();
         return services;
     }
 

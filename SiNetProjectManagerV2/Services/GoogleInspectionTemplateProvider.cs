@@ -1,5 +1,6 @@
 ﻿using Google.Apis.Drive.v3;
 using Google.Apis.Sheets.v4;
+using SiNet.Infrastructure.Google.Inspection;
 using SiNetSQL.Services.InspectionSync;
 using SiOffice.GoogleConnector.Reports;
 

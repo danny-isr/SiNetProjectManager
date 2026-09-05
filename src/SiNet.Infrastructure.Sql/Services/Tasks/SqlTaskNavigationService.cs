@@ -258,7 +258,9 @@ public sealed class SqlTaskNavigationService : ITaskNavigationService
 
             JobTypeDisplayName: jobTypeDisplayName,
 
-            CurrentStageDisplayName: currentStageDisplayName);
+            CurrentStageDisplayName: currentStageDisplayName,
+
+            PrimaryWorkTargetEntityType: interaction.PrimaryWorkTargetEntityType.ToString());
 
     }
 

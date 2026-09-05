@@ -4,17 +4,16 @@ using Google.Apis.Sheets.v4;
 using Google.Apis.Sheets.v4.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using SiNet.Application.Inspection;
+using SiNet.Application.Settings;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
-using SiNetSQL.MVVM;
-using SiNetSQL.Services;
 using SiNetSQL.Services.InspectionSync;
-using SiOffice.GoogleConnector.Reports;
-using static SiNetSQL.Services.InspectionSync.RichTextCodec;
+using static SiNet.Application.Inspection.RichTextCodec;
 using DriveFile = Google.Apis.Drive.v3.Data.File;
 using SheetsColor = Google.Apis.Sheets.v4.Data.Color;
 
-namespace SiNetProjectManagerV2.Services;
+namespace SiNet.Infrastructure.Google.Inspection;
 
 /// <summary>
 /// Google Sheets implementation of <see cref="IReportExportService"/>.
@@ -27,10 +26,14 @@ namespace SiNetProjectManagerV2.Services;
 ///   <item>Rich text injection with <see cref="TextFormatRun"/> conversion.</item>
 /// </list>
 /// </summary>
-public sealed class GoogleReportExportService : IReportExportService
+public sealed class GoogleReportExportService : IInspectionGoogleReportExportService
 {
-    private readonly GoogleAuthService _authService;
+    private const string PassedStatus = "Passed";
+    private const string RecurringFailedStatus = "RecurringFailed";
+
+    private readonly IGoogleDriveSheetsSession _googleSession;
     private readonly IDbContextFactory<SiNetSQLDbContext> _contextFactory;
+    private readonly ISystemSettingsQueryService _settings;
     private readonly ILogger<GoogleReportExportService>? _logger;
 
     private const string FolderMimeType = "application/vnd.google-apps.folder";
@@ -49,17 +52,19 @@ public sealed class GoogleReportExportService : IReportExportService
     private static readonly SheetsColor BlackColor = new() { Red = 0f, Green = 0f, Blue = 0f };
 
     public GoogleReportExportService(
-        GoogleAuthService authService,
+        IGoogleDriveSheetsSession googleSession,
         IDbContextFactory<SiNetSQLDbContext> contextFactory,
+        ISystemSettingsQueryService settings,
         ILogger<GoogleReportExportService>? logger = null)
     {
-        _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        _googleSession = googleSession ?? throw new ArgumentNullException(nameof(googleSession));
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _logger = logger;
     }
 
     /// <inheritdoc />
-    public async Task<ReportExportResult> ExportReportAsync(
+    public async Task<GoogleInspectionExportResult> ExportReportAsync(
         int reportId,
         string templateSpreadsheetId,
         CancellationToken cancellationToken = default)
@@ -180,11 +185,11 @@ public sealed class GoogleReportExportService : IReportExportService
             var statusLabels = await LoadStatusLabelsAsync(cancellationToken);
 
             // ── 2. Authenticate with Google ──
-            await _authService.EnsureAuthenticatedAsync(cancellationToken);
+            await _googleSession.EnsureAuthenticatedAsync(cancellationToken);
 
-            var driveService = _authService.DriveService
+            var driveService = _googleSession.DriveService
                 ?? throw new InvalidOperationException("Drive service not available after authentication.");
-            var sheetsService = _authService.SheetsService
+            var sheetsService = _googleSession.SheetsService
                 ?? throw new InvalidOperationException("Sheets service not available after authentication.");
 
             // ── 3. Copy template to new spreadsheet (into Google Drive Reports folder) ──
@@ -288,7 +293,7 @@ public sealed class GoogleReportExportService : IReportExportService
                 var label = note.Section.SectionName?.Name;
                 if (string.IsNullOrWhiteSpace(label)) continue;
 
-                var isAutoField = GeneralFieldTreeItem.AutoFieldLabels.Contains(label);
+                var isAutoField = InspectionQuestionnaireRules.AutoFieldLabels.Contains(label);
 
                 if (isAutoField && string.Equals(note.NoteStatus, "Manual", StringComparison.Ordinal))
                 {
@@ -305,8 +310,8 @@ public sealed class GoogleReportExportService : IReportExportService
 
             _logger?.LogInformation("[Export] Overlaid {Count} Chapter 0 notes onto tag map ({Auto} auto, {Regular} regular).",
                 chapter0Notes.Count,
-                chapter0Notes.Count(n => GeneralFieldTreeItem.AutoFieldLabels.Contains(n.Section.SectionName?.Name ?? "")),
-                chapter0Notes.Count(n => !GeneralFieldTreeItem.AutoFieldLabels.Contains(n.Section.SectionName?.Name ?? "")));
+                chapter0Notes.Count(n => InspectionQuestionnaireRules.AutoFieldLabels.Contains(n.Section.SectionName?.Name ?? "")),
+                chapter0Notes.Count(n => !InspectionQuestionnaireRules.AutoFieldLabels.Contains(n.Section.SectionName?.Name ?? "")));
 
             // ── 6. Build batch requests ──
             var requests = new List<Request>();
@@ -497,7 +502,7 @@ public sealed class GoogleReportExportService : IReportExportService
             }
 
             // 6d. Inject note text into <<X.Y Title>> cells (bottom-up to avoid index shifting)
-            var noteCellMap = new List<ExportedNoteCellMap>();
+            var noteCellMap = new List<GoogleExportedNoteCellMap>();
             foreach (var (code, info) in sectionTags.OrderByDescending(kv => kv.Value.NoteCell?.Row ?? -1))
             {
                 if (info.NoteCell is not { } noteCell || info.Notes.Count == 0)
@@ -588,7 +593,7 @@ public sealed class GoogleReportExportService : IReportExportService
                     var (plainText, runs) = RichTextCodec.Parse(note.NoteText);
 
                     // RecurringFailed: override all formatting → entire text Bold+Red
-                    if (string.Equals(note.NoteStatus, InspectionStatusKeys.RecurringFailed, StringComparison.Ordinal)
+                    if (string.Equals(note.NoteStatus, RecurringFailedStatus, StringComparison.Ordinal)
                         && !string.IsNullOrEmpty(plainText))
                     {
                         runs =
@@ -670,7 +675,7 @@ public sealed class GoogleReportExportService : IReportExportService
 
                     rowsInjected++;
 
-                    noteCellMap.Add(new ExportedNoteCellMap
+                    noteCellMap.Add(new GoogleExportedNoteCellMap
                     {
                         NoteId = note.NoteId,
                         SectionCode = code,
@@ -781,7 +786,7 @@ public sealed class GoogleReportExportService : IReportExportService
         catch (Exception ex)
         {
             _logger?.LogError(ex, "[Export] Export failed for report {ReportId}.", reportId);
-            return new ReportExportResult
+            return new GoogleInspectionExportResult
             {
                 IsSuccess = false,
                 ErrorMessage = ex.Message,
@@ -984,18 +989,19 @@ public sealed class GoogleReportExportService : IReportExportService
 
     /// <summary>
     /// Loads status label mappings from the SystemSettings DB table.
-    /// Falls back to <see cref="InspectionStatusKeys.DefaultLabels"/> when no DB value exists.
+    /// Uses the centralized Inspection status labels from system settings.
     /// </summary>
     private async Task<Dictionary<string, string>> LoadStatusLabelsAsync(CancellationToken cancellationToken)
     {
-        using var settingsService = new SystemSettingsService(_contextFactory);
-        var labels = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (key, defaultLabel) in InspectionStatusKeys.DefaultLabels)
+        var dto = await _settings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false);
+        ReportsFolderId ??= dto.Inspection.InspectionReportsFolderId;
+        return new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            var settingKey = $"StatusLabel_{key}";
-            labels[key] = await settingsService.GetOrDefaultAsync(settingKey, defaultLabel, cancellationToken);
-        }
-        return labels;
+            [PassedStatus] = dto.StatusLabels.Passed,
+            [InspectionQuestionnaireRules.Failed] = dto.StatusLabels.Failed,
+            [RecurringFailedStatus] = dto.StatusLabels.RecurringFailed,
+            [InspectionQuestionnaireRules.NotApplicable] = dto.StatusLabels.NotApplicable,
+        };
     }
 
     /// <summary>
@@ -1045,10 +1051,10 @@ public sealed class GoogleReportExportService : IReportExportService
             }
         }
 
-        if (hasFailed) return InspectionStatusKeys.Failed;
-        if (hasRecurring) return InspectionStatusKeys.RecurringFailed;
-        if (hasPassed) return InspectionStatusKeys.Passed;
-        if (allNotRelevant) return InspectionStatusKeys.NotApplicable;
+        if (hasFailed) return InspectionQuestionnaireRules.Failed;
+        if (hasRecurring) return RecurringFailedStatus;
+        if (hasPassed) return PassedStatus;
+        if (allNotRelevant) return InspectionQuestionnaireRules.NotApplicable;
         return null;
     }
 
@@ -1090,8 +1096,8 @@ public sealed class GoogleReportExportService : IReportExportService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(templateSpreadsheetId);
 
-        await _authService.EnsureAuthenticatedAsync(cancellationToken);
-        var sheetsService = _authService.SheetsService
+        await _googleSession.EnsureAuthenticatedAsync(cancellationToken);
+        var sheetsService = _googleSession.SheetsService
             ?? throw new InvalidOperationException("Sheets service not available after authentication.");
 
         var spreadsheet = await sheetsService.Spreadsheets.Get(templateSpreadsheetId)
@@ -1113,7 +1119,7 @@ public sealed class GoogleReportExportService : IReportExportService
     #endregion
 
     /// <inheritdoc />
-    public async Task<AnyoneWithLinkShareResult> ShareReportAnyoneWithLinkAsync(
+    public async Task<GoogleAnyoneWithLinkShareResult> ShareReportAnyoneWithLinkAsync(
         string spreadsheetId,
         CancellationToken cancellationToken = default)
     {
@@ -1121,8 +1127,8 @@ public sealed class GoogleReportExportService : IReportExportService
 
         try
         {
-            await _authService.EnsureAuthenticatedAsync(cancellationToken);
-            var driveService = _authService.DriveService
+            await _googleSession.EnsureAuthenticatedAsync(cancellationToken);
+            var driveService = _googleSession.DriveService
                 ?? throw new InvalidOperationException("Drive service not available after authentication.");
 
             var listRequest = driveService.Permissions.List(spreadsheetId);
@@ -1140,7 +1146,7 @@ public sealed class GoogleReportExportService : IReportExportService
             {
                 if (!string.Equals(anyone.Role, "writer", StringComparison.OrdinalIgnoreCase))
                 {
-                    var updateBody = new Google.Apis.Drive.v3.Data.Permission { Role = "writer" };
+                    var updateBody = new global::Google.Apis.Drive.v3.Data.Permission { Role = "writer" };
                     var updateRequest = driveService.Permissions.Update(updateBody, spreadsheetId, anyone.Id);
                     updateRequest.SupportsAllDrives = true;
                     await updateRequest.ExecuteAsync(cancellationToken);
@@ -1148,7 +1154,7 @@ public sealed class GoogleReportExportService : IReportExportService
             }
             else
             {
-                var permission = new Google.Apis.Drive.v3.Data.Permission
+                var permission = new global::Google.Apis.Drive.v3.Data.Permission
                 {
                     Type = "anyone",
                     Role = "writer",
@@ -1165,7 +1171,7 @@ public sealed class GoogleReportExportService : IReportExportService
                 "ExistingAnyonePermissionFound={Existing} Result=Success",
                 spreadsheetId, existingFound);
 
-            return new AnyoneWithLinkShareResult
+            return new GoogleAnyoneWithLinkShareResult
             {
                 IsSuccess = true,
                 ExistingAnyonePermissionFound = existingFound,
@@ -1177,7 +1183,7 @@ public sealed class GoogleReportExportService : IReportExportService
             _logger?.LogError(ex,
                 "[Export] Operation=ShareReportAnyoneWithLink SpreadsheetId={SpreadsheetId} " +
                 "Result=Failed Reason={Reason}", spreadsheetId, ex.Message);
-            return new AnyoneWithLinkShareResult
+            return new GoogleAnyoneWithLinkShareResult
             {
                 IsSuccess = false,
                 ErrorMessage = ex.Message
@@ -1345,7 +1351,7 @@ public sealed class GoogleReportExportService : IReportExportService
         return fullCode;
     }
 
-    private static ReportExportResult BuildResult(
+    private static GoogleInspectionExportResult BuildResult(
         string destinationId,
         string destinationUrl,
         int tagsReplaced,
@@ -1354,9 +1360,9 @@ public sealed class GoogleReportExportService : IReportExportService
         List<string> warnings,
         bool success,
         bool pdfGenerated = false,
-        List<ExportedNoteCellMap>? noteCellMap = null)
+        List<GoogleExportedNoteCellMap>? noteCellMap = null)
     {
-        return new ReportExportResult
+        return new GoogleInspectionExportResult
         {
             DestinationSpreadsheetId = destinationId,
             DestinationUrl = destinationUrl,
@@ -1407,7 +1413,7 @@ public sealed class GoogleReportExportService : IReportExportService
         string templateSpreadsheetId,
         string spreadsheetId,
         Spreadsheet spreadsheet,
-        List<ExportedNoteCellMap> noteCellMap,
+        List<GoogleExportedNoteCellMap> noteCellMap,
         InspectionReport report,
         string? designerEmail,
         List<string> warnings,
@@ -1491,7 +1497,7 @@ public sealed class GoogleReportExportService : IReportExportService
         {
             try
             {
-                var permission = new Google.Apis.Drive.v3.Data.Permission
+                var permission = new global::Google.Apis.Drive.v3.Data.Permission
                 {
                     Type = "user",
                     Role = "writer",

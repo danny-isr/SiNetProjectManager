@@ -42,6 +42,10 @@ namespace SiNet.Application.WorkSurfaces;
 /// <param name="ProcessDisplayName">Workflow definition name of the Trigger-linked instance (B2 UI).</param>
 /// <param name="JobTypeDisplayName">JobType track title of the Trigger-linked instance (B2 UI).</param>
 /// <param name="CurrentStageDisplayName">Current stage name of the Trigger-linked instance (B2 UI).</param>
+/// <param name="PrimaryWorkTargetEntityType">
+/// Runtime entity type of <paramref name="PrimaryWorkTargetEntityId"/>. Surfaces use it to prevent
+/// interpreting one entity's numeric id as another entity type.
+/// </param>
 public sealed record WorkSurfaceContext(
     int? TaskId,
     int ProjectId,
@@ -55,7 +59,8 @@ public sealed record WorkSurfaceContext(
     EmailOpenHints? EmailHints = null,
     string? ProcessDisplayName = null,
     string? JobTypeDisplayName = null,
-    string? CurrentStageDisplayName = null);
+    string? CurrentStageDisplayName = null,
+    string? PrimaryWorkTargetEntityType = null);
 
 /// <summary>Runtime-only Email open filter hints (e.g. FollowQuoteApproval).</summary>
 public sealed record EmailOpenHints(

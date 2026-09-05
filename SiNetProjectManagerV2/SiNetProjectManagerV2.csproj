@@ -74,6 +74,7 @@
          read slice to the modular AddSiNetWorkflowReads(). Already reached transitively via
          SiNetSQL -> SiNet.Infrastructure.Sql; this makes the dependency explicit (no new cycle). -->
     <ProjectReference Include="..\src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj" />
+    <ProjectReference Include="..\src\SiNet.Infrastructure.Google\SiNet.Infrastructure.Google.csproj" />
     <ProjectReference Include="..\src\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
     <ProjectReference Include="..\src\SiNet.Infrastructure.Autodesk\SiNet.Infrastructure.Autodesk.csproj" />
     <ProjectReference Include="..\src\SiNet.Infrastructure.Logging\SiNet.Infrastructure.Logging.csproj" />

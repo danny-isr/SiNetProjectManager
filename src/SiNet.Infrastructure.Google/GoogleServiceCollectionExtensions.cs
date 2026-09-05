@@ -9,6 +9,7 @@ using SiNet.Application.Email;
 using SiNet.Application.MasterPlan.Reports;
 using SiNet.Application.Projects;
 using SiNet.Application.ProjectWork;
+using SiNet.Infrastructure.Google.Inspection;
 using SiNet.Infrastructure.Google.ProjectWork;
 using SiNet.Infrastructure.Google.Reports;
 
@@ -77,6 +78,12 @@ public static class GoogleServiceCollectionExtensions
 
         // Inspection template sheet reader (raw cells; tag grammar stays in SQL template sync).
         services.AddTransient<IInspectionTemplateSheetReader, GoogleInspectionTemplateSheetReader>();
+        services.AddSingleton<IGoogleDriveSheetsSession, GmailDriveSheetsSession>();
+        services.AddTransient<IInspectionGoogleReportExportService, GoogleReportExportService>();
+        services.AddTransient<GoogleInspectionNoteScreenshotUploader>();
+        services.Replace(ServiceDescriptor.Transient<
+            IInspectionReportExportPort,
+            GoogleSheetsInspectionReportExportPort>());
 
         // ProjectWork Google Drive: Shared Drive primitives + IFileStore over the shared session.
         services.AddSingleton<IGoogleDriveFileService, GoogleDriveFileService>();

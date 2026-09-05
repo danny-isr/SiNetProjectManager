@@ -178,6 +178,16 @@ public sealed class WorkSurfaceLauncher(IServiceProvider services) : IWorkSurfac
             return await OpenEmailFirstFollowTaskAsync(context, cancellationToken).ConfigureAwait(true);
         }
 
+        if (WorkSurfaceComponentKeys.ShouldRouteEmailComposeToInspection(
+                context.ComponentKey,
+                context.PrimaryWorkTargetEntityType,
+                context.TaskTypeCode))
+        {
+            // Safe certification boundary: show the exact report and its exported artifact.
+            // STOP BEFORE SEND — this route must not send email or complete CommentsSentToPlanner.
+            context = context with { ComponentKey = WorkSurfaceComponentKeys.InspectionReport };
+        }
+
         if (WorkSurfaceComponentKeys.IsEmailSurface(context.ComponentKey))
         {
             // TEMP WF-DEBUG
