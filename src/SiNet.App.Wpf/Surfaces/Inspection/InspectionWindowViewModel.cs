@@ -40,6 +40,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private readonly IInspectionNoteLinkedFileHost? _linkedFileHost;
     private readonly IInspectionFileTreePickerHost? _fileTreePicker;
     private readonly IInspectionReportTaskLinkService? _reportTaskLinks;
+    private readonly IInspectionDrawingCommandService? _drawingCommands;
 
     private WorkSurfaceContext? _taskContext;
     private int? _browseProjectId;
@@ -84,7 +85,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         IInspectionNoteScreenshotHost? screenshotHost = null,
         IInspectionNoteLinkedFileHost? linkedFileHost = null,
         IInspectionFileTreePickerHost? fileTreePicker = null,
-        IInspectionReportTaskLinkService? reportTaskLinks = null)
+        IInspectionReportTaskLinkService? reportTaskLinks = null,
+        IInspectionDrawingCommandService? drawingCommands = null)
     {
         _workspace = workspace;
         _taskCompletion = taskCompletion;
@@ -100,6 +102,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         _linkedFileHost = linkedFileHost;
         _fileTreePicker = fileTreePicker;
         _reportTaskLinks = reportTaskLinks;
+        _drawingCommands = drawingCommands;
 
         CreateStrip = new InspectionCreateReportStripViewModel();
         Questionnaire = new InspectionQuestionnaireViewModel();
@@ -176,10 +179,29 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 && _reportCommands is not null
                 && IsReportEditable
                 && !IsBusy);
+        AddDrawingCommand = new AsyncRelayCommand(
+            AddDrawingAsync,
+            () => SelectedReport is not null
+                && _drawingCommands is not null
+                && IsReportEditable
+                && !IsBusy);
+        RemoveDrawingCommand = new AsyncRelayCommand<InspectionDrawingRow>(
+            RemoveDrawingAsync,
+            row => row is not null
+                && SelectedReport is not null
+                && _drawingCommands is not null
+                && IsReportEditable
+                && !IsBusy);
         AddNoteCommand = new AsyncRelayCommand<InspectionSectionItem>(
             AddNoteToSectionAsync,
             section => section is not null
                 && SelectedReport is not null
+                && _noteCommands is not null
+                && IsReportEditable
+                && !IsBusy);
+        AddNoteFromSelectionCommand = new AsyncRelayCommand(
+            AddNoteFromSelectionAsync,
+            () => SelectedReport is not null
                 && _noteCommands is not null
                 && IsReportEditable
                 && !IsBusy);
@@ -403,7 +425,10 @@ public sealed class InspectionWindowViewModel : ObservableObject
     public ICommand ShareReportCommand { get; }
     public ICommand ExportReportCommand { get; }
     public ICommand SelectReviewedPlanCommand { get; }
+    public ICommand AddDrawingCommand { get; }
+    public ICommand RemoveDrawingCommand { get; }
     public ICommand AddNoteCommand { get; }
+    public ICommand AddNoteFromSelectionCommand { get; }
     public ICommand MoveNoteUpCommand { get; }
     public ICommand MoveNoteDownCommand { get; }
     public ICommand ScreenshotPrimaryCommand { get; }
@@ -629,10 +654,22 @@ public sealed class InspectionWindowViewModel : ObservableObject
         if (selectedItem is InspectionNoteItem note)
         {
             Questionnaire.SelectedNote = note;
+            Questionnaire.SelectedSection = Questionnaire.FindSectionContaining(note);
+            RaiseCommandStates();
+            return;
+        }
+
+        if (selectedItem is InspectionSectionItem section)
+        {
+            Questionnaire.SelectedNote = null;
+            Questionnaire.SelectedSection = section;
+            RaiseCommandStates();
             return;
         }
 
         Questionnaire.SelectedNote = null;
+        Questionnaire.SelectedSection = null;
+        RaiseCommandStates();
     }
 
     /// <summary>Persists a general field after LostFocus / auto-manual toggle.</summary>
@@ -894,14 +931,32 @@ public sealed class InspectionWindowViewModel : ObservableObject
         }
     }
 
-    private bool CanMoveNote(InspectionNoteItem? note, int direction)
+    private bool CanMoveNote(InspectionNoteItem? note, int direction) =>
+        EvaluateCanMoveNote(
+            note,
+            direction,
+            IsReportEditable,
+            _noteCommands is not null,
+            IsBusy,
+            Questionnaire.FindSectionContaining);
+
+    /// <summary>
+    /// Pure enablement rules for ▲/▼ — extracted for unit tests. Direction -1 = up, +1 = down.
+    /// </summary>
+    internal static bool EvaluateCanMoveNote(
+        InspectionNoteItem? note,
+        int direction,
+        bool isReportEditable,
+        bool noteCommandsAvailable,
+        bool isBusy,
+        Func<InspectionNoteItem, InspectionSectionItem?> findSection)
     {
-        if (note is null || !IsReportEditable || _noteCommands is null || IsBusy)
+        if (note is null || !isReportEditable || !noteCommandsAvailable || isBusy)
             return false;
         if (!InspectionQuestionnaireRules.IsNumberedSubNote(note.NoteNumber))
             return false;
 
-        var section = Questionnaire.FindSectionContaining(note);
+        var section = findSection(note);
         if (section is null)
             return false;
 
@@ -1097,6 +1152,57 @@ public sealed class InspectionWindowViewModel : ObservableObject
         RaiseCommandStates();
     }
 
+    private async Task AddDrawingAsync()
+    {
+        if (SelectedReport is null || _drawingCommands is null || !IsReportEditable)
+            return;
+
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "בחר קובץ שרטוט",
+            Filter = "שרטוטים|*.pdf;*.dwf;*.dwfx|PDF|*.pdf|DWF|*.dwf;*.dwfx|כל הקבצים|*.*",
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+        if (dlg.ShowDialog() != true || string.IsNullOrWhiteSpace(dlg.FileName))
+            return;
+
+        var path = dlg.FileName;
+        var name = System.IO.Path.GetFileName(path);
+        var type = path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "Pdf" : "Dwf";
+        var result = await _drawingCommands
+            .AddDrawingAsync(SelectedReport.ReportId, path, name, type)
+            .ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            StatusMessage = result.ErrorMessage ?? "הוספת שרטוט נכשלה.";
+            return;
+        }
+
+        if (ResolveActiveProjectId() is int projectId)
+            await LoadReportContentAsync(projectId, SelectedReport.ReportId).ConfigureAwait(true);
+        else
+            StatusMessage = $"שרטוט נוסף: {name}";
+    }
+
+    private async Task RemoveDrawingAsync(InspectionDrawingRow? row)
+    {
+        if (row is null || SelectedReport is null || _drawingCommands is null || !IsReportEditable)
+            return;
+
+        var result = await _drawingCommands.RemoveDrawingAsync(row.Id).ConfigureAwait(true);
+        if (!result.Succeeded)
+        {
+            StatusMessage = result.ErrorMessage ?? "הסרת שרטוט נכשלה.";
+            return;
+        }
+
+        if (ResolveActiveProjectId() is int projectId)
+            await LoadReportContentAsync(projectId, SelectedReport.ReportId).ConfigureAwait(true);
+        else
+            DrawingsPanel.Drawings.Remove(row);
+    }
+
     private async Task ClearNoteLinkedFileAsync(InspectionNoteItem? note)
     {
         if (note?.NoteId is not long noteId || _noteCommands is null || !note.HasLinkedFile)
@@ -1141,6 +1247,21 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 Metadata.ReviewedFiles.ToList()))
             .ConfigureAwait(true);
         StatusMessage = result.Message;
+    }
+
+    private async Task AddNoteFromSelectionAsync()
+    {
+        var section = Questionnaire.SelectedSection
+            ?? (Questionnaire.SelectedNote is { } note
+                ? Questionnaire.FindSectionContaining(note)
+                : null);
+        if (section is null)
+        {
+            StatusMessage = "יש לבחור סעיף או הערה לפני הוספת הערה.";
+            return;
+        }
+
+        await AddNoteToSectionAsync(section).ConfigureAwait(true);
     }
 
     private async Task AddNoteToSectionAsync(InspectionSectionItem? section)
@@ -1725,7 +1846,11 @@ public sealed class InspectionWindowViewModel : ObservableObject
         (ShareReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ExportReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (OpenSourceReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (SelectReviewedPlanCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (AddDrawingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (RemoveDrawingCommand as AsyncRelayCommand<InspectionDrawingRow>)?.RaiseCanExecuteChanged();
         (AddNoteCommand as AsyncRelayCommand<InspectionSectionItem>)?.RaiseCanExecuteChanged();
+        (AddNoteFromSelectionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (SaveNoteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (MoveNoteUpCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();
         (MoveNoteDownCommand as AsyncRelayCommand<InspectionNoteItem>)?.RaiseCanExecuteChanged();

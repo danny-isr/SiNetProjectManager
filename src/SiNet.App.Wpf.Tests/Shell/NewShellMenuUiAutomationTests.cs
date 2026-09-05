@@ -64,6 +64,21 @@ public sealed class NewShellMenuUiAutomationTests
         Assert.Contains("InvokeOpen()", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void NewShell_menu_item_container_binds_AutomationId_when_present()
+    {
+        var xaml = File.ReadAllText(NewShellWindowXamlPath);
+        var factory = File.ReadAllText(Path.Combine(
+            Boundary.RepoPaths.RepoRoot, "src", "SiNet.App.Wpf", "Shell", "NewShellFactory.cs"));
+
+        Assert.Contains(
+            "Property=\"AutomationProperties.AutomationId\"",
+            xaml,
+            StringComparison.Ordinal);
+        Assert.Contains("Value=\"{Binding AutomationId}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Shell.Menu.InspectionReports", factory, StringComparison.Ordinal);
+    }
+
     private static string NewShellWindowXamlPath =>
         Path.Combine(Boundary.RepoPaths.RepoRoot, "src", "SiNet.App.Wpf", "Shell", "NewShellWindow.xaml");
 

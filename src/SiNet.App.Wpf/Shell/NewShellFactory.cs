@@ -181,7 +181,8 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             tasks.Add(new NewShellMenuItem(
                 "דוחות ביקורת",
                 () => ShowWindow(inspectionFactory.Create()),
-                "חלון בדיקת דוח (מערכת חדשה)"));
+                "חלון בדיקת דוח (מערכת חדשה)",
+                automationId: "Shell.Menu.InspectionReports"));
         }
 
         if (_services.GetService<IWorkflowClosedViewerWindowFactory>() is { } workflowViewerFactory

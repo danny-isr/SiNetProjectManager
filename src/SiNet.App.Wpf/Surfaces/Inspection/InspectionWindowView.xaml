@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:SiNet.App.Wpf.Surfaces.Inspection"
         mc:Ignorable="d"
         Title="{Binding Title}"
+        AutomationProperties.AutomationId="Inspection.Window"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -235,6 +236,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -375,13 +377,90 @@
                                         Style="{StaticResource CardActionButton}"
                                         Margin="6,0,0,0" Padding="8,1"
                                         VerticalAlignment="Center"
+                                        AutomationProperties.AutomationId="Inspection.SelectReviewedPlan"
                                         ToolTip="בחר את התוכנית שנבדקה" />
                             </Grid>
+                            <ItemsControl ItemsSource="{Binding Metadata.ReviewedFiles}"
+                                          Margin="0,4,0,0"
+                                          AutomationProperties.AutomationId="Inspection.ReviewedFiles">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock FontFamily="{DynamicResource SiFontFamily}"
+                                                   FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                   Foreground="{DynamicResource SiForegroundBrush}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,1">
+                                            <Run Text="{Binding FileName, Mode=OneWay}" />
+                                            <Run Text=" · " />
+                                            <Run Text="{Binding Alternative, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Drawings panel (list + add/remove) -->
+                    <Border Grid.Row="2" Background="{DynamicResource SiBackgroundBrush}" CornerRadius="4"
+                            BorderBrush="{DynamicResource SiBorderBrush}" BorderThickness="1"
+                            Padding="6,4" Margin="2,0,2,4"
+                            AutomationProperties.AutomationId="Inspection.DrawingsPanel">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="📐 שרטוטים" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource SiSecondaryBrush}"
+                                           FontFamily="{DynamicResource SiFontFamily}"
+                                           FontSize="{DynamicResource SiTextSmallFontSize}"
+                                           VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Content="➕ הוסף שרטוט"
+                                        Command="{Binding AddDrawingCommand}"
+                                        Style="{StaticResource CardActionButton}"
+                                        Padding="8,1"
+                                        AutomationProperties.AutomationId="Inspection.AddDrawing"
+                                        ToolTip="הוסף קובץ שרטוט לדוח (PDF/DWF מקומי)" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding DrawingsPanel.Drawings}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="3,2" Margin="0,0,0,2"
+                                                CornerRadius="3" BorderThickness="1"
+                                                BorderBrush="{DynamicResource SiBorderBrush}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding FileType}"
+                                                           FontWeight="SemiBold" Foreground="#1565C0"
+                                                           FontFamily="{DynamicResource SiFontFamily}"
+                                                           FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                <TextBlock Grid.Column="1" Text="{Binding FileName}"
+                                                           FontFamily="{DynamicResource SiFontFamily}"
+                                                           FontSize="{DynamicResource SiTextSmallFontSize}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <Button Grid.Column="2" Content="✖"
+                                                        Command="{Binding DataContext.RemoveDrawingCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource CardActionButton}"
+                                                        Padding="4,0"
+                                                        ToolTip="הסר שרטוט" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </Border>
 
                     <!-- Notes / cards list -->
-                    <Grid Grid.Row="2">
+                    <Grid Grid.Row="3">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
@@ -405,9 +484,11 @@
                                     Visibility="{Binding HasSelectedNote, Converter={StaticResource BoolToVisibility}}"
                                     ToolTip="הצעות דקדוק / ניסוח להערה הנבחרת" />
                             <Button Grid.Column="2" Content="+ הערה"
-                                    Command="{Binding AddNoteCommand}"
+                                    Command="{Binding AddNoteFromSelectionCommand}"
                                     Style="{StaticResource CardActionButton}"
-                                    Padding="8,1" ToolTip="הוסף הערה חדשה" />
+                                    Padding="8,1"
+                                    ToolTip="הוסף הערה חדשה לסעיף/הערה שנבחרו"
+                                    AutomationProperties.AutomationId="Inspection.Toolbar.AddNote" />
                         </Grid>
 
                         <!-- Hierarchical questionnaire tree: General + Chapter → Section → Note -->

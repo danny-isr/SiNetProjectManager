@@ -73,6 +73,7 @@
                     <!-- UI Automation: expose Title (not the NewShellMenuItem type name) for semantic agents/tests -->
                     <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
                     <Setter Property="AutomationProperties.HelpText" Value="{Binding Description}" />
+                    <Setter Property="AutomationProperties.AutomationId" Value="{Binding AutomationId}" />
                 </Style>
             </Menu.ItemContainerStyle>
         </Menu>

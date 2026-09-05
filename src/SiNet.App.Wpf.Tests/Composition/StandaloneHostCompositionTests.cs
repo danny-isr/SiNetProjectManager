@@ -59,6 +59,10 @@ public sealed class StandaloneHostCompositionTests
                 sp.GetRequiredService<IInspectionReportExportPort>());
             Assert.IsType<StandaloneInspectionNoteScreenshotHost>(
                 sp.GetRequiredService<IInspectionNoteScreenshotHost>());
+            Assert.IsType<StandaloneInspectionFileTreePickerHost>(
+                sp.GetRequiredService<IInspectionFileTreePickerHost>());
+            Assert.IsType<StandaloneInspectionNoteLinkedFileHost>(
+                sp.GetRequiredService<IInspectionNoteLinkedFileHost>());
             Assert.NotNull(sp.GetRequiredService<IProjectWorkSurfaceHost>());
             Assert.NotNull(sp.GetRequiredService<ILoggingRuntimeApplier>());
             Assert.NotNull(sp.GetRequiredService<IDirectoryUserLookupService>());

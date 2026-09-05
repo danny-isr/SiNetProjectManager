@@ -13,12 +13,18 @@ public sealed class NewShellMenuItem
     private readonly Action? _open;
 
     /// <summary>Creates a leaf menu item that opens a migrated surface.</summary>
-    public NewShellMenuItem(string title, Action open, string? description = null, bool isAvailable = true)
+    public NewShellMenuItem(
+        string title,
+        Action open,
+        string? description = null,
+        bool isAvailable = true,
+        string? automationId = null)
     {
         Title = title ?? throw new ArgumentNullException(nameof(title));
         _open = open ?? throw new ArgumentNullException(nameof(open));
         Description = description;
         IsAvailable = isAvailable;
+        AutomationId = string.IsNullOrWhiteSpace(automationId) ? null : automationId.Trim();
         Children = new ObservableCollection<NewShellMenuItem>();
         // UIA InvokePattern / FlaUI may raise Command off the WPF UI thread; marshal so
         // Window.Show and in-shell NavigateTo always run on the dispatcher.
@@ -31,6 +37,7 @@ public sealed class NewShellMenuItem
         _open = null;
         Description = description;
         IsAvailable = true;
+        AutomationId = null;
         Children = new ObservableCollection<NewShellMenuItem>(children);
         OpenCommand = null;
     }
@@ -44,6 +51,12 @@ public sealed class NewShellMenuItem
 
     /// <summary>Optional secondary text / tooltip.</summary>
     public string? Description { get; }
+
+    /// <summary>
+    /// Stable UI Automation id for leaf items (e.g. <c>Shell.Menu.InspectionReports</c>).
+    /// Groups leave this null.
+    /// </summary>
+    public string? AutomationId { get; }
 
     /// <summary>
     /// Whether the item's surface is available. Unavailable leaves are shown but disabled.

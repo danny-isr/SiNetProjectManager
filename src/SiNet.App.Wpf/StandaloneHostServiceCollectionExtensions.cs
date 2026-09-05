@@ -74,6 +74,12 @@ public static class StandaloneHostServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<
             IInspectionNoteScreenshotHost,
             StandaloneInspectionNoteScreenshotHost>());
+        services.Replace(ServiceDescriptor.Singleton<
+            IInspectionFileTreePickerHost,
+            StandaloneInspectionFileTreePickerHost>());
+        services.Replace(ServiceDescriptor.Singleton<
+            IInspectionNoteLinkedFileHost,
+            StandaloneInspectionNoteLinkedFileHost>());
 
         // DEBUG Inspection harness (menu item gated in NewShellFactory).
         services.TryAddSingleton<InspectionTreeViewModel>();

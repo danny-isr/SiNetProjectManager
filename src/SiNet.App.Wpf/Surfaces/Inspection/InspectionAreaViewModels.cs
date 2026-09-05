@@ -23,6 +23,7 @@ public sealed class InspectionCreateReportStripViewModel : ObservableObject
 public sealed class InspectionQuestionnaireViewModel : ObservableObject
 {
     private InspectionNoteItem? _selectedNote;
+    private InspectionSectionItem? _selectedSection;
 
     /// <summary>Mixed roots: optional <see cref="InspectionGeneralChapterItem"/> then numbered chapters.</summary>
     public ObservableCollection<object> RootItems { get; } = [];
@@ -31,6 +32,13 @@ public sealed class InspectionQuestionnaireViewModel : ObservableObject
     {
         get => _selectedNote;
         set => SetField(ref _selectedNote, value);
+    }
+
+    /// <summary>Section under the current tree selection (note's parent or the section itself).</summary>
+    public InspectionSectionItem? SelectedSection
+    {
+        get => _selectedSection;
+        set => SetField(ref _selectedSection, value);
     }
 
     public void ReplaceTree(
@@ -45,6 +53,7 @@ public sealed class InspectionQuestionnaireViewModel : ObservableObject
             RootItems.Add(chapter);
 
         SelectedNote = null;
+        SelectedSection = null;
     }
 
     public void ReplaceTree(IEnumerable<object> roots)
@@ -53,6 +62,7 @@ public sealed class InspectionQuestionnaireViewModel : ObservableObject
         foreach (var root in roots)
             RootItems.Add(root);
         SelectedNote = null;
+        SelectedSection = null;
     }
 
     public IEnumerable<InspectionNoteItem> EnumerateNotes()
