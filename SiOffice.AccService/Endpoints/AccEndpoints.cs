@@ -41,6 +41,7 @@ internal static class AccEndpoints
         v1.MapGet("/admin-identity", async (
             ITokenProvider tokenProvider,
             ISystemSettingsQueryService settingsQuery,
+            IAccServiceAdminApiStatusProbe adminApiProbe,
             CancellationToken ct) =>
         {
             string expected;
@@ -67,6 +68,22 @@ internal static class AccEndpoints
                 profile.AutodeskUserId,
                 profile.DisplayName);
 
+            // Real Admin API probe is required for Healthy (read-only list projects).
+            string? adminApiStatus = null;
+            if (check.EmailMatch && check.ProfileResolved && check.TokenAvailable)
+            {
+                try
+                {
+                    adminApiStatus = await adminApiProbe.ProbeAsync(ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    adminApiStatus = $"unavailable:{ex.GetType().Name}";
+                }
+            }
+
+            check = SiNet.Application.Identity.AccServiceAdminIdentity.WithAdminApiStatus(check, adminApiStatus);
+
             return Results.Ok(new
             {
                 expectedAdminEmail = check.ExpectedAdminEmail,
@@ -79,6 +96,8 @@ internal static class AccEndpoints
                 status = check.Status.ToString(),
                 identityStatus = check.Status.ToString(),
                 adminApiStatus = check.AdminApiStatus,
+                adminApiProbe =
+                    "GET https://developer.api.autodesk.com/construction/admin/v1/accounts/{accountId}/projects?limit=1",
                 failureReason = check.FailureReason ?? profile.FailureReason,
                 tokenPurpose = tokenProvider.TokenStorePurpose.ToString(),
                 tokenStoragePath = tokenProvider.ThreeLeggedRefreshTokenStoragePath,

@@ -107,9 +107,11 @@ There is **no Device Auth** flow. Interactive browser OAuth (`TokenProvider` →
 
 Metadata fields (no secrets): `TokenPurpose`, `ExpectedAdminEmail`, `ActualAdminEmail`, `ExportedUtc`, `SourceMachine`, optional `AutodeskUserId`.
 
-After successful install the drop token is moved under `used\` (do not leave live refresh tokens on the share).
+After successful install **and** runtime `/v1/acc/admin-identity` verification (Healthy), the drop **`refresh_token.json` is deleted** from the share. `export_meta.txt` may be archived under `used\` for audit. If runtime verification fails, the drop token is **not** deleted (controlled recovery).
 
 > **Note:** This DEV slice does **not** perform PROD installation. Before a future production rollout, migrate the existing server token into `\Autodesk\AccService\` via this export/install flow (or a controlled one-time copy of a known-good **AccService** token). Never copy a workstation desktop UserContext token.
+
+**Expected Admin email:** always `dbo.SystemSettings.AccBootstrapAdminEmail` (DB). Export/AuthOnce/Install read the DB; they do not hardcode `siad@…` as SoT. `--expected-email` / `-ExpectedAdminEmail` may only match the DB value (diagnostic); a CLI≠DB mismatch fails closed.
 
 ### 2.1 Confirm the gap
 
@@ -182,10 +184,14 @@ Vault problem — see [`SECRETS-MANAGEMENT.md`](../SECRETS-MANAGEMENT.md). Fixin
 
 | Condition | Display |
 | --- | --- |
-| Store + identity OK | `ACC Admin` / חשבון מוגדר+מחובר / מחסן: AccService / זהות: תקינה / Admin API |
+| Store + identity + Admin API 200 | `ACC Admin` / חשבון מוגדר+מחובר / מחסן: AccService / זהות: תקינה / Admin API: תקין |
 | Wrong Autodesk user | `ACC Admin — שגיאת זהות` |
 | Wrong token store/purpose | `ACC Admin — מחסן טוקן שגוי` |
 | Identity OK, Admin API 403 | `ACC Admin — החשבון נכון, אך חסרות הרשאות Account Admin` |
+
+Admin API probe (authoritative for Healthy):  
+`GET https://developer.api.autodesk.com/construction/admin/v1/accounts/{accountId}/projects?limit=1`  
+using the AccService Admin 3-legged token (`accountId` from default `AccHub`).
 
 Runtime `/v1/acc/admin-identity` is authoritative over export metadata.
 

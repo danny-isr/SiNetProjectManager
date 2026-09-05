@@ -51,6 +51,8 @@ public static class AccBootstrapServiceCollectionExtensions
 
         services.TryAddTransient<IProjectAccMappingProvisioner, ProjectAccMappingProvisionerAdapter>();
 
+        services.TryAddTransient<IAccServiceAdminApiStatusProbe, AccServiceAdminApiStatusProbe>();
+
         // Replace NullAccHumanMembershipProbe (AddSiNetIdentitySql) with ACC membership readback.
         services.RemoveAll<IAccHumanMembershipProbe>();
         services.AddSingleton<IAccHumanMembershipProbe>(sp =>

@@ -6,6 +6,7 @@ using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
 using SiNet.Infrastructure.Sql;
+using SiNet.Infrastructure.AccBootstrap;
 using SiNetSQL.Services.AccBootstrap;
 using SiOffice.AccService.Contracts;
 using SiOffice.AccService;
@@ -130,6 +131,8 @@ builder.Services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
 });
 builder.Services.AddSiNetAutodeskLocalFileTransfer();
 builder.Services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
+builder.Services.AddTransient<SiNet.Application.Abstractions.Autodesk.IAccServiceAdminApiStatusProbe,
+    AccServiceAdminApiStatusProbe>();
 
 var app = builder.Build();
 

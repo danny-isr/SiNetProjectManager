@@ -80,6 +80,7 @@ public static class AccServiceAdminIdentity
                 OperatorMessageHe: FormatMismatchMessageHe(expected, actual));
         }
 
+        // Healthy requires a successful real Admin API probe (200/OK). Identity match alone is not enough.
         if (IsAdminApiUnauthorized(adminApiStatus))
         {
             return new AccServiceAdminIdentityCheck(
@@ -97,7 +98,7 @@ public static class AccServiceAdminIdentity
                     "ACC Admin: החשבון נכון אך חסרות הרשאות Account Admin");
         }
 
-        if (IsAdminApiUnavailable(adminApiStatus))
+        if (IsAdminApiOk(adminApiStatus))
         {
             return new AccServiceAdminIdentityCheck(
                 ExpectedAdminEmail: expected,
@@ -107,9 +108,9 @@ public static class AccServiceAdminIdentity
                 AutodeskUserId: autodeskUserId,
                 DisplayName: displayName,
                 EmailMatch: true,
-                Status: AccServiceAdminIdentityStatus.ServiceUnavailable,
-                AdminApiStatus: adminApiStatus,
-                FailureReason: "AccService Admin identity matches but Admin API probe was unavailable.",
+                Status: AccServiceAdminIdentityStatus.Healthy,
+                AdminApiStatus: NormalizeAdminApiOk(adminApiStatus),
+                FailureReason: null,
                 OperatorMessageHe: null);
         }
 
@@ -121,9 +122,9 @@ public static class AccServiceAdminIdentity
             AutodeskUserId: autodeskUserId,
             DisplayName: displayName,
             EmailMatch: true,
-            Status: AccServiceAdminIdentityStatus.Healthy,
-            AdminApiStatus: adminApiStatus,
-            FailureReason: null,
+            Status: AccServiceAdminIdentityStatus.ServiceUnavailable,
+            AdminApiStatus: string.IsNullOrWhiteSpace(adminApiStatus) ? "unavailable" : adminApiStatus,
+            FailureReason: "AccService Admin identity matches but Admin API probe was not successful (200 required).",
             OperatorMessageHe: null);
     }
 
@@ -181,10 +182,29 @@ public static class AccServiceAdminIdentity
         && (adminApiStatus.Contains("403", StringComparison.Ordinal)
             || string.Equals(adminApiStatus.Trim(), "unauthorized", StringComparison.OrdinalIgnoreCase));
 
-    private static bool IsAdminApiUnavailable(string? adminApiStatus) =>
-        !string.IsNullOrWhiteSpace(adminApiStatus)
-        && (string.Equals(adminApiStatus.Trim(), "unavailable", StringComparison.OrdinalIgnoreCase)
-            || adminApiStatus.Contains("unavailable", StringComparison.OrdinalIgnoreCase));
+    private static bool IsAdminApiOk(string? adminApiStatus)
+    {
+        if (string.IsNullOrWhiteSpace(adminApiStatus))
+        {
+            return false;
+        }
+
+        var s = adminApiStatus.Trim();
+        if (string.Equals(s, "OK", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(s, "200", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return s.Length >= 3
+            && char.IsDigit(s[0])
+            && s[0] == '2'
+            && int.TryParse(s.AsSpan(0, Math.Min(3, s.Length)), out var code)
+            && code is >= 200 and < 300;
+    }
+
+    private static string NormalizeAdminApiOk(string? adminApiStatus) =>
+        IsAdminApiOk(adminApiStatus) ? "200" : (adminApiStatus ?? "unavailable");
 }
 
 public enum AccServiceAdminIdentityStatus

@@ -9,6 +9,16 @@ namespace SiNet.App.Wpf.Tests.Autodesk;
 public sealed class AccServiceTokenDistributionTests
 {
     [Fact]
+    public void Admin_api_probe_targets_construction_admin_list_projects()
+    {
+        Assert.Contains(
+            "construction/admin/v1/accounts/",
+            AccServiceAdminApiProbe.AbsoluteUrlTemplate,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("limit=1", AccServiceAdminApiProbe.AbsoluteUrlTemplate, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Dedicated_AccService_path_accepted_generic_desktop_rejected()
     {
         var root = Path.Combine(Path.GetTempPath(), "SiNetDist-" + Guid.NewGuid().ToString("N"));
@@ -94,7 +104,7 @@ public sealed class AccServiceTokenDistributionTests
     {
         Assert.Equal(
             AccServiceAdminIdentityStatus.Healthy,
-            AccServiceAdminIdentity.Evaluate("siad@si-eng.co.il", "siad@si-eng.co.il").Status);
+            AccServiceAdminIdentity.Evaluate("siad@si-eng.co.il", "siad@si-eng.co.il", adminApiStatus: "200").Status);
         Assert.Equal(
             AccServiceAdminIdentityStatus.AdminEmailMismatch,
             AccServiceAdminIdentity.Evaluate("siad@si-eng.co.il", "danny@si-eng.co.il").Status);
@@ -103,6 +113,9 @@ public sealed class AccServiceTokenDistributionTests
             AccServiceAdminIdentity.WithAdminApiStatus(
                 AccServiceAdminIdentity.Evaluate("siad@si-eng.co.il", "siad@si-eng.co.il"),
                 "403").Status);
+        Assert.Equal(
+            AccServiceAdminIdentityStatus.ServiceUnavailable,
+            AccServiceAdminIdentity.Evaluate("siad@si-eng.co.il", "siad@si-eng.co.il").Status);
     }
 
     [Fact]
@@ -122,9 +135,16 @@ public sealed class AccServiceTokenDistributionTests
         Assert.Contains("ActualAdminEmail", export, StringComparison.Ordinal);
         Assert.Contains("--verify", export, StringComparison.Ordinal);
         Assert.Contains("export_meta.txt", export, StringComparison.Ordinal);
+        Assert.Contains("AccBootstrapAdminEmail", export, StringComparison.Ordinal);
+        Assert.Contains("Get-AccBootstrapAdminEmailFromDb", export, StringComparison.Ordinal);
         // Desktop path may appear only as a refusal check — never as the export source default.
         Assert.DoesNotContain(
             "SourceToken = $desktopForbidden",
+            export,
+            StringComparison.Ordinal);
+        // Export must not hardcode the steady-state email as SoT (DB is canonical).
+        Assert.DoesNotContain(
+            "[string]$ExpectedAdminEmail = \"siad@si-eng.co.il\"",
             export,
             StringComparison.Ordinal);
 
@@ -133,10 +153,28 @@ public sealed class AccServiceTokenDistributionTests
         Assert.Contains("ActualAdminEmail", install, StringComparison.Ordinal);
         Assert.Contains("Resolve-ServiceAccount", install, StringComparison.Ordinal);
         Assert.Contains("desktopPath", install, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("admin-identity", install, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Remove-Item", install, StringComparison.Ordinal);
+        Assert.Contains("Get-AccBootstrapAdminEmailFromDb", install, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "[string]$ExpectedAdminEmail = \"siad@si-eng.co.il\"",
+            install,
+            StringComparison.Ordinal);
+        // Must not leave live refresh tokens under used\.
+        Assert.DoesNotContain(
+            "refresh_token.{0}.json",
+            install,
+            StringComparison.Ordinal);
 
         Assert.Contains("--verify", authOnce, StringComparison.Ordinal);
         Assert.Contains("token_identity.txt", authOnce, StringComparison.Ordinal);
         Assert.Contains("AutodeskTokenStoreOptions.AccServiceAdmin", authOnce, StringComparison.Ordinal);
+        Assert.Contains("ResolveExpectedAdminEmailFromDbAsync", authOnce, StringComparison.Ordinal);
+        Assert.Contains("SystemSettingKeys.AccBootstrapAdminEmail", authOnce, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "private const string DefaultExpectedAdminEmail = \"siad@si-eng.co.il\"",
+            authOnce,
+            StringComparison.Ordinal);
     }
 
     private static string FindRepoRoot()

@@ -1,7 +1,8 @@
 # =============================================================================
 #  Export-AccAutodeskToken-ToShare.ps1
-#  WORKSTATION: AuthOnce into dedicated AccService store, verify Autodesk identity,
-#  then copy refresh_token.json + non-secret metadata to the Server drop folder.
+#  WORKSTATION: AuthOnce into dedicated AccService store, verify Autodesk identity
+#  against dbo.SystemSettings.AccBootstrapAdminEmail, then copy refresh_token.json
+#  + non-secret metadata to the Server drop folder.
 #  Double-click: Export-AccAutodeskToken-ToShare.cmd  (NOT the .ps1)
 #  IMPORTANT: ASCII only (Windows PowerShell 5.1).
 # =============================================================================
@@ -10,7 +11,7 @@ param(
     [string]$SourceToken = "",
     [string]$DropDir = "\\SI-WIN-2K19\AppFolder\AppNet\Server\AutodeskTokenDrop",
     [string]$AuthOnceExe = "",
-    [string]$ExpectedAdminEmail = "siad@si-eng.co.il",
+    [string]$ExpectedAdminEmail = "",
     [int]$MaxTokenAgeMinutes = 30,
     [int]$AuthWaitSeconds = 600,
     [switch]$SkipCreate,
@@ -46,6 +47,61 @@ function Resolve-AuthOncePath {
         if (Test-Path -LiteralPath $c) { return $c }
     }
     return $null
+}
+
+function Get-SiNetVaultSecret([string]$Target) {
+    if (-not ("SiNetVaultHelper" -as [type])) {
+        Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class SiNetVaultHelper {
+  [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  static extern bool CredRead(string target, uint type, uint flags, out IntPtr credPtr);
+  [DllImport("advapi32.dll")] static extern void CredFree(IntPtr cred);
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+  struct CREDENTIAL {
+    public uint Flags; public uint Type; public string TargetName; public string Comment;
+    public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+    public uint CredentialBlobSize; public IntPtr CredentialBlob;
+    public uint Persist; public uint AttributeCount; public IntPtr Attributes;
+    public string TargetAlias; public string UserName;
+  }
+  public static string Get(string target) {
+    IntPtr p;
+    if (!CredRead(target, 1, 0, out p)) return null;
+    try {
+      var c = (CREDENTIAL)Marshal.PtrToStructure(p, typeof(CREDENTIAL));
+      if (c.CredentialBlobSize == 0 || c.CredentialBlob == IntPtr.Zero) return null;
+      var b = new byte[c.CredentialBlobSize];
+      Marshal.Copy(c.CredentialBlob, b, 0, (int)c.CredentialBlobSize);
+      return Encoding.UTF8.GetString(b);
+    } finally { CredFree(p); }
+  }
+}
+"@
+    }
+    return [SiNetVaultHelper]::Get($Target)
+}
+
+function Get-AccBootstrapAdminEmailFromDb {
+    $cs = Get-SiNetVaultSecret "SiNet/ConnectionStrings/SiNetDatabase"
+    if ([string]::IsNullOrWhiteSpace($cs)) {
+        throw "Vault key SiNet/ConnectionStrings/SiNetDatabase missing; cannot read AccBootstrapAdminEmail."
+    }
+    $conn = New-Object System.Data.SqlClient.SqlConnection $cs
+    try {
+        $conn.Open()
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT TOP (1) SettingValue FROM dbo.SystemSettings WHERE SettingKey = @k"
+        [void]$cmd.Parameters.AddWithValue("@k", "AccBootstrapAdminEmail")
+        $val = [string]$cmd.ExecuteScalar()
+        if ([string]::IsNullOrWhiteSpace($val)) {
+            throw "dbo.SystemSettings.AccBootstrapAdminEmail is missing or empty."
+        }
+        return $val.Trim()
+    }
+    finally { $conn.Dispose() }
 }
 
 function Test-IsDedicatedAccServiceTokenPath([string]$Path) {
@@ -96,11 +152,23 @@ try {
         $SourceToken = $dedicatedDefault
     }
 
+    $dbExpected = Get-AccBootstrapAdminEmailFromDb
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedAdminEmail) `
+            -and -not [string]::Equals($ExpectedAdminEmail.Trim(), $dbExpected, [StringComparison]::OrdinalIgnoreCase)) {
+        Write-Banner "RESULT: FAILED - CLI ExpectedAdminEmail != DB AccBootstrapAdminEmail" Red
+        Write-Log ("DB (canonical): {0}" -f $dbExpected)
+        Write-Log ("CLI override:   {0}" -f $ExpectedAdminEmail)
+        Write-Host "DB is the only source of truth. Do not create a second expected value." -ForegroundColor Yellow
+        $script:ExitCode = 4
+        return
+    }
+    $ExpectedAdminEmail = $dbExpected
+
     Write-Banner "Export AccService Admin token to Server drop"
     Write-Log ("KitRoot           : {0}" -f $kitRoot)
     Write-Log ("Source token      : {0}" -f $SourceToken)
     Write-Log ("Drop folder       : {0}" -f $DropDir)
-    Write-Log ("Expected Admin    : {0}" -f $ExpectedAdminEmail)
+    Write-Log ("Expected Admin    : {0} (dbo.SystemSettings.AccBootstrapAdminEmail)" -f $ExpectedAdminEmail)
     Write-Log ("Windows user      : {0}\{1}" -f $env:USERDOMAIN, $env:USERNAME)
     Write-Log ("SkipCreate        : {0}" -f [bool]$SkipCreate)
 
@@ -134,7 +202,7 @@ try {
     $identitySidecar = Join-Path $tokenDir "token_identity.txt"
 
     Write-Host ""
-    Write-Host "Sign in to Autodesk as AccBootstrapAdminEmail (steady-state: siad@si-eng.co.il)." -ForegroundColor Yellow
+    Write-Host ("Sign in to Autodesk as AccBootstrapAdminEmail ({0})." -f $ExpectedAdminEmail) -ForegroundColor Yellow
     Write-Host ""
 
     $needCreate = -not $SkipCreate
@@ -185,6 +253,8 @@ try {
     Copy-Item -LiteralPath $authOnceSrc -Destination $authOnce -Force
     Write-Log ("AuthOnce local copy: {0}" -f $authOnce)
 
+    # AuthOnce reads AccBootstrapAdminEmail from DB. Do not pass --expected-email
+    # (CLI override is diagnostic-only and must equal DB or AuthOnce fails).
     if ($needCreate) {
         & netsh http add urlacl url=http://localhost:8080/ user=Everyone 2>$null | Out-Null
         New-Item -ItemType Directory -Path $tokenDir -Force | Out-Null
@@ -200,14 +270,13 @@ try {
 
         Write-Banner "STEP: Autodesk browser login (AccService store only)"
         Write-Host "1) AuthOnce console will open."
-        Write-Host "2) Browser opens - sign in as AccBootstrapAdminEmail."
+        Write-Host ("2) Browser opens - sign in as {0}." -f $ExpectedAdminEmail)
         Write-Host "3) When AuthOnce prints OK (identity MATCH), press Enter in THAT window."
         Write-Host ""
         Read-Host "Press Enter here to launch AuthOnce"
 
         $startedUtc = [datetime]::UtcNow.AddSeconds(-5)
-        $okMarker = Join-Path $tokenDir "auth_once_last_ok.txt"
-        $authArgs = @("--force", "--no-pause", ("--expected-email={0}" -f $ExpectedAdminEmail))
+        $authArgs = @("--force", "--no-pause")
         Write-Log ("Starting AuthOnce {0} ..." -f ($authArgs -join ' '))
         $proc = Start-Process -FilePath $authOnce -ArgumentList $authArgs -WorkingDirectory $localAuthDir -PassThru
         if (-not $proc) { throw "Start-Process returned nothing for AuthOnce." }
@@ -238,9 +307,8 @@ try {
         Write-Host "New AccService token created." -ForegroundColor Green
     }
     else {
-        # Re-verify existing dedicated token before export (no browser if refresh still works).
         Write-Banner "STEP: Verify existing AccService token identity"
-        $verifyArgs = @("--verify", "--no-pause", ("--expected-email={0}" -f $ExpectedAdminEmail))
+        $verifyArgs = @("--verify", "--no-pause")
         Write-Log ("Starting AuthOnce {0} ..." -f ($verifyArgs -join ' '))
         $proc = Start-Process -FilePath $authOnce -ArgumentList $verifyArgs -WorkingDirectory $localAuthDir -PassThru -Wait
         Write-Log ("AuthOnce verify exit code: {0}" -f $proc.ExitCode)
@@ -284,8 +352,8 @@ try {
     }
     if (-not [string]::Equals($actual.Trim(), $ExpectedAdminEmail.Trim(), [StringComparison]::OrdinalIgnoreCase)) {
         Write-Banner "RESULT: FAILED - ActualAdminEmail does not match AccBootstrapAdminEmail" Red
-        Write-Log ("Expected: {0}" -f $ExpectedAdminEmail)
-        Write-Log ("Actual:   {0}" -f $actual)
+        Write-Log ("Expected (DB): {0}" -f $ExpectedAdminEmail)
+        Write-Log ("Actual:        {0}" -f $actual)
         Write-Host "Wrong Autodesk account - token will NOT be exported." -ForegroundColor Yellow
         $script:ExitCode = 7
         return
@@ -306,6 +374,7 @@ try {
     [void]$metaLines.Add("TokenPurpose=AccServiceAdmin")
     [void]$metaLines.Add(("ExpectedAdminEmail={0}" -f $ExpectedAdminEmail.Trim()))
     [void]$metaLines.Add(("ActualAdminEmail={0}" -f $actual.Trim()))
+    [void]$metaLines.Add("ExpectedSource=dbo.SystemSettings.AccBootstrapAdminEmail")
     if (-not [string]::IsNullOrWhiteSpace($userId)) {
         [void]$metaLines.Add(("AutodeskUserId={0}" -f $userId))
     }

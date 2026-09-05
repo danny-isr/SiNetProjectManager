@@ -7,14 +7,26 @@ namespace SiNet.App.Wpf.Tests.Identity;
 public sealed class AccServiceAdminIdentityTests
 {
     [Fact]
-    public void Match_when_expected_equals_connected_case_insensitive()
+    public void Match_with_admin_api_200_is_Healthy()
     {
-        var check = AccServiceAdminIdentity.Evaluate("SIAD@si-eng.co.il", "siad@si-eng.co.il");
+        var check = AccServiceAdminIdentity.Evaluate(
+            "SIAD@si-eng.co.il",
+            "siad@si-eng.co.il",
+            adminApiStatus: "200");
         Assert.Equal(AccServiceAdminIdentityStatus.Healthy, check.Status);
         Assert.True(check.EmailMatch);
+        Assert.Equal("200", check.AdminApiStatus);
         Assert.Null(check.WarningMessage);
         Assert.False(AccServiceAdminIdentity.IsKnownWrongAdmin(check));
         Assert.False(AccServiceAdminIdentity.ShouldBlockAdminMutation(check));
+    }
+
+    [Fact]
+    public void Match_without_admin_api_probe_is_ServiceUnavailable_not_Healthy()
+    {
+        var check = AccServiceAdminIdentity.Evaluate("siad@si-eng.co.il", "siad@si-eng.co.il");
+        Assert.Equal(AccServiceAdminIdentityStatus.ServiceUnavailable, check.Status);
+        Assert.True(check.EmailMatch);
     }
 
     [Fact]
@@ -32,7 +44,7 @@ public sealed class AccServiceAdminIdentityTests
     [Fact]
     public void Empty_expected_falls_back_to_default_siad()
     {
-        var check = AccServiceAdminIdentity.Evaluate(null, "siad@si-eng.co.il");
+        var check = AccServiceAdminIdentity.Evaluate(null, "siad@si-eng.co.il", adminApiStatus: "200");
         Assert.Equal(AccServiceAdminIdentityStatus.Healthy, check.Status);
         Assert.Equal(SystemSettingsDefaults.AccBootstrapAdminEmail, check.ExpectedAdminEmail);
     }
@@ -74,8 +86,10 @@ public sealed class AccServiceAdminIdentityTests
     [Fact]
     public void AccService_admin_may_differ_from_operator_SIUser_email()
     {
-        // Operator shirly vs AccService Admin siad — both valid roles; identity check uses AccBootstrap only.
-        var check = AccServiceAdminIdentity.Evaluate("siad@si-eng.co.il", "siad@si-eng.co.il");
+        var check = AccServiceAdminIdentity.Evaluate(
+            "siad@si-eng.co.il",
+            "siad@si-eng.co.il",
+            adminApiStatus: "200");
         Assert.Equal(AccServiceAdminIdentityStatus.Healthy, check.Status);
         Assert.NotEqual("shirly@si-eng.co.il", check.ExpectedAdminEmail);
     }

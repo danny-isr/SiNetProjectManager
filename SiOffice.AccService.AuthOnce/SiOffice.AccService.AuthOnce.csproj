@@ -12,7 +12,9 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" />
     <ProjectReference Include="..\src\SiNet.Infrastructure.Secrets\SiNet.Infrastructure.Secrets.csproj" />
+    <ProjectReference Include="..\src\SiNet.Application\SiNet.Application.csproj" />
     <ProjectReference Include="..\..\AutodeskIntegration\SiOffice.AutodeskConnector\SiOffice.AutodeskConnector.csproj" />
   </ItemGroup>
 </Project>

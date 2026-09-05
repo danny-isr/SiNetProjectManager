@@ -1,8 +1,10 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Data.SqlClient;
 using MyOffice.AutodeskConnector;
 using SiNet.Application.Configuration;
+using SiNet.Application.Settings;
 using SiNet.Infrastructure.Secrets;
 
 namespace SiOffice.AccService.AuthOnce;
@@ -10,12 +12,10 @@ namespace SiOffice.AccService.AuthOnce;
 /// <summary>
 /// Interactive one-shot Autodesk 3-legged auth for AccService Admin.
 /// Writes exclusively to the dedicated AccService token store and verifies the
-/// Autodesk profile email against AccBootstrapAdminEmail (default: siad@si-eng.co.il).
+/// Autodesk profile email against dbo.SystemSettings.AccBootstrapAdminEmail (DB SoT).
 /// </summary>
 internal static class Program
 {
-    private const string DefaultExpectedAdminEmail = "siad@si-eng.co.il";
-
     private static async Task<int> Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -37,7 +37,36 @@ internal static class Program
         var force = args.Any(a => string.Equals(a, "--force", StringComparison.OrdinalIgnoreCase));
         var verifyOnly = args.Any(a => string.Equals(a, "--verify", StringComparison.OrdinalIgnoreCase));
         var noPause = args.Any(a => string.Equals(a, "--no-pause", StringComparison.OrdinalIgnoreCase));
-        var expectedAdmin = ResolveExpectedEmail(args);
+        var cliExpected = TryGetCliExpectedEmail(args);
+
+        string dbExpected;
+        try
+        {
+            dbExpected = await ResolveExpectedAdminEmailFromDbAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Error.WriteLine($"FAIL: cannot read AccBootstrapAdminEmail from SystemSettings: {ex.Message}");
+            Console.ResetColor();
+            Pause(noPause);
+            return 2;
+        }
+
+        if (cliExpected is not null
+            && !string.Equals(cliExpected, dbExpected, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Error.WriteLine("FAIL: --expected-email differs from dbo.SystemSettings.AccBootstrapAdminEmail.");
+            Console.Error.WriteLine($"DB (canonical): {dbExpected}");
+            Console.Error.WriteLine($"CLI override:   {cliExpected}");
+            Console.Error.WriteLine("DB is the only source of truth. Do not create a second expected value.");
+            Console.ResetColor();
+            Pause(noPause);
+            return 4;
+        }
+
+        var expectedAdmin = dbExpected;
 
         var tokenDir = AutodeskTokenStorePaths.GetDefaultDirectory(AutodeskTokenStorePurpose.AccServiceAdmin);
         var tokenPath = AutodeskTokenStorePaths.GetDefaultRefreshTokenFilePath(AutodeskTokenStorePurpose.AccServiceAdmin);
@@ -52,13 +81,13 @@ internal static class Program
         Console.WriteLine($"AccService path  : {tokenPath}");
         Console.WriteLine($"Exists now       : {File.Exists(tokenPath)}");
         Console.WriteLine($"Desktop path     : {desktopTokenPath} (NOT written by AuthOnce)");
-        Console.WriteLine($"Expected Admin   : {expectedAdmin}");
+        Console.WriteLine($"Expected Admin   : {expectedAdmin} (from AccBootstrapAdminEmail)");
         Console.WriteLine($"Mode             : {(verifyOnly ? "verify-only" : force ? "force-auth" : "auth-if-needed")}");
         Console.WriteLine();
 
         if (!verifyOnly)
         {
-            Console.WriteLine("Sign in as AccBootstrapAdminEmail.");
+            Console.WriteLine("Sign in as AccBootstrapAdminEmail (DB value above).");
             Console.WriteLine("If the browser is already signed in as another Autodesk user, sign out first.");
             Console.WriteLine();
         }
@@ -179,7 +208,7 @@ internal static class Program
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.Error.WriteLine();
                 Console.Error.WriteLine("FAIL: AccService token identity mismatch.");
-                Console.Error.WriteLine($"Expected: {expectedAdmin}");
+                Console.Error.WriteLine($"Expected (DB AccBootstrapAdminEmail): {expectedAdmin}");
                 Console.Error.WriteLine($"Actual:   {profile.Email}");
                 Console.Error.WriteLine("Do NOT export this token. Sign in as the configured Admin and retry.");
                 Console.ResetColor();
@@ -210,7 +239,7 @@ internal static class Program
         }
     }
 
-    private static string ResolveExpectedEmail(string[] args)
+    private static string? TryGetCliExpectedEmail(string[] args)
     {
         foreach (var arg in args)
         {
@@ -225,7 +254,33 @@ internal static class Program
             }
         }
 
-        return DefaultExpectedAdminEmail;
+        return null;
+    }
+
+    private static async Task<string> ResolveExpectedAdminEmailFromDbAsync()
+    {
+        var connectionString = CredentialVault.GetSecret(SecretCatalog.SiNetDatabase);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"Vault key '{SecretCatalog.SiNetDatabase}' is missing. Cannot read AccBootstrapAdminEmail.");
+        }
+
+        await using var conn = new SqlConnection(connectionString);
+        await conn.OpenAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT TOP (1) SettingValue FROM dbo.SystemSettings WHERE SettingKey = @key";
+        cmd.Parameters.AddWithValue("@key", SystemSettingKeys.AccBootstrapAdminEmail);
+        var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        var value = result as string;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException(
+                $"dbo.SystemSettings.{SystemSettingKeys.AccBootstrapAdminEmail} is missing or empty.");
+        }
+
+        return value.Trim();
     }
 
     private static void WriteIdentitySidecar(
@@ -241,6 +296,7 @@ internal static class Program
             "TokenPurpose=AccServiceAdmin",
             $"ExpectedAdminEmail={expected.Trim()}",
             $"ActualAdminEmail={actual.Trim()}",
+            $"ExpectedSource=dbo.SystemSettings.AccBootstrapAdminEmail",
             $"ExportedUtc={DateTime.UtcNow:o}",
             $"SourceMachine={Environment.MachineName}",
             $"SourcePath={tokenPath}",

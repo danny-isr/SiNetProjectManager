@@ -151,7 +151,10 @@ public sealed class AutodeskTokenStoreIsolationTests
     [Fact]
     public void Expected_siad_with_service_token_siad_is_Healthy()
     {
-        var check = AccServiceAdminIdentity.Evaluate("siad@si-eng.co.il", "siad@si-eng.co.il");
+        var check = AccServiceAdminIdentity.Evaluate(
+            "siad@si-eng.co.il",
+            "siad@si-eng.co.il",
+            adminApiStatus: "200");
         Assert.Equal(AccServiceAdminIdentityStatus.Healthy, check.Status);
         Assert.True(check.EmailMatch);
     }

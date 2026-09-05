@@ -9,13 +9,15 @@ namespace SiNet.Infrastructure.Autodesk;
 /// <summary>
 /// Permanent System Health row: AccService Admin expected vs actual token identity.
 /// Prefers AccService <c>/v1/acc/admin-identity</c>; falls back to local token + settings on DEV.
+/// Healthy requires a real Admin API probe == 200.
 /// </summary>
 public sealed class AccAdminIdentityStatusContributor(
     ISystemSettingsQueryService settings,
     IAccServiceAdminIdentityRemoteProbe? remoteProbe = null,
-    ITokenProvider? tokenProvider = null) : ISubsystemStatusContributor
+    ITokenProvider? tokenProvider = null,
+    IAccServiceAdminApiStatusProbe? adminApiProbe = null) : ISubsystemStatusContributor
 {
-    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(12);
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(20);
 
     private readonly ISystemSettingsQueryService _settings =
         settings ?? throw new ArgumentNullException(nameof(settings));
@@ -86,11 +88,13 @@ public sealed class AccAdminIdentityStatusContributor(
             _lastTokenStoragePath = AutodeskTokenStorePaths.GetDefaultRefreshTokenFilePath(
                 AutodeskTokenStorePurpose.AccServiceAdmin);
             _lastTokenPurpose = AutodeskTokenStorePurpose.AccServiceAdmin.ToString();
-            return AccServiceAdminIdentity.Evaluate(
-                dto.Acc.AccBootstrapAdminEmail,
-                actualAdminEmail: null,
-                tokenAvailable: false,
-                profileResolved: false);
+            return AccServiceAdminIdentity.WithAdminApiStatus(
+                AccServiceAdminIdentity.Evaluate(
+                    dto.Acc.AccBootstrapAdminEmail,
+                    actualAdminEmail: null,
+                    tokenAvailable: false,
+                    profileResolved: false),
+                "unavailable");
         }
 
         _lastTokenStoragePath = tokenProvider.ThreeLeggedRefreshTokenStoragePath;
@@ -102,13 +106,32 @@ public sealed class AccAdminIdentityStatusContributor(
 
         var profile = await AccServiceAdminTokenProfile.ResolveAsync(tokenProvider, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        return AccServiceAdminIdentity.Evaluate(
+        var identity = AccServiceAdminIdentity.Evaluate(
             dto.Acc.AccBootstrapAdminEmail,
             profile.Email,
             profile.TokenAvailable,
             profile.ProfileResolved,
             profile.AutodeskUserId,
             profile.DisplayName);
+
+        string? adminApiStatus = "unavailable";
+        if (!_wrongStore
+            && identity.EmailMatch
+            && identity.ProfileResolved
+            && identity.TokenAvailable
+            && adminApiProbe is not null)
+        {
+            try
+            {
+                adminApiStatus = await adminApiProbe.ProbeAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                adminApiStatus = $"unavailable:{ex.GetType().Name}";
+            }
+        }
+
+        return AccServiceAdminIdentity.WithAdminApiStatus(identity, adminApiStatus);
     }
 
     private SubsystemRuntimeStatus Classify(AccServiceAdminIdentityCheck check)
@@ -160,6 +183,12 @@ public sealed class AccAdminIdentityStatusContributor(
                     SubsystemRuntimeState.Degraded,
                     $"ACC Admin: פרופיל לא זמין — מצופה {expected}"),
 
+            AccServiceAdminIdentityStatus.ServiceUnavailable =>
+                Row(
+                    SubsystemRuntimeState.Degraded,
+                    "ACC Admin — זהות תקינה, אך Admin API לא זמין" + Environment.NewLine +
+                    $"Admin API: {check.AdminApiStatus ?? "unavailable"}"),
+
             _ =>
                 Row(
                     SubsystemRuntimeState.Degraded,
@@ -175,7 +204,8 @@ public sealed class AccAdminIdentityStatusContributor(
         }
 
         if (string.Equals(adminApiStatus, "OK", StringComparison.OrdinalIgnoreCase)
-            || adminApiStatus.StartsWith("2", StringComparison.Ordinal))
+            || string.Equals(adminApiStatus, "200", StringComparison.OrdinalIgnoreCase)
+            || (adminApiStatus.Length > 0 && adminApiStatus[0] == '2'))
         {
             return "Admin API: תקין";
         }
@@ -194,7 +224,6 @@ public sealed class AccAdminIdentityStatusContributor(
 
         if (string.IsNullOrWhiteSpace(tokenStoragePath))
         {
-            // Purpose AccServiceAdmin without path still acceptable for local default construction.
             return string.IsNullOrWhiteSpace(tokenPurpose)
                 || string.Equals(tokenPurpose, AutodeskTokenStorePurpose.AccServiceAdmin.ToString(), StringComparison.OrdinalIgnoreCase);
         }
