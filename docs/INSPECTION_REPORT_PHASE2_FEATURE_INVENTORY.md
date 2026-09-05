@@ -1,11 +1,12 @@
 # Inspection Report — Phase 2 Feature Inventory & Certification Matrix
 
-> **Status:** Target / In progress  
-> **Updated:** 2026-09-05  
-> **Baseline:** `026b30db6e2037b5828daffc883b8cb50b192194` on `development`  
+> **Status:** Target / Partially certified overnight  
+> **Updated:** 2026-09-06  
+> **Baseline start:** `6e6a3bbcd8393cef4f9bbe7483734c575a0704b2`  
+> **Baseline HEAD:** `d205970e1bd0b21625a0457c4208fa4b1dc8aff9` on `development`  
 > **Host:** Standalone `SiNet.App.Wpf` (production)  
-> **Safe E2E report:** #9 (project 136) — Export / lock / AI / screenshot experiments  
-> **Workflow report:** #4 — untouched until Task #300 compose boundary  
+> **Safe E2E report:** ReportId **#9** (project 136, ReportNumber=2, Inspector=E2E-CREATE)  
+> **Workflow report:** ReportId **#4** (ReportNumber=1) — Task #300 target  
 > **Preserve:** WF #80 PRP.SentFollowUp, #82 OPN.SendOpinion, #83 REV.SendReportToPlanner, #85 MAT.Complete; Task #300 OPEN — **no external send**
 
 This document is the Phase 2 source of truth for **every** user-facing Inspection capability and host seam. Live results fill the **Result** column during certification.
@@ -21,18 +22,19 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 | `IInspectionWorkspace` | `SqlInspectionWorkspace` | |
 | `IInspectionNoteCommandService` | `SqlInspectionNoteCommandService` | |
 | `IInspectionReportCommandService` | `SqlInspectionReportCommandService` | |
-| `IInspectionDrawingCommandService` | `SqlInspectionDrawingCommandService` (no UI) | |
+| `IInspectionDrawingCommandService` | `SqlInspectionDrawingCommandService` + UI Add/Remove | FIXED + PASS (unit/composition; live OpenFileDialog NOT EXERCISED overnight) |
 | `IInspectionReportTaskLinkService` | `SqlInspectionReportTaskLinkService` | |
-| `IInspectionNoteAiReviewer` | `OllamaInspectionNoteAiReviewer` via `AddSiNetAi` | |
+| `IInspectionNoteAiReviewer` | `OllamaInspectionNoteAiReviewer` via `AddSiNetAi` | Ollama UP (6 models) — live Grammar/Rephrase NOT EXERCISED overnight |
 | `IInspectionTemplateCatalog` | `GoogleDriveInspectionTemplateCatalog` | |
 | `IInspectionTemplateSheetReader` | Google reader | |
-| `IInspectionReportExportPort` | **`GoogleSheetsInspectionReportExportPort`** via `AddSiNetGoogle` (SQL Unavailable is fallback only) | wired (composition PASS) |
-| `IInspectionNoteScreenshotHost` | **`StandaloneInspectionNoteScreenshotHost`** via Standalone composition Replace | wired (composition PASS) |
-| `IInspectionNoteLinkedFileHost` | **`NoOpInspectionNoteLinkedFileHost`** — PRODUCT GAP (open) | |
-| `IInspectionFileTreePickerHost` | **`NoOpInspectionFileTreePickerHost`** — PRODUCT GAP | |
-| `IInspectionReportEmailHost` | **`NoOpInspectionReportEmailHost`** (not injected into VM); Task #300 remaps to Inspection pre-send | routing PASS (unit) |
+| `IInspectionReportExportPort` | **`GoogleSheetsInspectionReportExportPort`** via `AddSiNetGoogle` | wired; live Export on #9 NOT EXERCISED overnight |
+| `IInspectionNoteScreenshotHost` | **`StandaloneInspectionNoteScreenshotHost`** | wired; live clipboard upload NOT EXERCISED overnight |
+| `IInspectionNoteLinkedFileHost` | **`StandaloneInspectionNoteLinkedFileHost`** (hubs) | FIXED (composition); live open needs Project Work tree |
+| `IInspectionFileTreePickerHost` | **`StandaloneInspectionFileTreePickerHost`** | FIXED (composition); live pick needs Project Work tree |
+| `IInspectionReportComposeDraftService` | **`SqlInspectionReportComposeDraftService`** | FIXED + PASS (unit) — draft only |
+| `IInspectionReportEmailHost` | **`NoOpInspectionReportEmailHost`** (unused by VM); Task #300 compose strip never sends | PASS (hard stop) |
 
-**Phase 2 code slice:** real Export (moved `GoogleReportExportService`; Export ≠ SentAt/lock), real Screenshot host, Task #300 `EmailComposeToPlanner`+`InspectionReport` → Inspection (**STOP BEFORE SEND**). Remaining product gaps: linked open, file-tree picker, planner stubs, drawings UI.
+**Overnight commits:** `3ecfdb1` (UI AutomationIds, toolbar add-note, linked/picker hosts, drawings/reviewed UI); `d205970` (Task #300 compose draft strip + CompleteTask gate).
 
 **Export lifecycle (Target):** `ExportAsync` may create the Google artifact and persist `SentSpreadsheetId` / `SentSpreadsheetUrl` for Share/readback. It must **not** set `SentAt` or `IsLockedAfterSend`. Email success remains the Sent/lock boundary.
 
@@ -76,8 +78,8 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 | Q1 | Chapters / sections / notes load | TreeView | |
 | Q2 | Numbering (`NoteSubIndex`) | | |
 | Q3 | Add note (section `+`) | `AddNoteCommand(section)` | |
-| Q4 | Toolbar `+ הערה` | `AddNoteCommand` without section — **dead / GAP** | |
-| Q5 | Move note up | `MoveNoteUpCommand` | |
+| Q4 | Toolbar `+ הערה` | `AddNoteFromSelectionCommand` — requires section/note selection | FIXED + PASS (unit); live NOT EXERCISED overnight |
+| Q5 | Move note up | `MoveNoteUpCommand` — first sibling correctly disabled | FIXED + PASS (unit enablement); live reorder NOT EXERCISED |
 | Q6 | Move note down | `MoveNoteDownCommand` | |
 | Q7 | Save note text on edit complete | `EditCompleted` | |
 | Q8 | Save status (debounced) | | |
@@ -230,8 +232,8 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 | TM1 | `Component.InspectionReport` → Inspection + exact report | |
 | TM2 | `Component.ManagerReviewApproval` → Inspection + result picker | |
 | TM3 | Complete task | `CompleteTaskCommand` | |
-| TM4 | Task #300 `SendReportToPlanner` | Target: `EmailComposeToPlanner` + InspectionReport target routes to Inspection, never Email inbox | |
-| TM5 | #300 opens report-compose for Report #4 | Safe certification boundary: exported artifact visible in Inspection; **STOP BEFORE SEND** — do not call `IInspectionReportEmailHost.SendReportEmailAsync` and do not complete `CommentsSentToPlanner` | |
+| TM4 | Task #300 `SendReportToPlanner` | Target: `EmailComposeToPlanner` + InspectionReport target routes to Inspection, never Email inbox | PASS (unit) |
+| TM5 | #300 opens report-compose for Report #4 | Draft strip To/Subject/Body/URL; PreviewSend blocked; CompleteTask blocked; **STOP BEFORE SEND** | FIXED + PASS (unit); live Task Workbench open pending second pass |
 
 ---
 
@@ -253,13 +255,15 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 | Share | `ShareReportCommand` | export port | Native Google target | |
 | Export | `ExportReportCommand` | export port | Native Google target | |
 | Complete task | `CompleteTaskCommand` | task completion | real | |
-| Select plan | `SelectReviewedPlanCommand` | picker | NoOp | |
-| AI review | `ReviewNoteAiCommand` | Ollama | real | |
-| + note toolbar | `AddNoteCommand` | — | dead | |
+| Select plan | `SelectReviewedPlanCommand` | picker | Standalone host | FIXED (composition) |
+| AI review | `ReviewNoteAiCommand` | Ollama | real | Ollama UP; live NOT EXERCISED |
+| + note toolbar | `AddNoteFromSelectionCommand` | note cmds | real | FIXED + PASS (unit) |
 | + note section | `AddNoteCommand(section)` | note cmds | real | |
-| Move ▲▼ | Move up/down | note cmds | real | |
-| Linked open/set/clear | linked cmds | mixed | GAP/real | |
-| Screenshot 📷/menus | screenshot cmds | Standalone Google/WPF target | |
+| Move ▲▼ | Move up/down | note cmds | real | FIXED enablement (unit) |
+| Linked open/set/clear | linked cmds | Standalone hubs | FIXED (composition) |
+| Screenshot 📷/menus | screenshot cmds | Standalone Google/WPF | wired; live NOT EXERCISED |
+| Drawings | Add/Remove | drawing cmds | FIXED UI | live OpenFileDialog NOT EXERCISED |
+| Planner compose | PreviewSend | draft service | FIXED | STOP BEFORE SEND |
 | General LostFocus/toggle | code-behind | note cmds | real | |
 | Rich edit + AI apply | editor | AI | real | |
 
@@ -280,9 +284,11 @@ Source: [`InspectionQuestionnaireRules.cs`](../src/SiNet.Application/Inspection/
 | Date | Report | Scope | Evidence |
 | --- | --- | --- | --- |
 | 2026-09-05 Phase 1 | #9 | Validation + Export gate + email autofill | Commit `026b30d` |
-| 2026-09-05 Phase 2 code | — | Export port real; Screenshot host real; Task #300→Inspection; offline 3721 PASS | this branch (pre-push) |
-| Phase 2 live UI | #9 | AI grammar/rephrase + clipboard screenshot + Export artifact | **IN PROGRESS** — host wired; clipboard image prepared; full UI pass still required on Report #9 |
-| Phase 2 Task #300 | #4 | Open Inspection via SendReportToPlanner; STOP BEFORE SEND | routing unit PASS; live compose boundary pending |
+| 2026-09-05 Phase 2 code | — | Export port real; Screenshot host real; Task #300→Inspection; offline 3721 PASS | `6e6a3bb` |
+| 2026-09-06 overnight | #9 | Live UI: Project 136 → דוחות ביקורת → select ReportId 9; close/reopen | PASS — AutomationId `Inspection.Window` + `Shell.Menu.InspectionReports`; SHA `3ecfdb1` |
+| 2026-09-06 overnight | — | Hosts: linked-file + file-tree picker + drawings UI + reviewed list | FIXED composition `3ecfdb1` |
+| 2026-09-06 overnight | #4/#300 | Compose draft strip + CompleteTask blocked | FIXED unit `d205970`; live Workbench open still pending |
+| Phase 2 live deep | #9 | Validation matrix / AI / screenshot / Export / Share | **NOT EXERCISED** overnight (time) — Ollama UP confirmed |
 
 ### Isolated dirty work (NOT in Inspection commits)
 
