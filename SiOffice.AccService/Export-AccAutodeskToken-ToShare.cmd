@@ -1,7 +1,13 @@
 @echo off
 setlocal
 title SiNet - Export Acc Autodesk Token
-cd /d "%~dp0"
+pushd "%~dp0"
+if errorlevel 1 (
+  echo ERROR: Cannot access %~dp0
+  echo CMD cannot use UNC as a working directory without pushd.
+  pause
+  exit /b 1
+)
 echo ================================================================
 echo   Export Autodesk token (workstation)
 echo ================================================================
@@ -19,4 +25,5 @@ echo Exit code: %ERR%
 echo ================================================================
 echo.
 pause
+popd
 endlocal & exit /b %ERR%

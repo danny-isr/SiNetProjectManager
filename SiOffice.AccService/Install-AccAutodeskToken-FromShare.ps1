@@ -41,6 +41,18 @@ function Read-MetaMap([string]$Path) {
     return $map
 }
 
+function Convert-ToSystemDataSqlClientConnectionString([string]$ConnectionString) {
+    # Microsoft.Data.SqlClient accepts "Trust Server Certificate"; System.Data.SqlClient requires TrustServerCertificate.
+    # Do not change vault secrets — normalize only for legacy SqlConnection construction.
+    if ([string]::IsNullOrWhiteSpace($ConnectionString)) {
+        return $ConnectionString
+    }
+    return [regex]::Replace(
+        $ConnectionString,
+        '(?i)(^|;)\s*Trust Server Certificate\s*=',
+        '${1}TrustServerCertificate=')
+}
+
 function Get-SiNetVaultSecret([string]$Target) {
     if (-not ("SiNetVaultHelperInstall" -as [type])) {
         Add-Type -TypeDefinition @"
@@ -81,6 +93,7 @@ function Get-AccBootstrapAdminEmailFromDb {
     if ([string]::IsNullOrWhiteSpace($cs)) {
         throw "Vault key SiNet/ConnectionStrings/SiNetDatabase missing; cannot read AccBootstrapAdminEmail."
     }
+    $cs = Convert-ToSystemDataSqlClientConnectionString $cs
     $conn = New-Object System.Data.SqlClient.SqlConnection $cs
     try {
         $conn.Open()

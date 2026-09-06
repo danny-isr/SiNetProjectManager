@@ -85,15 +85,22 @@ $refreshText = [System.IO.File]::ReadAllText($refreshPs1)
 $refreshAscii = -join ($refreshText.ToCharArray() | ForEach-Object { if ([int]$_ -lt 128) { $_ } else { '-' } })
 [System.IO.File]::WriteAllText($refreshDest, $refreshAscii, [System.Text.Encoding]::ASCII)
 
-# ASCII CMD wrapper (no BOM) — same pattern as Upgrade-AccService.cmd
+# ASCII CMD wrapper (no BOM) — UNC-safe pushd (same pattern as Server kit wrappers)
 $cmdLines = @(
     "@echo off",
     "setlocal",
-    "cd /d ""%~dp0""",
+    "pushd ""%~dp0""",
+    "if errorlevel 1 (",
+    "  echo ERROR: Cannot access %~dp0",
+    "  echo CMD cannot use UNC as a working directory without pushd.",
+    "  pause",
+    "  exit /b 1",
+    ")",
     "net session >nul 2>&1",
     "if %errorlevel% neq 0 (",
     "  echo Requesting Administrator elevation...",
     "  powershell.exe -NoProfile -Command ""Start-Process -FilePath '%~f0' -Verb RunAs""",
+    "  popd",
     "  exit /b",
     ")",
     "echo Refresh AccService Autodesk token from:",
@@ -103,6 +110,7 @@ $cmdLines = @(
     "echo.",
     "echo Exit code: %ERR%",
     "pause",
+    "popd",
     "exit /b %ERR%"
 )
 $ascii = [System.Text.Encoding]::ASCII

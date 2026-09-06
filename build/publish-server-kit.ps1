@@ -73,11 +73,18 @@ function Write-AsciiCmd([string]$Path, [string[]]$Lines) {
 $upgradeCmd = @(
     "@echo off",
     "setlocal",
-    "cd /d ""%~dp0""",
+    "pushd ""%~dp0""",
+    "if errorlevel 1 (",
+    "  echo ERROR: Cannot access %~dp0",
+    "  echo CMD cannot use UNC as a working directory without pushd.",
+    "  pause",
+    "  exit /b 1",
+    ")",
     "net session >nul 2>&1",
     "if %errorlevel% neq 0 (",
     "  echo Requesting Administrator elevation...",
     "  powershell.exe -NoProfile -Command ""Start-Process -FilePath '%~f0' -Verb RunAs""",
+    "  popd",
     "  exit /b",
     ")",
     "echo Running AccService UPGRADE from:",
@@ -87,16 +94,24 @@ $upgradeCmd = @(
     "echo.",
     "echo Exit code: %ERR%",
     "pause",
+    "popd",
     "exit /b %ERR%"
 )
 $fullCmd = @(
     "@echo off",
     "setlocal",
-    "cd /d ""%~dp0""",
+    "pushd ""%~dp0""",
+    "if errorlevel 1 (",
+    "  echo ERROR: Cannot access %~dp0",
+    "  echo CMD cannot use UNC as a working directory without pushd.",
+    "  pause",
+    "  exit /b 1",
+    ")",
     "net session >nul 2>&1",
     "if %errorlevel% neq 0 (",
     "  echo Requesting Administrator elevation...",
     "  powershell.exe -NoProfile -Command ""Start-Process -FilePath '%~f0' -Verb RunAs""",
+    "  popd",
     "  exit /b",
     ")",
     "echo Running AccService FULL install from:",
@@ -106,6 +121,7 @@ $fullCmd = @(
     "echo.",
     "echo Exit code: %ERR%",
     "pause",
+    "popd",
     "exit /b %ERR%"
 )
 Write-AsciiCmd (Join-Path $DeployDir "Upgrade-AccService.cmd") $upgradeCmd
@@ -117,11 +133,18 @@ if (Test-Path $refreshPs1Source) {
     $refreshCmd = @(
         "@echo off",
         "setlocal",
-        "cd /d ""%~dp0""",
+        "pushd ""%~dp0""",
+        "if errorlevel 1 (",
+        "  echo ERROR: Cannot access %~dp0",
+        "  echo CMD cannot use UNC as a working directory without pushd.",
+        "  pause",
+        "  exit /b 1",
+        ")",
         "net session >nul 2>&1",
         "if %errorlevel% neq 0 (",
         "  echo Requesting Administrator elevation...",
         "  powershell.exe -NoProfile -Command ""Start-Process -FilePath '%~f0' -Verb RunAs""",
+        "  popd",
         "  exit /b",
         ")",
         "echo Refresh AccService Autodesk token from:",
@@ -131,6 +154,7 @@ if (Test-Path $refreshPs1Source) {
         "echo.",
         "echo Exit code: %ERR%",
         "pause",
+        "popd",
         "exit /b %ERR%"
     )
     Write-AsciiCmd (Join-Path $DeployDir "Refresh-AccService-Token.cmd") $refreshCmd
@@ -175,7 +199,13 @@ foreach ($pair in $tokenScriptPairs) {
     $cmdLines = @(
         "@echo off",
         "setlocal",
-        "cd /d ""%~dp0"""
+        "pushd ""%~dp0""",
+        "if errorlevel 1 (",
+        "  echo ERROR: Cannot access %~dp0",
+        "  echo CMD cannot use UNC as a working directory without pushd.",
+        "  pause",
+        "  exit /b 1",
+        ")"
     )
     if ($pair.NeedsAdmin) {
         $cmdLines += @(
@@ -183,6 +213,7 @@ foreach ($pair in $tokenScriptPairs) {
             "if %errorlevel% neq 0 (",
             "  echo Requesting Administrator elevation...",
             "  powershell.exe -NoProfile -Command ""Start-Process -FilePath '%~f0' -Verb RunAs""",
+            "  popd",
             "  exit /b",
             ")"
         )
@@ -195,6 +226,7 @@ foreach ($pair in $tokenScriptPairs) {
         "echo.",
         "echo Exit code: %ERR%",
         "pause",
+        "popd",
         "exit /b %ERR%"
     )
     Write-AsciiCmd (Join-Path $DeployDir $pair.Cmd) $cmdLines

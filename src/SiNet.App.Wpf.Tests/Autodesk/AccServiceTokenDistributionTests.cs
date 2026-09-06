@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using SiNet.Application.Identity;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Autodesk;
@@ -137,6 +138,9 @@ public sealed class AccServiceTokenDistributionTests
         Assert.Contains("export_meta.txt", export, StringComparison.Ordinal);
         Assert.Contains("AccBootstrapAdminEmail", export, StringComparison.Ordinal);
         Assert.Contains("Get-AccBootstrapAdminEmailFromDb", export, StringComparison.Ordinal);
+        Assert.Contains("Convert-ToSystemDataSqlClientConnectionString", export, StringComparison.Ordinal);
+        Assert.Contains("Trust Server Certificate", export, StringComparison.Ordinal);
+        Assert.Contains("TrustServerCertificate=", export, StringComparison.Ordinal);
         // Desktop path may appear only as a refusal check — never as the export source default.
         Assert.DoesNotContain(
             "SourceToken = $desktopForbidden",
@@ -156,6 +160,8 @@ public sealed class AccServiceTokenDistributionTests
         Assert.Contains("admin-identity", install, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Remove-Item", install, StringComparison.Ordinal);
         Assert.Contains("Get-AccBootstrapAdminEmailFromDb", install, StringComparison.Ordinal);
+        Assert.Contains("Convert-ToSystemDataSqlClientConnectionString", install, StringComparison.Ordinal);
+        Assert.Contains("Trust Server Certificate", install, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "[string]$ExpectedAdminEmail = \"siad@si-eng.co.il\"",
             install,
@@ -175,6 +181,109 @@ public sealed class AccServiceTokenDistributionTests
             "private const string DefaultExpectedAdminEmail = \"siad@si-eng.co.il\"",
             authOnce,
             StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(
+        "Server=SI-WIN-2K19\\SIDATA;Database=SiData;Integrated Security=True;TrustServerCertificate=True;Encrypt=True",
+        "TrustServerCertificate=True")]
+    [InlineData(
+        "Data Source=SI-WIN-2K19\\SIDATA;Initial Catalog=SiData;Integrated Security=True;Trust Server Certificate=True;Encrypt=True",
+        "Trust Server Certificate=True")]
+    public void SystemDataSqlClient_connection_string_normalizer_accepts_both_trust_keyword_forms(
+        string input,
+        string originalTrustFragment)
+    {
+        var normalized = ConvertToSystemDataSqlClientConnectionString(input);
+
+        Assert.DoesNotContain("Trust Server Certificate", normalized, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TrustServerCertificate=", normalized, StringComparison.OrdinalIgnoreCase);
+
+        // Other keys unchanged (presence).
+        Assert.Contains("Integrated Security=True", normalized, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Encrypt=True", normalized, StringComparison.OrdinalIgnoreCase);
+        if (input.Contains("Server=", StringComparison.OrdinalIgnoreCase))
+            Assert.Contains("Server=", normalized, StringComparison.OrdinalIgnoreCase);
+        if (input.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
+            Assert.Contains("Data Source=", normalized, StringComparison.OrdinalIgnoreCase);
+        if (input.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase))
+            Assert.Contains("Initial Catalog=", normalized, StringComparison.OrdinalIgnoreCase);
+        if (input.Contains("Database=", StringComparison.OrdinalIgnoreCase))
+            Assert.Contains("Database=", normalized, StringComparison.OrdinalIgnoreCase);
+
+        // Prove System.Data.SqlClient accepts the normalized string (ctor parses keywords).
+        Assert.True(
+            TryConstructSystemDataSqlClientConnection(normalized, out var error),
+            $"SqlConnection rejected normalized string (from '{originalTrustFragment}'): {error}");
+        Assert.False(
+            TryConstructSystemDataSqlClientConnection(
+                "Server=x;Database=y;Integrated Security=True;Trust Server Certificate=True",
+                out _),
+            "Spaced Trust Server Certificate must remain unsupported by System.Data.SqlClient");
+    }
+
+    [Fact]
+    public void Export_and_Install_cmd_wrappers_use_unc_safe_pushd()
+    {
+        var repoRoot = FindRepoRoot();
+        var exportCmd = File.ReadAllText(Path.Combine(repoRoot, "SiOffice.AccService", "Export-AccAutodeskToken-ToShare.cmd"));
+        var installCmd = File.ReadAllText(Path.Combine(repoRoot, "SiOffice.AccService", "Install-AccAutodeskToken-FromShare.cmd"));
+        var kitPublisher = File.ReadAllText(Path.Combine(repoRoot, "build", "publish-server-kit.ps1"));
+
+        foreach (var text in new[] { exportCmd, installCmd })
+        {
+            Assert.Contains("pushd \"%~dp0\"", text, StringComparison.Ordinal);
+            Assert.Contains("popd", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("cd /d \"%~dp0\"", text, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("pushd \"\"%~dp0\"\"", kitPublisher, StringComparison.Ordinal);
+        Assert.DoesNotContain("cd /d \"\"%~dp0\"\"", kitPublisher, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Mirrors <c>Convert-ToSystemDataSqlClientConnectionString</c> in the Acc token PS1 scripts.
+    /// </summary>
+    private static string ConvertToSystemDataSqlClientConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return connectionString;
+
+        return Regex.Replace(
+            connectionString,
+            @"(?i)(^|;)\s*Trust Server Certificate\s*=",
+            "$1TrustServerCertificate=");
+    }
+
+    private static bool TryConstructSystemDataSqlClientConnection(string connectionString, out string? error)
+    {
+        error = null;
+        // Windows PowerShell 5.1 hosts System.Data.SqlClient (same provider the ops scripts use).
+        var ps = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments =
+                "-NoProfile -NonInteractive -Command " +
+                "\"$ErrorActionPreference='Stop'; " +
+                "try { $null = New-Object System.Data.SqlClient.SqlConnection ([string]$env:SINET_CS); 'OK' } " +
+                "catch { $_.Exception.Message; exit 2 }\"",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        ps.Environment["SINET_CS"] = connectionString;
+
+        using var proc = System.Diagnostics.Process.Start(ps)
+            ?? throw new InvalidOperationException("Failed to start powershell.exe");
+        var stdout = proc.StandardOutput.ReadToEnd().Trim();
+        var stderr = proc.StandardError.ReadToEnd().Trim();
+        proc.WaitForExit(30_000);
+        if (proc.ExitCode == 0 && stdout.Equals("OK", StringComparison.Ordinal))
+            return true;
+
+        error = string.IsNullOrWhiteSpace(stdout) ? stderr : stdout;
+        return false;
     }
 
     private static string FindRepoRoot()
