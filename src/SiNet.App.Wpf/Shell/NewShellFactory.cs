@@ -13,8 +13,10 @@ using SiNet.App.Wpf.Admin.SystemStatus;
 using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Admin.WorkflowOps;
+#if DEBUG
 using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
+#endif
 using SiNet.App.Wpf.Projects.Dashboard;
 using SiNet.App.Wpf.Shared.Projects;
 using SiNet.App.Wpf.Surfaces.Email;
@@ -823,6 +825,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
     private bool HasAuthenticatedUser()
         => _services.GetService<ICurrentUserContext>()?.UserId is not null;
 
+#if DEBUG
     private void OpenInspectionShell()
     {
         try
@@ -942,6 +945,7 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 MessageBoxImage.Error);
         }
     }
+#endif
 
     private static void ShowWindow(Window window)
     {

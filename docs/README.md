@@ -2,7 +2,7 @@
 
 > **Title:** docs/ README -- New System & ops documentation index
 > **Date:** 02.08.2026
-> **Updated:** 17.08.2026
+> **Updated:** 06.09.2026
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
 As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
@@ -30,6 +30,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md) | As-Is docs reconciliation ledger (dimensions, contradictions, Needs Review) |
 | [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) | PROD vs DEV machine roles, config placement, allowed ops, Google/ACC isolation target |
 | [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) | Publish gates, versioning, rollback; who may run `publish-all.ps1` |
+| [`RELEASE_AUTOMATION_LOCKDOWN.md`](./RELEASE_AUTOMATION_LOCKDOWN.md) | **Release must not ship/run DEV/test automation** (Inspection harness, PilotSmoke, seed) |
 | [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md) | Live log tails, System Status, Workflow Ops, pilot routines |
 | [`OPS_LLOG_REVIEW.md`](./OPS_LLOG_REVIEW.md) | **Agent:** incremental UNC Llog sweep (state in `artifacts/llog-review/`) |
 | [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md) | How to restore AccService Autodesk 3-legged refresh token on PROD |

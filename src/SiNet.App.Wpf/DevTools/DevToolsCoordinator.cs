@@ -1,3 +1,4 @@
+#if DEBUG
 using System.Text;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ namespace SiNet.App.Wpf.DevTools;
 
 /// <summary>
 /// Coordinates New System dev reset/seed operations from the shell (Application ports only).
+/// DEBUG builds only — see docs/RELEASE_AUTOMATION_LOCKDOWN.md.
 /// </summary>
 public sealed class DevToolsCoordinator(IServiceProvider services)
 {
@@ -196,3 +198,4 @@ public sealed class DevToolsCoordinator(IServiceProvider services)
         exception.GetType().Name.Contains("DbUpdate", StringComparison.Ordinal)
         || exception.ToString().Contains("IX_ProjectAssignment_UniqueOpenTask", StringComparison.Ordinal);
 }
+#endif

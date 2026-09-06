@@ -2,12 +2,12 @@
 
 > **Title:** Release Process
 > **Date:** 02.08.2026
-> **Updated:** 07.08.2026 (As-Is reconciliation -- branches exist; version in OS title; dimensions; SyncEngine folder; default branch note)
+> **Updated:** 06.09.2026 (RELEASE_AUTOMATION_LOCKDOWN)
 > **Status:** Active / Current Source of Truth
 > **Scope:** How the PROD workstation ships builds to users; what changes are allowed where; gates before `publish-all.ps1`; versioning and rollback. Does not replace channel-level install detail in [`DEPLOYMENT.md`](../DEPLOYMENT.md).
 > **Reconciliation:** [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md)
 
-Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md), [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md), [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md), [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md), [`BUILD_SIBLING_PINS.md`](./BUILD_SIBLING_PINS.md).
+Related: [`ENVIRONMENTS.md`](./ENVIRONMENTS.md), [`PRODUCTION_MONITORING.md`](./PRODUCTION_MONITORING.md), [`ROLLOUT_SINET_APP_WPF.md`](./ROLLOUT_SINET_APP_WPF.md), [`DESKTOP_CUTOVER.md`](./DESKTOP_CUTOVER.md), [`OPS-P0-DB-BACKUP.md`](./OPS-P0-DB-BACKUP.md), [`BUILD_SIBLING_PINS.md`](./BUILD_SIBLING_PINS.md), [`RELEASE_AUTOMATION_LOCKDOWN.md`](./RELEASE_AUTOMATION_LOCKDOWN.md).
 
 ---
 
@@ -152,6 +152,8 @@ dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj
 ```
 
 Do **not** publish if build, tests, or secret-scan fail.
+
+**Release automation lockdown:** before any pilot/install publish, [`RELEASE_AUTOMATION_LOCKDOWN.md`](./RELEASE_AUTOMATION_LOCKDOWN.md) must be green (`RELEASE TEST/DEV AUTOMATION = DISABLED`). No PilotSmoke / DevTools seed / DEBUG Inspection harness in the Release host.
 
 ### 5.3 Ops P0 checklist (before expanding the pilot)
 

@@ -81,7 +81,8 @@ public static class StandaloneHostServiceCollectionExtensions
             IInspectionNoteLinkedFileHost,
             StandaloneInspectionNoteLinkedFileHost>());
 
-        // DEBUG Inspection harness (menu item gated in NewShellFactory).
+#if DEBUG
+        // DEBUG Inspection harness — compile-out of Release (menu is already #if DEBUG in NewShellFactory).
         services.TryAddSingleton<InspectionTreeViewModel>();
         services.TryAddSingleton<InspectionNotesViewModel>();
         services.TryAddSingleton<InspectionDrawingsViewModel>();
@@ -89,6 +90,11 @@ public static class StandaloneHostServiceCollectionExtensions
         services.TryAddSingleton<InspectionReportViewModel>();
         services.TryAddSingleton<InspectionShellViewModel>();
         services.TryAddSingleton<InspectionShellView>();
+#endif
+
+#if !DEBUG
+        ReleaseDevAutomationGuard.AssertStandaloneHostDescriptorsClean(services);
+#endif
 
         return services;
     }

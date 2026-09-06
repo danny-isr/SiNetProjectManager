@@ -40,6 +40,16 @@ public sealed class ProductionPilotBoundaryTests
     }
 
     [Fact]
+    public void Standalone_host_does_not_register_inspection_harness_outside_debug()
+    {
+        var source = ReadRepoFile("src/SiNet.App.Wpf/StandaloneHostServiceCollectionExtensions.cs");
+        var harnessIdx = source.IndexOf("TryAddSingleton<InspectionShellViewModel>", StringComparison.Ordinal);
+        Assert.True(harnessIdx > 0);
+        var debugBefore = source.LastIndexOf("#if DEBUG", harnessIdx, StringComparison.Ordinal);
+        Assert.True(debugBefore >= 0 && debugBefore < harnessIdx);
+    }
+
+    [Fact]
     public void Email_window_exposes_detail_component_with_action_bar()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailSurfaceView.xaml");

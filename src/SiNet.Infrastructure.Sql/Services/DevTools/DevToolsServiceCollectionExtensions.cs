@@ -4,7 +4,9 @@ using SiNet.Application.DevTools;
 namespace SiNet.Infrastructure.Sql.Services.DevTools;
 
 /// <summary>
-/// Registers New System dev-tools services (DEBUG-capable; Release stubs fail closed).
+/// Registers New System dev-tools services.
+/// DEBUG: full seed/reset/demo. Release: read-only seed-baseline verify + fail-closed stubs only
+/// (no mutating seed/reset services). See <c>docs/RELEASE_AUTOMATION_LOCKDOWN.md</c>.
 /// </summary>
 public static class DevToolsServiceCollectionExtensions
 {
@@ -12,16 +14,17 @@ public static class DevToolsServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<DevToolsGate>();
-        services.AddTransient<SqlWorkflowSeedService>();
-        services.AddTransient<SqlTaskDemoSeedService>();
-        // Read-only; available in Release too (System Status + optional DevTools UI in DEBUG).
+        // Read-only; System Status SeedBaseline contributor needs this in Release too.
         services.AddTransient<ISeedBaselineVerifyService, SqlSeedBaselineVerifyService>();
 
 #if DEBUG
+        services.AddSingleton<DevToolsGate>();
+        services.AddTransient<SqlWorkflowSeedService>();
+        services.AddTransient<SqlTaskDemoSeedService>();
         services.AddTransient<IStaticSeedService, SqlStaticSeedService>();
         services.AddTransient<IDevDataResetService, SqlDevDataResetService>();
 #else
+        // Fail-closed stubs: resolve ≠ mutate. Menu is already #if DEBUG in NewShellFactory.
         services.AddTransient<IStaticSeedService, SqlStaticSeedServiceReleaseStub>();
         services.AddTransient<IDevDataResetService, SqlDevDataResetServiceReleaseStub>();
 #endif
