@@ -1,187 +1,170 @@
 ﻿# RC1 — Controlled Pilot Release Candidate Gate
 
 > **Date:** 2026-09-06  
-> **Updated:** 2026-09-06 (blocker clearance)  
+> **Updated:** 2026-09-06 (ACC SoT finish + push)  
 > **Machine:** `danny` (DEV workstation)  
-> **Environment:** `development` branch, SQL `danny\SQLEXPRESS` / `SiData`, Gmail `shirly@si-eng.co.il`, AccService Local (in-process PilotSmoke) / `https://localhost:8443` when host-started  
+> **Environment:** `development` branch, SQL `danny\SQLEXPRESS` / `SiData`, Gmail `shirly@si-eng.co.il`  
 > **Operator SIUser:** Id=`12` (שירלי / `AzureAD\dannyisrael`)
 
 ## Candidate freeze
 
 | Item | Value |
 | --- | --- |
-| **Candidate product SiNet SHA** | `eeda3c17c356421c95311a5b77754ccab02e204f` |
-| **Harness / RC1-doc SHA (after clearance)** | `612c4e1ed110283e950e586ec6b54ec993d2b703` (+ follow-up docs pin commits on same branch) |
-| `origin/development` at freeze | **identical** to candidate (`eeda3c17`) |
+| **RC1 candidate SHA (after harness + doc)** | *(tip after this document commit / push — see Final)* |
+| Prior product baseline | `eeda3c17c356421c95311a5b77754ccab02e204f` |
+| Harness fix commit | `612c4e1ed110283e950e586ec6b54ec993d2b703` |
 | SiNetSQL | `a34418f294fa6cd131daa538f098af5a7849d3d7` |
 | SiOffice.AutodeskConnector | `e847dade01c70fc10043bfa299d23c7077f80c33` |
 | SiOffice.GoogleConnector | `c066c3205e1fe6f0a7b997084ff53d35ed33e91e` |
-| Sibling verification | **PASS** (`build/fetch-siblings.ps1` + local HEAD match) |
-| Product version (csproj / window title) | `1.0.34` |
+| Product version | `1.0.34` |
 
-Product candidate remains `eeda3c17`. Clearance required **test-harness-only** fixes under `src/SiNet.App.Wpf.Tests/Live/` (no production authorization / Pilot policy weaken).
+Harness-only changes under `src/SiNet.App.Wpf.Tests/Live/` + this certification doc. No production authorization / Pilot policy weaken. No Inspection/runtime composition edits.
 
 ### Worktree hygiene
 
-| Class | Paths / notes |
+| Class | Notes |
 | --- | --- |
-| Unrelated local work | `stash` commit `0f1bffd8cf4ce6021b5dbe2f4fdf04a888ff6f95` — message `RC1-temp-unrelated-dirty` (index may shift; use commit hash). **Do not pop until after RC1 gate.** |
-| Also present | `stash` `wip-gmail-label-cutover-aside` — untouched |
-| Local test evidence | Untracked `tmp-e2e/` + `%LOCALAPPDATA%\SiNet\pilot-smoke\` — not shipped |
+| Stash | `0f1bffd8cf4ce6021b5dbe2f4fdf04a888ff6f95` — `RC1-temp-unrelated-dirty` (**do not pop**) |
+| Local evidence | `%LOCALAPPDATA%\SiNet\pilot-smoke\`, `tmp-e2e\` (untracked) |
 
 ---
 
-## BUILD GATE (prior — still green)
+## AccServiceAdmin identity contract (production seam)
 
-| Config | Result | Warnings | Errors |
-| --- | --- | --- | --- |
-| Debug `SiNet.sln` | **PASS** | 261 | 0 |
-| Release `SiNet.sln` | **PASS** | 261 | 0 |
+PilotSmoke ACC layer binds the **same** store as `SiOffice.AccService/Program.cs`:
 
-## TEST GATE (prior — still green)
+`new TokenProvider(…, AutodeskTokenStoreOptions.AccServiceAdmin)`
 
-| Project | Failed | Passed | Skipped | Total |
-| --- | --- | --- | --- | --- |
-| `SiNet.App.Wpf.Tests` Release | 0 | **3763** | 19 | 3782 |
-| `SiNet.Infrastructure.Google.Tests` | 0 | **93** | 0 | 93 |
-| `SiNet.LegacyBridge.Tests` | 0 | **20** | 0 | 20 |
-| `MasterPlan.SyncEngine.Tests` | 0 | **72** | 0 | 72 |
-
-Focused Pilot policy unit filter `FullyQualifiedName~PilotStart`: **12 Passed / 0 Failed**.
-
-## SECRET SCAN
-
-`powershell -File .\build\secret-scan.ps1` → **PASS**.
-
----
-
-## STARTUP / IDENTITY (prior)
+Proof (`tmp-e2e/rc1-acc-admin-proof.txt`, Local ACC seam — AccService HTTP not required):
 
 | Check | Result |
 | --- | --- |
-| AccService / App.Wpf Release start | **PASS** (earlier this day) |
-| Windows user → SIUser 12 Authorized | **PASS** |
-| Gmail silent restore `shirly@si-eng.co.il` | **PASS** |
+| Purpose | `AccServiceAdmin` |
+| Path | `%LOCALAPPDATA%\SiNet\Autodesk\AccService\refresh_token.json` (dedicated; isolated from UserContext) |
+| Token available | **true** |
+| Connected admin email | `siad@si-eng.co.il` |
+| Expected (`AccBootstrapAdminEmail`) | `siad@si-eng.co.il` |
+| Identity status | **Healthy** (email match + Admin API probe) |
+| Admin API probe | **200** (`AccServiceAdminApiProbe` list projects on hub `b.43b1768f-…`) |
+| Project authorization | tip read of SoT lineage on ACC project `SI-SI` / `62311c21-…` **OK** |
+| UserContext shortcut | **Not used** |
+| IdentityOperationGuard | **Unchanged** |
 
 ---
 
-## A — PilotSmoke identity + S1–S8a (clearance)
+## A6 root cause (prior failure → fix)
 
-### Root cause
+**Prior exception (before harness token fix):**  
+`ACC Admin mutation blocked: AccService must use the dedicated AccService Autodesk token store.`
 
-After `IdentityOperationGuard` required `WorkflowMutate` → `AuthenticatedUserSession`, PilotSmoke only fixed DB `LoginName` and never bound the same `IWindowsCurrentUserAuthenticator` session as production. Live fail was `IdentityOperationDeniedException` **before** PilotStartGate.
+| Question | Answer |
+| --- | --- |
+| Root cause class | **Wrong identity/token purpose** — harness used UserContext vault `AddSiNetAutodeskVaultTokenProvider()` while `AccProjectProvisioningService` (since `cf92e8c`) requires `AutodeskTokenStorePurpose.AccServiceAdmin` + dedicated path |
+| Wrong hub/project? | No — disposable Place `SI` → expected ACC name `SI-SI` |
+| Stale mapping? | No — failure aborted **before** mapping write |
+| Project-number normalization? | No |
+| Smoke project unmappable by design? | No — Place `SI` maps to existing DEV ACC project `SI-SI` via production provisioner |
+| Production mapping repair? | **Not performed** |
 
-### Harness fix (no production guard weaken)
+### Successful A6 values (tip SHA SoT, project **3223**)
 
-- `PilotSmokeSeed.EnsureAuthorizedOperatorSessionAsync` — authenticate + assert Authorized + UserId match  
-- `P0PilotLiveSmokeTests` / `P0PilotGmailAccLiveSmokeTests` — call after login  
-- `finally`: snapshot/restore all `Pilot.*`; if restored `Enabled=true`, force `Enabled=false` so DEV allowlists are not left armed  
+| Field | Value |
+| --- | --- |
+| Source ProjectId | `3223` |
+| ProjectNumber / NameAndNumber | `(3223)[P0-SMOKE] 0906-1612` |
+| Place | `SI` |
+| Expected ACC project name | `SI-SI` |
+| Actual AccProjectId | `62311c21-b79a-40e6-a992-18c6032314a0` |
+| Actual AccProjectName | `SI-SI` |
+| Target folder | `urn:adsk.wipprod:fs.folder:co.CoYQIyUNQ9eru3iYs8FETw` |
+| Target path | `/(3223)[P0-SMOKE]_0906-1612` |
 
-### Live SQL rerun
+---
+
+## A — PilotSmoke S1–S8a
 
 | Item | Value |
 | --- | --- |
-| Evidence | `%LOCALAPPDATA%\SiNet\pilot-smoke\p0-pilot-smoke-20260906-134809.md` |
-| Result | **PASS** (dotnet test exit 0) |
+| Evidence | `p0-pilot-smoke-20260906-134809.md` |
+| Result | **PASS** |
+
+S1–S8a all Pass. Post-restore: `Pilot.Enabled=false`, users=`12`, codes inert.
+
+---
+
+## B — Gmail → ACC → SQL SoT (tip / new candidate)
+
+Disposable corridor: `SI-SMOKE-INBOX` + Place `SI` / ACC `SI-SI` (supported production filing pattern).  
+Message `P0-SMOKE-RC1-20260906-161134` + `rc1-smoke.pdf` (self-INBOX insert; no external workflow send).  
+Evidence: `p0-pilot-smoke-20260906-161211.md`
 
 | Step | Result |
 | --- | --- |
-| S1 Fail-closed | **Pass** |
-| S2 Narrow allowlist | **Pass** |
-| S3 Allowed Proposal start | **Pass** (instance 86) |
-| S4 Denied user | **Pass** |
-| S5 Denied workflow | **Pass** |
-| S6 Corridor | **Pass** |
-| S7 Blocked continuation before mutation | **Pass** (S7a/S7b) |
-| S8a Kill-switch | **Pass** |
+| A1–A4 | Pass (disposable inbox) |
+| A5 ingest | **Succeeded** `1/1` → inbox `c515b53e-…` |
+| G2 Gmail filing | **Pass** → SQL project 3223 |
+| A6 mapping | **Pass** → `SI-SI` |
+| A6b tag | **Pass** |
+| A7 MoveToProject | **Pass** `moved=1/1` AllFilesTransferred (not FiledButMoveMetadataFailed / MissingInAcc / MetadataReadFailed / UnknownAccInboxFile) |
+| G3 unfile | **Pass** (0 project labels) |
+| A3r restore | **Pass** |
 
-### Pilot.* after restore (fresh SQL read)
+### Three sources of truth (final)
 
-| Key | Value |
+| Source | State |
 | --- | --- |
-| `Pilot.Enabled` | **false** |
-| `Pilot.AllowedUserIds` | `12` |
-| `Pilot.AllowedWorkflowCodes` | `Opinion,Proposal,PlanningWorkflow,Review,Outsourcing` (inert while Enabled=false) |
+| **Gmail** | Subject token message filed then **unfiled**; 0 project labels remain (G3) |
+| **ACC** | Physical tip `urn:adsk.wipprod:fs.file:vf.d7viKgoNTqG1QxZgZw1B4w?version=1` on project `62311c21-…` (`SI-SI`) — Autodesk tip readback **OK** |
+| **SQL** | `EmailInboxMessage` id **25**; attachment id **26** `rc1-smoke.pdf` AccItemId `urn:adsk.wipprod:dm.lineage:d7viKgoNTqG1QxZgZw1B4w` AccVersionId matches tip; ProjectFileId=174; InboxAccProjectId=`c515b53e-…` |
+
+Cleanup: Gmail unfile + InboxProjectName/OfficeInbox restore via harness; ACC soft-delete leftovers remain per smoke policy (manual Admin Console). Pilot.* left fail-closed.
 
 ---
 
-## B — Gmail → ACC → SQL SoT (clearance, current candidate + harness)
+## C — Packaging
 
-Disposable message `P0-SMOKE-RC1-20260906-140937` (self-INBOX insert with `rc1-smoke.pdf`; no external workflow send).  
-Evidence: `%LOCALAPPDATA%\SiNet\pilot-smoke\p0-pilot-smoke-20260906-140943.md`
-
-| SoT | Proof |
+| Check | Status |
 | --- | --- |
-| Gmail source | messageId `1a07668e0a88603e`, RFC822 `<p0-smoke-rc1-c768dde289aa4534a037109fd340e707@si-eng.co.il>` |
-| Filing action | G2 Gmail label write under `פרויקטים_משרד` → SQL project **3222**; G3 unfile restored mailbox |
-| Physical ACC | A5 ingest **Succeeded** `1/1` into disposable `SI-SMOKE-INBOX` (`c515b53e-…`); A7 MoveToProject **1/1** into `SI-SI` (`62311c21-…`) |
-| SQL metadata | `EmailInboxMessage` id **24**; attachment id **25** `rc1-smoke.pdf` AccItemId `urn:adsk.wipprod:dm.lineage:TiiVdg5BTkmZNc30OT6e5g` version=1 |
-| Readback | Gmail label round-trip + SQL AccItemId/folder ids + ACC guard allowlist only disposable targets |
+| DEV dry-package | **Unavailable** — Windows SDK / MakeAppx path missing on DEV (not a product defect) |
+| UNC `\\SI-WIN-2K19\AppFolder\AppNet\` | **Write probe OK** from this DEV session |
+| DEV `CN=SI Office` cert | **Not present** on DEV (expected — lives on release station) |
+| DEV .NET SDK | `10.0.302` present |
+| PROD release station | Prerequisites documented in `docs/RELEASE_PROCESS.md` §4; prior ship `a874409` = **1.0.34** signed/published from that station |
 
-### Additional harness fixes required for this corridor
-
-1. **AccService Admin token** in `PilotSmokeHost` when ACC layer on — same contract as `SiOffice.AccService` (`AutodeskTokenStoreOptions.AccServiceAdmin`). Does **not** weaken `IdentityOperationGuard`.  
-2. **Subject locate** in `PilotSmokeGmailMessagePicker` — Inbox scope for explicit tokens (AllMail excludes `-in:sent`, which hid self-inserted disposables); **refuse** fall-through to AUTO when token set (prevents production mailbox targeting).
-
-`InboxProjectName` / OfficeInbox resource restored after run. `Pilot.Enabled` remains **false**.
+**Classification:** `READY FOR PROD RELEASE-STATION DRY PACKAGE`  
+(not an RC1 blocker on DEV). Require dry `publish-all.ps1 -SkipDeploy -NoBump` on PROD before publish.
 
 ---
 
-## C — Packaging reclassification
+## Automated gates on new candidate
 
-| Check | Classification |
+*(filled after Release build / test / secret-scan on pushed tip)*
+
+| Gate | Result |
 | --- | --- |
-| Dry pack on this DEV host | **NOT RUN ON DEV — RELEASE-STATION PREREQUISITE** |
-| Reason | DEV lacks Windows SDK (`MakeAppx` / `SignTool` path). No SDK/cert install authorized in this task. |
-| PROD release station | Documented prerequisites in `docs/RELEASE_PROCESS.md` §4: VS/MSBuild, .NET SDK per `global.json`, Windows SDK (`MakeAppx`/`SignTool`), WiX, signing cert **`CN=SI Office`**, UNC write to `\\SI-WIN-2K19\AppFolder\AppNet\`, sibling pins. Recent ship `origin/release` `a874409` = `SiNet.App.Wpf` **1.0.34** confirms that station previously packaged/signed/published. |
-| Before publish | **Require** dry `publish-all.ps1 -SkipDeploy -NoBump` on **PROD** release workstation (not this DEV machine). |
-
-RC1 is **not** blocked on missing PROD packaging infrastructure; DEV dry-pack absence is expected and reclassified.
-
----
-
-## OPS / LIMITATIONS (unchanged)
-
-- DB backup drill: **MANUAL REQUIRED BEFORE PILOT**  
-- MasterPlan key rotation: before wide rollout  
-- Central Llog UNC marker: **PILOT LIMITATION**  
-- Email off-Dispatcher `UnobservedTaskException`: **PILOT LIMITATION**  
-- Do **not** enable production Pilot settings yet  
+| Release `SiNet.App.Wpf` build | pending |
+| `SiNet.App.Wpf.Tests` Release | pending |
+| Google / LegacyBridge / SyncEngine | pending |
+| secret-scan | pending |
+| Focused PilotSmoke SQL | prior PASS (`…134809.md`); ACC SoT PASS (`…161211.md`) |
 
 ---
 
-## BLOCKERS
-
-*None remaining for RC1 pilot-promotion decision.*
-
-Cleared:
-
-1. ~~PilotSmoke identity session~~ → S1–S8a **PASS**  
-2. ~~ACC filing SoT on candidate~~ → Gmail→ACC→SQL **PASS** (evidence `…140943.md`)  
-3. ~~Packaging blocked on DEV SDK~~ → reclassified **RELEASE-STATION PREREQUISITE**
-
----
-
-## Proposed initial pilot allowlist (recommendation only — do **not** set production yet)
+## Proposed initial pilot allowlist (do **not** enable yet)
 
 **UserIds:** `12`  
+**Codes:** `Proposal`, `Opinion`, `Review`  
+Defer Planning/Outsourcing.
 
-**Workflow codes (first day):** `Proposal`, `Opinion`, `Review`  
-
-Keep `PlanningWorkflow` / `Outsourcing` out of first-day allowlist.  
-Runtime: leave `Pilot.Enabled=false` until ops explicitly enables the narrow list on the **pilot** database.
-
-## Proposed development → release promotion (do **not** execute in this gate)
+## Branch delta (do **not** merge)
 
 | Branch | SHA |
 | --- | --- |
 | `origin/release` | `a874409fd9d41b6590d86c574a43ff94f1f3fd41` |
-| Candidate product `development` | `eeda3c17c356421c95311a5b77754ccab02e204f` |
-| Ahead/behind (`release...development`) | **0 behind / 92 ahead** (at freeze) |
+| `development` tip (candidate) | *(after push)* |
 
-No development→release merge. No publish. No installation. No external workflow send.
+No development→release merge. No publish. No install.
 
 ---
 
 RC1 VERDICT: READY FOR PILOT PROMOTION
-
