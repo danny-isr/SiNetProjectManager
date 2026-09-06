@@ -10,7 +10,7 @@
 
 | Item | Value |
 | --- | --- |
-| **RC1 candidate SHA (after harness + doc)** | `0efb325a949fc73d40ebe3cb0cb088c53d4278f7` |
+| **RC1 candidate SHA (after harness + doc)** | `9e6e64c64193971939374f0b443cf0d2f4d978d4` |
 | Prior product baseline | `eeda3c17c356421c95311a5b77754ccab02e204f` |
 | Harness fix commit | `612c4e1ed110283e950e586ec6b54ec993d2b703` |
 | SiNetSQL | `a34418f294fa6cd131daa538f098af5a7849d3d7` |
@@ -164,7 +164,7 @@ Defer Planning/Outsourcing.
 | Branch | SHA |
 | --- | --- |
 | `origin/release` | `a874409fd9d41b6590d86c574a43ff94f1f3fd41` |
-| `development` tip (candidate) | *(after push)* |
+| `development` tip (candidate) | `0efb325a949fc73d40ebe3cb0cb088c53d4278f7` |
 
 No development→release merge. No publish. No install.
 
