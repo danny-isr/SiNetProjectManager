@@ -7,9 +7,11 @@ using Xunit;
 namespace SiNet.App.Wpf.Tests.Live;
 
 /// <summary>
-/// Live product-path validation matrix against Report #9 on the DEV SiData database.
-/// Exercises the same command service the UI uses (SaveNoteStatus/SaveNoteText), then reloads
-/// via workspace and asserts questionnaire rules. Gated by vault SQL connection.
+/// LIVE INTEGRATION (product-path services), NOT LIVE UI.
+/// Validation matrix against Report #9 on the DEV SiData database via
+/// <see cref="IInspectionNoteCommandService"/> / <see cref="IInspectionWorkspace"/>
+/// (same services the UI uses). Gated by vault SQL connection.
+/// Restores probe note 53 (1.1.1) to NotApplicable + empty in finally.
 /// </summary>
 [Collection(InspectionReport9LiveCollection.Name)]
 public sealed class InspectionReport9LiveValidationMatrixTests
@@ -58,27 +60,33 @@ public sealed class InspectionReport9LiveValidationMatrixTests
             ("ManagerReview", "E2E manager text", false, true),
         };
 
-        foreach (var (status, text, invalid, managerBlocks) in cases)
+        try
         {
-            var saveText = await notes.SaveNoteTextAsync(ProbeNoteId, text).ConfigureAwait(true);
-            Assert.True(saveText.Succeeded, saveText.ErrorMessage);
-            var saveStatus = await notes.SaveNoteStatusAsync(ProbeNoteId, statusId: null, statusText: status)
-                .ConfigureAwait(true);
-            Assert.True(saveStatus.Succeeded, saveStatus.ErrorMessage);
+            foreach (var (status, text, invalid, managerBlocks) in cases)
+            {
+                var saveText = await notes.SaveNoteTextAsync(ProbeNoteId, text).ConfigureAwait(true);
+                Assert.True(saveText.Succeeded, saveText.ErrorMessage);
+                var saveStatus = await notes.SaveNoteStatusAsync(ProbeNoteId, statusId: null, statusText: status)
+                    .ConfigureAwait(true);
+                Assert.True(saveStatus.Succeeded, saveStatus.ErrorMessage);
 
-            var (readStatus, readText) = await ReadProbeAsync().ConfigureAwait(true);
-            Assert.Equal(status ?? string.Empty, readStatus ?? string.Empty);
-            Assert.Equal(text ?? string.Empty, readText ?? string.Empty);
+                var (readStatus, readText) = await ReadProbeAsync().ConfigureAwait(true);
+                Assert.Equal(status ?? string.Empty, readStatus ?? string.Empty);
+                Assert.Equal(text ?? string.Empty, readText ?? string.Empty);
 
-            var hasError = InspectionQuestionnaireRules.HasValidationError(readStatus, readText);
-            Assert.Equal(invalid, hasError);
-            if (managerBlocks)
-                Assert.False(InspectionQuestionnaireRules.CanExportNotes([(readStatus, readText)]));
+                var hasError = InspectionQuestionnaireRules.HasValidationError(readStatus, readText);
+                Assert.Equal(invalid, hasError);
+                if (managerBlocks)
+                    Assert.False(InspectionQuestionnaireRules.CanExportNotes([(readStatus, readText)]));
+            }
         }
-
-        // Restore exportable probe note
-        Assert.True((await notes.SaveNoteTextAsync(ProbeNoteId, "").ConfigureAwait(true)).Succeeded);
-        Assert.True((await notes.SaveNoteStatusAsync(ProbeNoteId, null, "NotApplicable").ConfigureAwait(true)).Succeeded);
+        finally
+        {
+            // Restore probe 53 / 1.1.1 to exportable NotApplicable + empty
+            await notes.SaveNoteTextAsync(ProbeNoteId, "").ConfigureAwait(true);
+            await notes.SaveNoteStatusAsync(ProbeNoteId, null, InspectionQuestionnaireRules.NotApplicable)
+                .ConfigureAwait(true);
+        }
 
         var treeFinal = await workspace.GetQuestionnaireTreeAsync(ReportId).ConfigureAwait(true);
         var numbered = treeFinal

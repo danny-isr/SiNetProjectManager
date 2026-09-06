@@ -7,8 +7,11 @@ using Xunit;
 namespace SiNet.App.Wpf.Tests.Live;
 
 /// <summary>
-/// Live general-field auto → manual override → restore auto on Report #9.
+/// LIVE INTEGRATION (product-path services), NOT LIVE UI.
+/// General-field auto → manual override → restore on Report #9 via
+/// <see cref="IInspectionNoteCommandService"/> / <see cref="IInspectionWorkspace"/>.
 /// Uses a non-identity field (never project name / place / report number).
+/// Finally restores the original text and manual-override flag.
 /// </summary>
 [Collection(InspectionReport9LiveCollection.Name)]
 public sealed class InspectionReport9LiveGeneralOverrideTests
@@ -69,7 +72,7 @@ public sealed class InspectionReport9LiveGeneralOverrideTests
             Assert.True(overridden.IsManualOverride);
             Assert.Equal(manualValue, overridden.Text);
 
-            // Restore auto
+            // Restore auto (happy-path assertion); finally still re-applies original snapshot
             Assert.True((await notes.SaveNoteTextAsync(noteId, null).ConfigureAwait(true)).Succeeded);
             Assert.True((await notes.SaveNoteStatusAsync(noteId, null, null).ConfigureAwait(true)).Succeeded);
 
@@ -79,7 +82,7 @@ public sealed class InspectionReport9LiveGeneralOverrideTests
         }
         finally
         {
-            // Best-effort restore prior DB state
+            // Restore original text / manual flag so Report #9 stays as found
             await notes.SaveNoteTextAsync(noteId, originalText).ConfigureAwait(true);
             await notes.SaveNoteStatusAsync(
                     noteId,

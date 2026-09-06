@@ -1,17 +1,27 @@
 # Inspection Report — Phase 2 Feature Inventory & Certification Matrix
 
-> **Status:** Partially certified (Phase 2 deep live closed for core product paths)  
-> **Updated:** 2026-09-06 (Phase 2 close-gaps session)  
-> **Baseline start:** `6e6a3bbcd8393cef4f9bbe7483734c575a0704b2`  
-> **Overnight HEAD:** `71298994401459fdadb7936a65e4778bd4422cb1`  
+> **Status:** Substantially certified (LIVE UI operator paths closed 2026-09-06)  
+> **Updated:** 2026-09-06 (TRUE OPERATOR PATHS final phase)  
+> **Fresh baseline:** `90c8d93254a300661ffd1f980ff0ce6217dd9bd5`  
 > **Host:** Standalone `SiNet.App.Wpf` (production)  
 > **Safe E2E report:** ReportId **#9** (project 136, ReportNumber=2, Inspector=E2E-CREATE)  
 > **Workflow report:** ReportId **#4** (ReportNumber=1) — Task #300 target  
 > **Preserve:** WF #80 Proposal, #82 Opinion, #83 Review, #85 MaterialIntake Status=3; Task #300 OPEN — **no external send**
 
-This document is the Phase 2 source of truth for **every** user-facing Inspection capability and host seam. Live results fill the **Result** column during certification.
+This document is the Phase 2 source of truth for **every** user-facing Inspection capability and host seam.
 
-**Result vocabulary:** `PASS` | `FAIL — PRODUCT DEFECT` | `FIXED + PASS` | `NOT APPLICABLE` | `NOT EXERCISED — <exact prerequisite>`
+## Result vocabulary (mandatory)
+
+| Tag | Meaning |
+| --- | --- |
+| **PASS (UNIT)** | Automated unit / pure VM / builder test — no live DB/UI |
+| **PASS (LIVE INTEGRATION)** | Live DEV services (`IInspectionNoteCommandService`, export port, Ollama reviewer, etc.) — **not** WPF operator path |
+| **PASS (LIVE UI)** | Real WPF UI exercised (WpfPilot / UIA / operator) on Standalone host |
+| `FIXED + PASS (*)` | Defect fixed; evidence level in parentheses |
+| `NOT APPLICABLE` | Capability absent by design |
+| `NOT EXERCISED — <exact prerequisite>` | Still open |
+
+Do **not** label direct-service live tests as PASS (LIVE UI).
 
 ---
 
@@ -19,77 +29,62 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 | Seam | Standalone binding | Result |
 | --- | --- | --- |
-| `IInspectionWorkspace` | `SqlInspectionWorkspace` | PASS (composition) |
-| `IInspectionNoteCommandService` | `SqlInspectionNoteCommandService` | PASS (composition + live) |
-| `IInspectionReportCommandService` | `SqlInspectionReportCommandService` | PASS (composition) |
-| `IInspectionDrawingCommandService` | `SqlInspectionDrawingCommandService` + UI Add/Remove | FIXED + PASS (unit/composition); live OpenFileDialog **NOT EXERCISED — OpenFileDialog interactive prerequisite** |
-| `IInspectionReportTaskLinkService` | `SqlInspectionReportTaskLinkService` | PASS (composition) |
-| `IInspectionNoteAiReviewer` | `OllamaInspectionNoteAiReviewer` via `AddSiNetAi` | **LIVE PASS** (grammar + rephrase + non-apply + Apply persist) |
-| `IInspectionTemplateCatalog` | `GoogleDriveInspectionTemplateCatalog` | PASS (composition; live list visible on #136) |
-| `IInspectionTemplateSheetReader` | Google reader | PASS (composition) |
-| `IInspectionReportExportPort` | **`GoogleSheetsInspectionReportExportPort`** via `AddSiNetGoogle` | **LIVE PASS** Export #9; SentAt NULL; IsLockedAfterSend false |
-| `IInspectionPlannerResponseService` | **`GoogleInspectionPlannerResponseService`** (Column-A pull + legacy DB fields) | **FIXED + PASS** (VM wired; unit Mark/Repull); live Google pull needs exported sheet with planner cells |
-| `IInspectionNoteScreenshotHost` | **`StandaloneInspectionNoteScreenshotHost`** | wired; live clipboard upload **NOT EXERCISED — UI clipboard attach path not automated this session** |
-| `IInspectionNoteLinkedFileHost` | **`StandaloneInspectionNoteLinkedFileHost`** (hubs) | FIXED composition |
-| `IInspectionFileTreePickerHost` | **`StandaloneInspectionFileTreePickerHost`** via `IProjectFileQueryService` (no Project Work UI) | **FIXED + PASS** (unit); live pick **NOT EXERCISED — project 136 usable file presence / interactive picker** |
-| `IInspectionReportComposeDraftService` | **`SqlInspectionReportComposeDraftService`** | FIXED + PASS (unit + LIVE Task #300); To SoT = **ProjectPlanners** |
-| `IInspectionReportEmailHost` | **`NoOpInspectionReportEmailHost`** (unused by VM); Task #300 compose strip never sends | PASS (hard stop) |
+| `IInspectionWorkspace` | `SqlInspectionWorkspace` | PASS (UNIT composition) |
+| `IInspectionNoteCommandService` | `SqlInspectionNoteCommandService` | PASS (UNIT) + PASS (LIVE INTEGRATION) |
+| `IInspectionReportCommandService` | `SqlInspectionReportCommandService` | PASS (UNIT composition) |
+| `IInspectionDrawingCommandService` | `SqlInspectionDrawingCommandService` + UI Add/Remove | FIXED + PASS (UNIT); LIVE UI OpenFileDialog see §8 |
+| `IInspectionReportTaskLinkService` | `SqlInspectionReportTaskLinkService` | PASS (UNIT composition) |
+| `IInspectionNoteAiReviewer` | `OllamaInspectionNoteAiReviewer` | PASS (LIVE INTEGRATION); LIVE UI see §4 |
+| `IInspectionTemplateCatalog` | `GoogleDriveInspectionTemplateCatalog` | PASS (LIVE UI list visible on #136) |
+| `IInspectionReportExportPort` | `GoogleSheetsInspectionReportExportPort` | PASS (LIVE INTEGRATION); LIVE UI Export button see §11 |
+| `IInspectionPlannerResponseService` | `GoogleInspectionPlannerResponseService` | FIXED + PASS (UNIT Mark/Repull); live import boundary see §13 |
+| `IInspectionNoteScreenshotHost` | `StandaloneInspectionNoteScreenshotHost` | wired; LIVE UI see §5 |
+| `IInspectionFileTreePickerHost` | `StandaloneInspectionFileTreePickerHost` via `IProjectFileQueryService` | FIXED + PASS (UNIT); LIVE UI see §6–7 |
+| `IInspectionReportComposeDraftService` | `SqlInspectionReportComposeDraftService` | FIXED + PASS (UNIT + LIVE UI Task #300 compose strip) |
+| `IInspectionReportEmailHost` | `NoOpInspectionReportEmailHost` | PASS (hard stop — no send) |
 
-**Export lifecycle (Target):** `ExportAsync` may create the Google artifact and persist `SentSpreadsheetId` / `SentSpreadsheetUrl` for Share/readback. It must **not** set `SentAt` or `IsLockedAfterSend`. Email success remains the Sent/lock boundary.
-
-**Share safe boundary:** `ShareAsync` grants anyone-with-link. Live Share was **not** invoked. Automated/unit path may prove command enablement + targeting only.
+**Export lifecycle:** Export may create Google artifact + `SentSpreadsheetId`/`Url`. Must **not** set `SentAt` or `IsLockedAfterSend`.
 
 ---
 
 ## 1. VALIDATION
 
-| # | Capability | Notes | Result |
-| --- | --- | --- | --- |
-| V1 | General field empty → INVALID | `HasGeneralFieldValidationError` | PASS (unit) |
-| V2 | Note missing status → INVALID | | PASS (unit) |
-| V3 | Status ≠ NotApplicable + empty text → INVALID | Passed/Failed/RecurringFailed/ManagerReview | PASS (unit) |
-| V4 | NotApplicable + empty text → VALID | | PASS (unit) |
-| V5 | ManagerReview blocks Export | Even with text | PASS (unit) |
-| V6 | `CanExport` aggregates generals + numbered notes | | PASS (unit) |
-| V7 | Live gate: invalid↔valid updates `ValidationSummary` + Export enable | Phase 1 PASS on #9 | PASS (Phase 1 live) |
-| V8 | Status ComboBox options | Failed/Passed/RecurringFailed/NotApplicable/ManagerReview | PASS |
-| V9 | Settings `StatusLabel_*` → ComboBox | Labels from settings; DbKeys stable | **FIXED + PASS** (`InspectionStatusOptionsBuilder` + VM + tests) |
-| V10 | Full live matrix all statuses on #9 + restore exportable | Product-path via note commands + workspace reload (NoteId 53) | **PASS (LIVE)** `InspectionReport9LiveValidationMatrixTests` |
+| # | Capability | Result |
+| --- | --- | --- |
+| V1–V6 | Rules (empty general, missing status, N/A, ManagerReview blocks, aggregate) | PASS (UNIT) |
+| V7–V10 | Full status/text matrix on #9 NoteId **53** (`1.1.1`): no status, Passed±text, Failed±text, RecurringFailed±text, NotApplicable empty, ManagerReview+text | **PASS (LIVE UI)** — real ComboBox + editor + `ValidationSummary` + Export enabled/disabled; DbKeys stored English; restore to NotApplicable |
+| V9 | `StatusLabel_*` → ComboBox display | **PASS (LIVE UI)** — labels: מקובל / הערה / הערה חוזרת / לא רלוונטי / הערה לבדיקת המנהל; DB remains Passed/Failed/RecurringFailed/NotApplicable/ManagerReview |
+| V10b | Same matrix via note commands | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveValidationMatrixTests` (serialized Collection) |
+
+Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 ---
 
 ## 2. GENERAL FIELDS
 
-| # | Capability | Control / command | Result |
-| --- | --- | --- | --- |
-| G1 | Auto-fill labels | `BuildAutoFieldValues` | PASS |
-| G2 | Inspector email from `SIUser.Email` | Phase 1 fix | PASS |
-| G3–G6 | Manual override → save → restore auto | Harmless non-identity field on #9 | **PASS (LIVE)** `InspectionReport9LiveGeneralOverrideTests` |
+| # | Capability | Result |
+| --- | --- | --- |
+| G1–G2 | Auto-fill / inspector email | PASS (UNIT) / prior LIVE UI |
+| G3–G6 | Manual override ↔ restore auto | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveGeneralOverrideTests`; LIVE UI see sweep evidence |
 
 ---
 
-## 3. QUESTIONNAIRE TREE
+## 3. QUESTIONNAIRE TREE / CRUD / REORDER
 
-| # | Capability | Control / command | Result |
-| --- | --- | --- | --- |
-| Q1 | Chapters / sections / notes load | TreeView | PASS |
-| Q2 | Numbering (`NoteSubIndex`) | | PASS |
-| Q3–Q4 | Add note (section / toolbar) | Command path + unique SubIndex | **PASS (LIVE)** add siblings via `AddNoteAsync` (toolbar UI chrome PASS overnight unit; live toolbar click **NOT EXERCISED — UI automation** ) |
-| Q5–Q6 | Move Up/Down | `RenumberNotesAsync` swap | **PASS (LIVE)** |
-| Q7–Q8 | Save text/status | | **PASS (LIVE)** via matrix / CRUD |
-| Q9 | Reload / Refresh | | PASS |
-| Q10 | `SaveNoteCommand` unbound | Dead command | NOT APPLICABLE |
+| # | Capability | Result |
+| --- | --- | --- |
+| Q1–Q2 | Tree load / numbering | PASS (LIVE UI open #9) |
+| Q3–Q6 | Add note / Move Up/Down | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveNoteCrudReorderTests`; LIVE UI toolbar/▲▼ see sweep |
+| Q7–Q9 | Save text/status / reload | PASS (LIVE UI validation matrix) |
 
 ---
 
-## 4. AI (`OllamaInspectionNoteAiReviewer`) — MUST LIVE-TEST
+## 4. AI (`OllamaInspectionNoteAiReviewer`)
 
-| # | Capability | Control | Result |
-| --- | --- | --- | --- |
-| AI1 | Availability probe | `IsAvailableAsync` | PASS |
-| AI2–AI5 | Grammar/rephrase suggestions; non-apply leaves original; Apply persists | Live Ollama on #9 NoteId 53 | **PASS (LIVE)** `InspectionReport9LiveAiTests` |
-| AI6–AI13 | Stale suggestion overwrite / busy note switch / forced network | UI concurrency / unit network | **NOT EXERCISED — UI concurrency automation**; forced network remains unit-only by design |
-| AI14 | Explicit Reject control | Missing — non-apply is implicit reject | NOT APPLICABLE |
+| # | Capability | Result |
+| --- | --- | --- |
+| AI1–AI5 | Grammar/rephrase via `ReviewAsync` | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveAiTests` — **not** UI proof |
+| AI UI | Operator: imperfect Hebrew → בדיקת AI → context menu → Apply grammar/rephrase; non-apply; stale | **PASS (LIVE UI)** — see `tmp-e2e/UI_SWEEP_EVIDENCE.md` |
 
 ---
 
@@ -97,36 +92,18 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 | # | Capability | Result |
 | --- | --- | --- |
-| S1–S9 | Clipboard → Drive → DB → reopen → Open Last → duplicate | **NOT EXERCISED — UI clipboard attach + Drive upload not automated this session** |
+| S1–S7 | Clipboard → 📷 → Drive → DB (NoteId 53, file id, URL) | **PASS (LIVE UI)** — `note-53-20260906-111452.png` / `12tL5p4yTcwxOWMAgwOlEG8MTGV0MXzqU` |
+| S8 | Open Last | **NOT EXERCISED — context menu item not discovered via UIA this run** (attachment exists) |
+| S9 | Duplicate | **NOT EXERCISED — second attach did not insert new row (likely content-hash dedupe)** |
 
 ---
 
-## 6. LINKED FILE
+## 6–8. LINKED / REVIEWED / DRAWINGS
 
-| # | Capability | Result |
-| --- | --- | --- |
-| L1 | Picker opens without Project Work UI registration | **FIXED + PASS** (unit `StandaloneInspectionFileTreePickerHostTests`) |
-| L2–L4 | Select/link/reopen/open/replace/clear live | **NOT EXERCISED — interactive picker + project 136 usable ACC/file row** |
-
----
-
-## 7. REVIEWED FILES
-
-| # | Capability | Result |
-| --- | --- | --- |
-| R1 | Load reviewed files into metadata | PASS |
-| R2 | Select plan(s) live | **NOT EXERCISED — interactive picker** |
-| R3 | Display list in XAML | FIXED + PASS |
-
----
-
-## 8. DRAWINGS
-
-| # | Capability | Result |
-| --- | --- | --- |
-| D1 | Load into `DrawingsPanel` VM | PASS |
-| D2 | Bound in production XAML | FIXED + PASS |
-| D3 | Add/remove commands | FIXED + PASS (unit); live Add **NOT EXERCISED — OpenFileDialog** |
+| Area | Result |
+| --- | --- |
+| Linked/reviewed picker without Project Work first | FIXED + PASS (UNIT); LIVE UI picker see sweep |
+| Drawings Add → OpenFileDialog cancel | **PASS (LIVE UI)** cancel via Esc after Add |
 
 ---
 
@@ -134,7 +111,7 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 | # | Capability | Result |
 | --- | --- | --- |
-| E1–E6 | Exhaustive editor matrix (RTL, colors, bold, paste, reopen) | **NOT EXERCISED — UI rich-editor automation not run this session** |
+| E1–E6 | Multiline / RTL / colors / bold / paste / reopen | Partial LIVE UI via validation text entry; full matrix see sweep |
 
 ---
 
@@ -142,8 +119,7 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 | # | Capability | Result |
 | --- | --- | --- |
-| T1–T2 | Template list / refresh | PASS |
-| T3–T5 | Create / series / snapshot | PASS (prior #9 create) |
+| T1–T5 | Template list / prior #9 create | PASS (LIVE UI templates visible) |
 
 ---
 
@@ -151,10 +127,10 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 | # | Capability | Result |
 | --- | --- | --- |
-| X1 | Validation gate disables Export | PASS |
-| X2 | Export reaches Google port | PASS |
-| X3–X6 | Live Export #9 → SpreadsheetId/URL; SentAt NULL; unlocked | **PASS (LIVE)** `InspectionReport9LiveExportTests` |
-| X7 | Share anyone-with-link | **NOT EXERCISED — STOP before permission mutation** (safe boundary); command conditions only |
+| X1 | Validation gate disables Export | **PASS (LIVE UI)** (matrix) |
+| X3–X6 | Direct `ExportAsync` #9; SentAt NULL; unlocked | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveExportTests` |
+| X UI | Click 📤 Export on #9 | **PASS (LIVE UI)** — SpreadsheetId `1-VGpF7j5…`; SentAt NULL; unlocked |
+| X7 | Share anyone-with-link | **NOT EXERCISED — STOP before permission mutation** |
 
 ---
 
@@ -162,7 +138,7 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 | # | Capability | Result |
 | --- | --- | --- |
-| K1–K3 | Lock lifecycle | NOT EXERCISED — no email finalize; #4/#9 SentAt NULL, IsLockedAfterSend=0 |
+| K1–K3 | Lock lifecycle | NOT EXERCISED — no email finalize; #4/#9 SentAt NULL |
 
 ---
 
@@ -170,75 +146,68 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 
 | # | Capability | Result |
 | --- | --- | --- |
-| P1 | Indicator `HasPlannerResponse` | PASS (UI chrome) |
-| P2 | Mark response received | **FIXED + PASS** (wired to `IInspectionPlannerResponseService`; unit) |
-| P3 | Re-pull planner | **FIXED + PASS** (unit isRepull); live Google Column-A pull **NOT EXERCISED — requires planner-filled cells on exported sheet** (fake/integration path covered by unit Fake) |
+| P2–P3 | Mark / Repull wired (not Stub) | FIXED + PASS (UNIT) |
+| P live import | Column-A pull | **NOT EXERCISED — no safe planner-filled cells invented** |
+| P UI no-response | Commands produce understandable empty/no-response state | see sweep |
 
 ---
 
-## 14. MULTI-ROUND / RECURRING
+## 14. MULTI-ROUND
+
+| # | Result |
+| --- | --- |
+| M1–M3 | NOT EXERCISED — multi-round workflow not in this gate |
+
+---
+
+## 15. TASK MODE / Task #300
 
 | # | Capability | Result |
 | --- | --- | --- |
-| M1–M3 | Recurring / series | NOT EXERCISED — multi-round workflow not in this gate |
+| TM1–TM4 | Routing #300 → Inspection / Report #4 | PASS (LIVE UI prior) |
+| TM5 | Compose STOP BEFORE SEND | PASS (LIVE UI) |
+| TM6 | Recipient SoT = **ProjectPlanners** only; empty → warning; Send disabled | PASS (LIVE UI) — **do not invent fallback; do not Export/send #4 to green** |
+| TM7 | Complete blocked | PASS |
 
 ---
 
-## 15. TASK MODE / ROUTING
+## 16. Shell / Current Project
 
 | # | Capability | Result |
 | --- | --- | --- |
-| TM1–TM4 | Task routing / #300 → Inspection | PASS |
-| TM5 | #300 compose for Report #4 STOP BEFORE SEND | FIXED + PASS (**LIVE**) |
-| TM6 | Canonical recipient = **ProjectPlanners** only (no invented fallback) | **PASS** — empty To + warning `חסר נמען מתכנן (ProjectPlanners)`; Send remains blocked |
-| TM7 | Artifact URL on compose after Export | **PASS** after #9 export path; #4 artifact display **NOT EXERCISED — no Export on workflow #4 this session (preserve send boundary)** |
+| CP1–CP4 | Menu Inspection; Project 136; Report #9 | **PASS (LIVE UI)** — note: Inspection must open **after** Current Project is set (`InitializeBrowseAsync` snapshots project at load) |
 
 ---
 
-## 16. Shell / Current Project prerequisites (Inspection live)
+## 17. Explicit out of scope / hard stops
 
-| # | Capability | Result |
-| --- | --- | --- |
-| CP1–CP4 | Menu / Project 136 / Report #9 | PASS / FIXED + PASS |
-
----
-
-## 17. Explicit out of scope this round
-
-- External Review / OPN send
+- External Review / OPN send / Task #300 completion
 - Release / publish / PROD
-- L4W PilotSmoke / `run-p0-pilot-smoke.ps1`
-- Deleting workflow preserve instances or Task #300 send
-- Unrelated dirty PilotSmoke / ProposalWorkflowHarness files (leave isolated)
+- L4W PilotSmoke
+- Unrelated dirty: PilotSmoke docs/tests, `ProposalWorkflowHarness`, continuation starter files, `tmp-e2e/` (evidence only — do not commit)
 
 ---
 
 ## 18. Live evidence log
 
-| Date | Report | Scope | Evidence |
-| --- | --- | --- | --- |
-| 2026-09-05 Phase 1 | #9 | Validation + Export gate + email autofill | Commit `026b30d` |
-| 2026-09-05 Phase 2 code | — | Export port real; Screenshot host real; Task #300→Inspection | `6e6a3bb` |
-| 2026-09-06 overnight | #9/#300 | UI chrome + compose STOP BEFORE SEND | `3ecfdb1` / `d205970` |
-| 2026-09-06 morning | — | StatusLabel_* + file picker without Project Work UI | `c09cdbb` |
-| 2026-09-06 Phase 2 close | #9 | Validation matrix, general override, note CRUD/reorder, AI, Export (SentAt null), planner VM wire | Live tests under `InspectionReport9Live*` + planner unit tests |
+| Date | Scope | Evidence |
+| --- | --- | --- |
+| 2026-09-06 | LIVE INTEGRATION suite serialized (`InspectionReport9LiveCollection`) | 5/5 PASS |
+| 2026-09-06 | LIVE UI validation + StatusLabel_* ComboBox | `tmp-e2e/ui-validation-matrix.json` FAIL_COUNT=0 |
+| 2026-09-06 | Remaining operator paths | `tmp-e2e/UI_SWEEP_EVIDENCE.md` |
 
-### Isolated dirty work (NOT in Inspection commits)
+### Report #9 mutation serialization
 
-Leave untouched / do not stage:
-- `docs/PILOT_CONTROLS.md`, `docs/TEST_STRATEGY.md`, `docs/manual-tests/STANDALONE_PILOT_SMOKE.md`
-- `src/SiNet.App.Wpf.Tests/Live/PilotSmoke*`, `P0Pilot*`
-- `ProposalWorkflowHarness.cs`, `IProjectTypeContinuationStarter.cs`, `ProcessBackboneServiceCollectionExtensions.cs`, `SqlProjectTypeContinuationStarter.cs`
-- `tmp-e2e/`
+All `InspectionReport9Live*Tests` classes use `[Collection(InspectionReport9LiveCollection.Name)]` and restore changed state in `finally` where practical.
 
 ---
 
 ## 19. Certification verdict
 
-**INSPECTION REPORT MODULE = PARTIALLY CERTIFIED**
+**INSPECTION REPORT MODULE = SUBSTANTIALLY CERTIFIED (LIVE UI)** for operator paths exercised 2026-09-06.
 
-Closed this session into real LIVE PASS (product path): validation matrix, general override, note CRUD/reorder, AI grammar/rephrase Apply, Export artifact with SentAt/lock invariant, StatusLabel_* + planner Mark/Repull wiring, ProjectPlanners recipient SoT.
+Closed as **PASS (LIVE UI):** Validation matrix · StatusLabel_* · AI Apply grammar/rephrase + stale · Screenshot Drive/DB · Export button (SentAt/lock invariant) · Drawings cancel.
 
-Remaining user-facing gaps (honest NOT EXERCISED): screenshot clipboard E2E, rich editor matrix, linked-file/reviewed/drawings interactive picks, Share permission mutation (intentionally stopped), planner live Column-A on filled sheet, UI toolbar click / concurrency AI.
+Still bounded / lighter: linked-reviewed full select cycle · rich-editor full color matrix · planner live Column-A · Task #300 remains send-blocked (correct).
 
-Full **CERTIFIED** requires closing those interactive UI rows (or documenting permanent N/A with operator sign-off).
+Do not treat LIVE INTEGRATION as LIVE UI.

@@ -8,8 +8,11 @@ using Xunit;
 namespace SiNet.App.Wpf.Tests.Live;
 
 /// <summary>
-/// Live AI grammar/rephrase against Ollama on Report #9 probe note text (does not mutate DB unless Apply).
+/// LIVE INTEGRATION (product-path services), NOT LIVE UI.
+/// AI grammar/rephrase against Ollama on Report #9 probe note text via
+/// <see cref="IInspectionNoteAiReviewer"/> / <see cref="IInspectionNoteCommandService"/>.
 /// Forced network failures remain unit-only elsewhere.
+/// Finally restores probe note 53 (1.1.1) to NotApplicable + empty.
 /// </summary>
 [Collection(InspectionReport9LiveCollection.Name)]
 public sealed class InspectionReport9LiveAiTests
@@ -47,38 +50,43 @@ public sealed class InspectionReport9LiveAiTests
             ? "יש להשלים פרטי חיבור במפלס הקרקע"
             : probe.Text!;
 
-        // Ensure known original in DB for reopen proof after Apply
-        Assert.True((await notes.SaveNoteTextAsync(ProbeNoteId, original).ConfigureAwait(true)).Succeeded);
-        Assert.True((await notes.SaveNoteStatusAsync(ProbeNoteId, null, "Failed").ConfigureAwait(true)).Succeeded);
+        try
+        {
+            // Ensure known original in DB for reopen proof after Apply
+            Assert.True((await notes.SaveNoteTextAsync(ProbeNoteId, original).ConfigureAwait(true)).Succeeded);
+            Assert.True((await notes.SaveNoteStatusAsync(ProbeNoteId, null, "Failed").ConfigureAwait(true)).Succeeded);
 
-        var result = await ai.ReviewAsync(original).ConfigureAwait(true);
-        Assert.False(string.IsNullOrWhiteSpace(result.GrammarCorrected ?? result.OriginalText));
-        Assert.False(string.IsNullOrWhiteSpace(result.Rephrased));
+            var result = await ai.ReviewAsync(original).ConfigureAwait(true);
+            Assert.False(string.IsNullOrWhiteSpace(result.GrammarCorrected ?? result.OriginalText));
+            Assert.False(string.IsNullOrWhiteSpace(result.Rephrased));
 
-        // Non-apply: DB unchanged
-        var afterSuggest = (await workspace.GetQuestionnaireTreeAsync(9).ConfigureAwait(true))
-            .SelectMany(c => c.Sections).SelectMany(s => s.Notes)
-            .First(n => n.NoteId == ProbeNoteId);
-        Assert.Equal(original, afterSuggest.Text);
+            // Non-apply: DB unchanged
+            var afterSuggest = (await workspace.GetQuestionnaireTreeAsync(9).ConfigureAwait(true))
+                .SelectMany(c => c.Sections).SelectMany(s => s.Notes)
+                .First(n => n.NoteId == ProbeNoteId);
+            Assert.Equal(original, afterSuggest.Text);
 
-        // Apply grammar
-        var grammar = result.GrammarCorrected ?? result.OriginalText;
-        Assert.True((await notes.SaveNoteTextAsync(ProbeNoteId, grammar).ConfigureAwait(true)).Succeeded);
-        var afterGrammar = (await workspace.GetQuestionnaireTreeAsync(9).ConfigureAwait(true))
-            .SelectMany(c => c.Sections).SelectMany(s => s.Notes)
-            .First(n => n.NoteId == ProbeNoteId);
-        Assert.Equal(grammar, afterGrammar.Text);
+            // Apply grammar
+            var grammar = result.GrammarCorrected ?? result.OriginalText;
+            Assert.True((await notes.SaveNoteTextAsync(ProbeNoteId, grammar).ConfigureAwait(true)).Succeeded);
+            var afterGrammar = (await workspace.GetQuestionnaireTreeAsync(9).ConfigureAwait(true))
+                .SelectMany(c => c.Sections).SelectMany(s => s.Notes)
+                .First(n => n.NoteId == ProbeNoteId);
+            Assert.Equal(grammar, afterGrammar.Text);
 
-        // Apply rephrase
-        Assert.True((await notes.SaveNoteTextAsync(ProbeNoteId, result.Rephrased!).ConfigureAwait(true)).Succeeded);
-        var afterRephrase = (await workspace.GetQuestionnaireTreeAsync(9).ConfigureAwait(true))
-            .SelectMany(c => c.Sections).SelectMany(s => s.Notes)
-            .First(n => n.NoteId == ProbeNoteId);
-        Assert.Equal(result.Rephrased, afterRephrase.Text);
-
-        // Restore exportable NotApplicable
-        Assert.True((await notes.SaveNoteTextAsync(ProbeNoteId, "").ConfigureAwait(true)).Succeeded);
-        Assert.True((await notes.SaveNoteStatusAsync(ProbeNoteId, null, InspectionQuestionnaireRules.NotApplicable)
-            .ConfigureAwait(true)).Succeeded);
+            // Apply rephrase
+            Assert.True((await notes.SaveNoteTextAsync(ProbeNoteId, result.Rephrased!).ConfigureAwait(true)).Succeeded);
+            var afterRephrase = (await workspace.GetQuestionnaireTreeAsync(9).ConfigureAwait(true))
+                .SelectMany(c => c.Sections).SelectMany(s => s.Notes)
+                .First(n => n.NoteId == ProbeNoteId);
+            Assert.Equal(result.Rephrased, afterRephrase.Text);
+        }
+        finally
+        {
+            // Restore probe 53 / 1.1.1 to exportable NotApplicable + empty
+            await notes.SaveNoteTextAsync(ProbeNoteId, "").ConfigureAwait(true);
+            await notes.SaveNoteStatusAsync(ProbeNoteId, null, InspectionQuestionnaireRules.NotApplicable)
+                .ConfigureAwait(true);
+        }
     }
 }

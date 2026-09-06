@@ -13,8 +13,10 @@ using Xunit;
 namespace SiNet.App.Wpf.Tests.Live;
 
 /// <summary>
-/// Live Export on Report #9 via GoogleSheetsInspectionReportExportPort.
-/// Proves artifact identity persistence and SentAt/lock unchanged.
+/// LIVE INTEGRATION (product-path services), NOT LIVE UI.
+/// Export on Report #9 via <see cref="IInspectionReportExportPort"/> (GoogleSheets port).
+/// Proves artifact identity persistence. Does not mutate questionnaire notes —
+/// no note restore in finally. Asserts SentAt / lock remain unchanged after export.
 /// Share anyone-with-link is NOT invoked (safe boundary).
 /// </summary>
 [Collection(InspectionReport9LiveCollection.Name)]
@@ -65,6 +67,7 @@ public sealed class InspectionReport9LiveExportTests
         Assert.Null(detailBefore!.SentAt);
         Assert.False(detailBefore.IsLockedAfterSend);
 
+        // No note mutation → no note restore. Export must leave SentAt / lock unchanged.
         var export = sp.GetRequiredService<IInspectionReportExportPort>();
         var result = await export.ExportAsync(ReportId).ConfigureAwait(true);
         Assert.True(result.Succeeded, result.ErrorMessage);
