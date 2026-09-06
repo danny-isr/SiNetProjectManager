@@ -10,7 +10,7 @@
 
 | Item | Value |
 | --- | --- |
-| **RC1 candidate SHA (after harness + doc)** | *(tip after this document commit / push — see Final)* |
+| **RC1 candidate SHA (after harness + doc)** | `0efb325a949fc73d40ebe3cb0cb088c53d4278f7` |
 | Prior product baseline | `eeda3c17c356421c95311a5b77754ccab02e204f` |
 | Harness fix commit | `612c4e1ed110283e950e586ec6b54ec993d2b703` |
 | SiNetSQL | `a34418f294fa6cd131daa538f098af5a7849d3d7` |
@@ -138,15 +138,18 @@ Cleanup: Gmail unfile + InboxProjectName/OfficeInbox restore via harness; ACC so
 
 ## Automated gates on new candidate
 
-*(filled after Release build / test / secret-scan on pushed tip)*
-
 | Gate | Result |
 | --- | --- |
-| Release `SiNet.App.Wpf` build | pending |
-| `SiNet.App.Wpf.Tests` Release | pending |
-| Google / LegacyBridge / SyncEngine | pending |
-| secret-scan | pending |
-| Focused PilotSmoke SQL | prior PASS (`…134809.md`); ACC SoT PASS (`…161211.md`) |
+| Release `SiNet.App.Wpf` build | **PASS** |
+| `SiNet.App.Wpf.Tests` Release | **PASS** — Failed 0, Passed **3763**, Skipped 19, Total 3782 |
+| Google.Tests | **PASS** — 93/93 |
+| LegacyBridge.Tests | **PASS** — 20/20 |
+| SyncEngine.Tests | **PASS** — 72/72 |
+| secret-scan | **PASS** (2553 files) |
+| Focused PilotSmoke SQL on tip | **PASS** (S1–S8a; evidence under `%LOCALAPPDATA%\SiNet\pilot-smoke\`) |
+| ACC SoT on tip | **PASS** — `p0-pilot-smoke-20260906-161211.md` |
+
+DB/schema: **unchanged** (no migrations).
 
 ---
 
