@@ -9,6 +9,7 @@ using SiNet.Application.Abstractions.Inspection;
 using SiNet.Application.Identity;
 using SiNet.Application.Inspection;
 using SiNet.Application.Projects;
+using SiNet.Application.Settings;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
 using AppInspectionNoteRow = SiNet.Application.Abstractions.Inspection.InspectionNoteRow;
@@ -42,6 +43,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private readonly IInspectionReportTaskLinkService? _reportTaskLinks;
     private readonly IInspectionDrawingCommandService? _drawingCommands;
     private readonly IInspectionReportComposeDraftService? _composeDraft;
+    private readonly ISystemSettingsQueryService? _systemSettings;
 
     private WorkSurfaceContext? _taskContext;
     private InspectionReportComposeDraft? _plannerComposeDraft;
@@ -89,7 +91,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         IInspectionFileTreePickerHost? fileTreePicker = null,
         IInspectionReportTaskLinkService? reportTaskLinks = null,
         IInspectionDrawingCommandService? drawingCommands = null,
-        IInspectionReportComposeDraftService? composeDraft = null)
+        IInspectionReportComposeDraftService? composeDraft = null,
+        ISystemSettingsQueryService? systemSettings = null)
     {
         _workspace = workspace;
         _taskCompletion = taskCompletion;
@@ -107,6 +110,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         _reportTaskLinks = reportTaskLinks;
         _drawingCommands = drawingCommands;
         _composeDraft = composeDraft;
+        _systemSettings = systemSettings;
 
         CreateStrip = new InspectionCreateReportStripViewModel();
         Questionnaire = new InspectionQuestionnaireViewModel();
@@ -506,6 +510,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         }
 
         await RefreshTemplatesAsync(ct).ConfigureAwait(true);
+        await ApplyStatusLabelsFromSettingsAsync(ct).ConfigureAwait(true);
 
         if (_browseProjectId is int projectId)
         {
@@ -533,6 +538,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
         if (context is null)
             return false;
+
+        await ApplyStatusLabelsFromSettingsAsync(ct).ConfigureAwait(true);
 
         if (!WorkSurfaceComponentKeys.IsInspectionReportSurface(context.ComponentKey))
         {
@@ -1330,6 +1337,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
     private async Task RefreshAsync()
     {
+        await ApplyStatusLabelsFromSettingsAsync().ConfigureAwait(true);
+
         if (IsTaskMode && _taskContext?.PrimaryWorkTargetEntityId is int reportId)
         {
             await LoadExactReportAsync(_taskContext.ProjectId, reportId).ConfigureAwait(true);
@@ -1341,6 +1350,33 @@ public sealed class InspectionWindowViewModel : ObservableObject
             var keepId = SelectedReport?.ReportId;
             await LoadBrowseReportsAsync(projectId, keepId).ConfigureAwait(true);
         }
+    }
+
+    /// <summary>
+    /// Reloads ComboBox display labels from <c>StatusLabel_*</c> settings. DbKey codes stay stable.
+    /// </summary>
+    internal async Task ApplyStatusLabelsFromSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        if (_systemSettings is null)
+            return;
+
+        try
+        {
+            var settings = await _systemSettings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(true);
+            ApplyStatusOptions(InspectionStatusOptionsBuilder.FromLabels(settings.StatusLabels));
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Inspection] Failed to load status labels: {ex.Message}");
+        }
+    }
+
+    internal void ApplyStatusOptions(IReadOnlyList<(string DbKey, string Label)> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        StatusOptions.Clear();
+        foreach (var (dbKey, label) in options)
+            StatusOptions.Add(new InspectionStatusOption(dbKey, label));
     }
 
     private async Task RefreshTemplatesAsync(CancellationToken ct = default)

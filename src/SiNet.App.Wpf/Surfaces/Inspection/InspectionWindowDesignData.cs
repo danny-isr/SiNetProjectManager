@@ -32,13 +32,9 @@ internal static class InspectionWindowDesignData
     ];
 
     public static IReadOnlyList<InspectionStatusOption> DefaultStatusOptions { get; } =
-    [
-        new(InspectionQuestionnaireRules.Failed, "הערה"),
-        new("Passed", "מקובל"),
-        new("RecurringFailed", "הערה חוזרת"),
-        new(InspectionQuestionnaireRules.NotApplicable, "לא רלוונטי"),
-        new(InspectionQuestionnaireRules.ManagerReview, "הערה לבדיקת המנהל"),
-    ];
+        InspectionStatusOptionsBuilder.FromLabels(labels: null)
+            .Select(o => new InspectionStatusOption(o.DbKey, o.Label))
+            .ToList();
 
     /// <summary>Fake tree: General chapter + numbered chapters (design-time only).</summary>
     public static IReadOnlyList<object> BuildSampleTree()

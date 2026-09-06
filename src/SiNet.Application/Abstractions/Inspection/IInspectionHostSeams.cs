@@ -25,9 +25,10 @@ public sealed record InspectionNoteAiReviewResult(
 public interface IInspectionFileTreePickerHost
 {
     /// <summary>
-    /// Multi-select reviewed plans from the live ProjectWork tree. Returns an empty list when the
-    /// user confirms with no selection; <see langword="null"/> when cancelled. Requires the native
-    /// ProjectWork surface to have registered an active-file provider.
+    /// Multi-select reviewed plans. Standalone prefers the live ProjectWork hub when registered;
+    /// otherwise loads the project file skeleton from <c>IProjectFileQueryService</c> for the
+    /// current project (no prior Project Work UI open required).
+    /// Returns an empty list when the user confirms with no selection; <see langword="null"/> when cancelled.
     /// </summary>
     Task<IReadOnlyList<InspectionFilePickResult>?> PickReviewedPlansAsync(
         int projectId, CancellationToken cancellationToken = default);

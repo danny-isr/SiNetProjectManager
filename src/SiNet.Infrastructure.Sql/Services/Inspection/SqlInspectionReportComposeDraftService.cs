@@ -64,7 +64,7 @@ internal sealed class SqlInspectionReportComposeDraftService(
         if (string.IsNullOrWhiteSpace(sheetId) && string.IsNullOrWhiteSpace(sheetUrl))
             warning = "יש לייצא את הדוח לפני שליחה למתכנן.";
         else if (plannerEmails.Count == 0)
-            warning = "לא נמצא מייל מתכנן — יש להשלים נמען ידנית לפני שליחה.";
+            warning = "חסר נמען מתכנן (ProjectPlanners) — Send נשאר חסום עד להשלמת נמען.";
 
         return new InspectionReportComposeDraft(
             ReportId: report.ReportId,

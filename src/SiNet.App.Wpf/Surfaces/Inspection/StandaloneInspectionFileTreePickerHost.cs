@@ -7,18 +7,22 @@ using SiNet.Application.Projects;
 namespace SiNet.App.Wpf.Surfaces.Inspection;
 
 /// <summary>
-/// Standalone file-tree picker for reviewed plans / note links using the shared
-/// <see cref="FileTreePickerWindow"/> and the ProjectWork active-file hub.
-/// Enforces <paramref name="projectId"/> against <see cref="ICurrentProjectContext"/>.
+/// Standalone file-tree picker for reviewed plans / note links.
+/// Prefers the live ProjectWork hub when registered; otherwise loads the project file
+/// skeleton from <see cref="IProjectFileQueryService"/> so Inspection does not require
+/// opening «בעבודה 2» first.
 /// </summary>
 internal sealed class StandaloneInspectionFileTreePickerHost(
     IActiveFileQueryHub activeFiles,
-    ICurrentProjectContext currentProject) : IInspectionFileTreePickerHost
+    ICurrentProjectContext currentProject,
+    IProjectFileQueryService projectFiles) : IInspectionFileTreePickerHost
 {
     private readonly IActiveFileQueryHub _activeFiles =
         activeFiles ?? throw new ArgumentNullException(nameof(activeFiles));
     private readonly ICurrentProjectContext _currentProject =
         currentProject ?? throw new ArgumentNullException(nameof(currentProject));
+    private readonly IProjectFileQueryService _projectFiles =
+        projectFiles ?? throw new ArgumentNullException(nameof(projectFiles));
 
     public Task<IReadOnlyList<InspectionFilePickResult>?> PickReviewedPlansAsync(
         int projectId, CancellationToken cancellationToken = default) =>
@@ -54,24 +58,23 @@ internal sealed class StandaloneInspectionFileTreePickerHost(
             return null;
         }
 
-        if (!_activeFiles.IsAvailable)
+        var expectedNumber = project.ProjectNumber?.Trim();
+        List<FileTreePickerWindow.PickerNode> roots;
+        if (_activeFiles.IsAvailable)
         {
-            MessageBox.Show(
-                "כדי לבחור קבצים לדוח, יש לפתוח קודם את חלון העבודה (עץ קבצים פעיל).",
-                title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return null;
+            roots = BuildPickerRoots(_activeFiles.GetActiveFolderTree(), expectedNumber);
+        }
+        else
+        {
+            var tree = await _projectFiles.GetProjectFileTreeAsync(projectId, cancellationToken)
+                .ConfigureAwait(true);
+            roots = BuildPickerRootsFromProjectTree(tree);
         }
 
-        var tree = _activeFiles.GetActiveFolderTree();
-        // Scope guard: drop any file whose ProjectNumber does not match the current project number.
-        var expectedNumber = project.ProjectNumber?.Trim();
-        var roots = BuildPickerRoots(tree, expectedNumber);
         if (roots.Count == 0)
         {
             MessageBox.Show(
-                "לא נמצאו קבצים בעץ הפרויקט הפעיל לבחירה.",
+                "לא נמצאו קבצים בעץ הפרויקט לבחירה.",
                 title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -114,6 +117,65 @@ internal sealed class StandaloneInspectionFileTreePickerHost(
             .ToList();
     }
 
+    /// <summary>Maps DB project-file skeleton to picker nodes (no Project Work UI required).</summary>
+    internal static List<FileTreePickerWindow.PickerNode> BuildPickerRootsFromProjectTree(
+        ProjectFileTreeDto? tree)
+    {
+        var roots = new List<FileTreePickerWindow.PickerNode>();
+        if (tree is null)
+            return roots;
+
+        foreach (var folder in tree.RootFolders)
+        {
+            var node = MapProjectFolder(folder);
+            if (node is not null)
+                roots.Add(node);
+        }
+
+        return roots;
+    }
+
+    private static FileTreePickerWindow.PickerNode? MapProjectFolder(ProjectFolderDto folder)
+    {
+        var children = new List<FileTreePickerWindow.PickerNode>();
+        foreach (var child in folder.Children)
+        {
+            var mapped = MapProjectFolder(child);
+            if (mapped is not null)
+                children.Add(mapped);
+        }
+
+        foreach (var file in folder.Files)
+        {
+            var displayName = string.IsNullOrWhiteSpace(file.Extension)
+                ? file.BaseName
+                : file.BaseName.EndsWith(file.Extension, StringComparison.OrdinalIgnoreCase)
+                    ? file.BaseName
+                    : file.BaseName + file.Extension;
+
+            children.Add(new FileTreePickerWindow.PickerNode
+            {
+                Kind = FileTreePickerWindow.PickerNodeKind.File,
+                Title = displayName,
+                IsSelectable = true,
+                Tag = new InspectionFilePickResult(displayName, Alternative: "1", Version: null, FullPath: null),
+            });
+        }
+
+        if (children.Count == 0)
+            return null;
+
+        var folderNode = new FileTreePickerWindow.PickerNode
+        {
+            Kind = FileTreePickerWindow.PickerNodeKind.Folder,
+            Title = folder.Name,
+            IsSelectable = false,
+        };
+        foreach (var child in children)
+            folderNode.Children.Add(child);
+        return folderNode;
+    }
+
     internal static List<FileTreePickerWindow.PickerNode> BuildPickerRoots(
         IReadOnlyList<ActiveFolderInfo> folders,
         string? expectedProjectNumber)
@@ -153,7 +215,6 @@ internal sealed class StandaloneInspectionFileTreePickerHost(
                     expectedProjectNumber.TrimStart('0'),
                     StringComparison.OrdinalIgnoreCase))
             {
-                // Also allow when ProjectNumber is stored as int and ProjectNumber string differs only by formatting.
                 if (!int.TryParse(expectedProjectNumber, out var expectedInt)
                     || file.ProjectNumber != expectedInt)
                 {
@@ -165,7 +226,6 @@ internal sealed class StandaloneInspectionFileTreePickerHost(
                 ? file.FileName
                 : file.FileName + file.Extension;
 
-            // Prefer first alternative as default pick payload; Version left null (operator may set later).
             string? alt = file.Alternatives.Count > 0 ? file.Alternatives[0].AlternativeName : null;
             children.Add(new FileTreePickerWindow.PickerNode
             {
