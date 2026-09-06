@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Identity;
+using SiNet.Infrastructure.Sql.Services.Identity;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -117,5 +120,52 @@ internal static class PilotSmokeSeed
         await db.SaveChangesAsync(cancellationToken);
 
         return new OperatorLogin(declaredOperatorUserId, windowsLogin, previous, Changed: true);
+    }
+
+    /// <summary>
+    /// Binds <see cref="AuthenticatedUserSession"/> the same way the production host does after
+    /// Windows login resolution — via <see cref="IWindowsCurrentUserAuthenticator"/>.
+    /// <para>
+    /// LoginName alignment (<see cref="EnsureOperatorLoginAsync"/>) is necessary but not sufficient:
+    /// <c>IdentityOperationGuard</c> / <c>WorkflowMutate</c> reads the in-process session through
+    /// <see cref="IIdentityCoherenceService"/>. Without this bind, StartAsync fails with
+    /// <c>IdentityOperationDeniedException</c> before <c>IPilotStartGate</c> runs.
+    /// </para>
+    /// Does not weaken production guards and does not register PilotSmoke-specific authorization.
+    /// </summary>
+    public static async Task<WindowsUserAuthenticationResult> EnsureAuthorizedOperatorSessionAsync(
+        IServiceProvider services,
+        int declaredOperatorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        var authenticator = services.GetRequiredService<IWindowsCurrentUserAuthenticator>();
+        var result = await authenticator.AuthenticateAsync(cancellationToken).ConfigureAwait(false);
+
+        if (result.Status is not WindowsUserAuthStatus.Authorized)
+        {
+            throw new InvalidOperationException(
+                "PilotSmoke could not bind an Authorized SIUser session for WorkflowMutate. "
+                + $"Status={result.Status}, reason='{result.FailureReason ?? "<none>"}'.");
+        }
+
+        if (result.Profile is null || result.Profile.UserId != declaredOperatorUserId)
+        {
+            throw new InvalidOperationException(
+                "Authenticated session UserId does not match "
+                + $"{PilotSmokeEnvironment.OperatorUserIdEnv}={declaredOperatorUserId}. "
+                + $"Resolved UserId={result.Profile?.UserId.ToString() ?? "<null>"}.");
+        }
+
+        // Defense in depth: coherence must see the same profile the host would use.
+        var session = services.GetRequiredService<AuthenticatedUserSession>();
+        if (!session.HasSession || session.UserId != declaredOperatorUserId)
+        {
+            throw new InvalidOperationException(
+                "AuthenticatedUserSession was not populated after AuthenticateAsync.");
+        }
+
+        return result;
     }
 }

@@ -28,8 +28,9 @@ namespace SiNet.App.Wpf.Tests.Live;
 /// <c>docs/PILOT_CONTROLS.md</c>, against a real DEV database.
 /// <para>
 /// One ordered scenario, because each step depends on the state the previous step left behind.
-/// Every mutation of <c>Pilot.*</c> is snapshotted and restored in <c>finally</c>, and the final
-/// assertion is that a fresh read reports <c>Pilot.Enabled=false</c>.
+/// Every mutation of <c>Pilot.*</c> is snapshotted and restored in <c>finally</c>. After restore,
+/// if the snapshot left Pilot enabled, the harness forces <c>Pilot.Enabled=false</c> so a broad
+/// DEV allowlist is never left accidentally armed. The final assertion is fail-closed enabled.
 /// </para>
 /// <para>
 /// Gates and safety model: <c>docs/TEST_STRATEGY.md</c> §4W. Skips (never fails) when the gates are
@@ -135,10 +136,33 @@ public sealed class P0PilotLiveSmokeTests
         {
             await RestorePilotSnapshotAsync(dbFactory, snapshot);
 
-            var finalRead = await settingsQuery.GetSystemSettingsAsync();
-            evidence.Fact("Pilot.Enabled after restore (fresh read)", finalRead.Workflow.PilotEnabled.ToString());
-            evidence.Fact("Pilot.AllowedUserIds after restore", finalRead.Workflow.PilotAllowedUserIds);
-            evidence.Fact("Pilot.AllowedWorkflowCodes after restore", finalRead.Workflow.PilotAllowedWorkflowCodes);
+            var restoredRead = await settingsQuery.GetSystemSettingsAsync();
+            evidence.Fact("Pilot.Enabled after restore (fresh read)", restoredRead.Workflow.PilotEnabled.ToString());
+            evidence.Fact(
+                "Pilot.AllowedUserIds after restore",
+                string.IsNullOrWhiteSpace(restoredRead.Workflow.PilotAllowedUserIds)
+                    ? "<empty>"
+                    : restoredRead.Workflow.PilotAllowedUserIds);
+            evidence.Fact(
+                "Pilot.AllowedWorkflowCodes after restore",
+                string.IsNullOrWhiteSpace(restoredRead.Workflow.PilotAllowedWorkflowCodes)
+                    ? "<empty>"
+                    : restoredRead.Workflow.PilotAllowedWorkflowCodes);
+
+            // Never leave Pilot armed on DEV after the corridor — broad restored allowlists stay
+            // inert when Enabled is false.
+            if (restoredRead.Workflow.PilotEnabled)
+            {
+                await WritePilotSettingsAsync(
+                    dbFactory,
+                    enabled: "false",
+                    userIds: snapshot.AllowedUserIds,
+                    codes: snapshot.AllowedWorkflowCodes);
+                evidence.Pass(
+                    "Post-restore fail-closed enforcement",
+                    "Snapshot restored Pilot.Enabled=true; forced Enabled=false so DEV allowlists "
+                    + "are not left accidentally armed. AllowedUserIds/Codes left as restored (inert).");
+            }
 
             if (smokeProjectId is int created)
             {
@@ -152,10 +176,21 @@ public sealed class P0PilotLiveSmokeTests
             evidence.Fact("Evidence file", evidence.MarkdownPath);
         }
 
-        var afterRestore = await settingsQuery.GetSystemSettingsAsync();
+        var after = await settingsQuery.GetSystemSettingsAsync();
+        evidence.Fact("Pilot.Enabled final (fresh read)", after.Workflow.PilotEnabled.ToString());
+        evidence.Fact(
+            "Pilot.AllowedUserIds final",
+            string.IsNullOrWhiteSpace(after.Workflow.PilotAllowedUserIds)
+                ? "<empty>"
+                : after.Workflow.PilotAllowedUserIds);
+        evidence.Fact(
+            "Pilot.AllowedWorkflowCodes final",
+            string.IsNullOrWhiteSpace(after.Workflow.PilotAllowedWorkflowCodes)
+                ? "<empty>"
+                : after.Workflow.PilotAllowedWorkflowCodes);
         Assert.False(
-            afterRestore.Workflow.PilotEnabled,
-            "Pilot.Enabled must read false after the smoke restores its snapshot.");
+            after.Workflow.PilotEnabled,
+            "Pilot.Enabled must read false after restore (+ fail-closed enforcement if needed).");
     }
 
     private static Microsoft.Extensions.DependencyInjection.ServiceProvider BuildProvider(
@@ -227,6 +262,8 @@ public sealed class P0PilotLiveSmokeTests
         // Windows identity on this workstation resolves to nobody until the row is repointed. This is
         // the second and last thing the tier fixes rather than reports (docs/TEST_STRATEGY.md §4W.2.3).
         var login = await PilotSmokeSeed.EnsureOperatorLoginAsync(dbFactory, operatorUserId);
+        var auth = await PilotSmokeSeed.EnsureAuthorizedOperatorSessionAsync(
+            provider, operatorUserId);
         evidence.Pass(
             "P2 Operator SIUser",
             $"Id={operatorUserId} name='{operatorUser.Name}' active, and Windows identity "
@@ -235,7 +272,8 @@ public sealed class P0PilotLiveSmokeTests
                 ? $" after repointing LoginName from '{login.PreviousLoginName ?? "<empty>"}'. "
                   + "Group memberships and role were not touched."
                 : " already; nothing was changed.")
-            + $" Role={operatorUser.Role}.");
+            + $" Role={operatorUser.Role}. AuthenticatedUserSession bound "
+            + $"(AuthStatus={auth.Status}, email='{auth.Profile?.Email ?? "<none>"}') for WorkflowMutate.");
 
         if (login.Changed)
         {

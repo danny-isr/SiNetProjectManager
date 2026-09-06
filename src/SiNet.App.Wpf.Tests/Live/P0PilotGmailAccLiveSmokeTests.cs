@@ -68,12 +68,15 @@ public sealed class P0PilotGmailAccLiveSmokeTests(ITestOutputHelper output)
         var settings = provider.GetRequiredService<ISystemSettingsQueryService>();
 
         var login = await PilotSmokeSeed.EnsureOperatorLoginAsync(dbFactory, gate.OperatorUserId);
+        var auth = await PilotSmokeSeed.EnsureAuthorizedOperatorSessionAsync(
+            provider, gate.OperatorUserId);
         evidence.Pass(
             "P2 Operator login resolves",
             $"Windows identity '{login.WindowsLogin}' resolves to SIUser {gate.OperatorUserId}"
             + (login.Changed
                 ? $" after repointing LoginName from '{login.PreviousLoginName ?? "<empty>"}'."
-                : " already."));
+                : " already.")
+            + $" AuthStatus={auth.Status}.");
 
         var message = await ProbeGmailAsync(provider, gmailTier, evidence);
         var actingLogin = WindowsIdentity.GetCurrent().Name;

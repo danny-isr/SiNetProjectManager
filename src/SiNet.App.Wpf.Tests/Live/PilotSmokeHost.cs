@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO;
+using MyOffice.AutodeskConnector;
 using SiNet.Application.Abstractions.Autodesk;
+using SiNet.Application.Configuration;
 using SiNet.Infrastructure.AccBootstrap;
 using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
@@ -72,10 +74,21 @@ internal static class PilotSmokeHost
             return services.BuildServiceProvider();
         }
 
-        // The vault token provider is host-level wiring in production
-        // (StandaloneHostServiceCollectionExtensions); without it the local inbox executor cannot be
-        // constructed at all.
-        services.AddSiNetAutodeskVaultTokenProvider();
+        // AccService Admin token store — same contract as SiOffice.AccService/Program.cs.
+        // AccProjectProvisioningService fail-closes unless purpose=AccServiceAdmin and the path is
+        // the dedicated AccService refresh_token.json. The desktop WPF host keeps UserContext and
+        // routes admin mutations through AccService; this Local smoke performs those mutations
+        // in-process, so it must bind the AccService Admin store (not weaken production guards).
+        services.AddSingleton<ITokenProvider>(sp =>
+        {
+            var vault = sp.GetRequiredService<ISecretVaultStore>();
+            var clientId = vault.GetSecret(SecretCatalog.AutodeskClientId) ?? string.Empty;
+            var clientSecret = vault.GetSecret(SecretCatalog.AutodeskClientSecret) ?? string.Empty;
+            return new TokenProvider(
+                clientId,
+                clientSecret,
+                AutodeskTokenStoreOptions.AccServiceAdmin);
+        });
         services.AddSiNetAutodesk();
         services.AddSiNetAutodeskLocalSql();
         services.AddSiNetAccInboxBootstrapLocal();

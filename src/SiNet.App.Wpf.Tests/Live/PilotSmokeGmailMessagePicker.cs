@@ -30,9 +30,13 @@ internal static class PilotSmokeGmailMessagePicker
 
         if (!IsAutoSubjectToken(subjectToken))
         {
+            // Explicit subject locate must include self-addressed disposable messages that Gmail
+            // also tags SENT. AllMail excludes -in:sent and would miss them, then historically
+            // fell through to AUTO (unsafe). Search Inbox instead; refuse if none match.
             var bySubject = await QueryAsync(
                 gateway,
                 subject: subjectToken,
+                mailboxScope: EmailMailboxScope.Inbox,
                 attachmentsOnly: false,
                 pageSize: 50,
                 cancellationToken);
@@ -55,11 +59,16 @@ internal static class PilotSmokeGmailMessagePicker
                     newest,
                     $"subject token '{subjectToken}' (newest match; no Gmail-reported attachments — ingest may still create body PDF)");
             }
+
+            throw new InvalidOperationException(
+                $"No Gmail message matched subject token '{subjectToken}'. Refusing to fall through "
+                + "to automatic AllMail selection — that could target a production mailbox item.");
         }
 
         var autoCandidates = await QueryAsync(
             gateway,
             subject: null,
+            mailboxScope: EmailMailboxScope.AllMail,
             attachmentsOnly: true,
             pageSize: 100,
             cancellationToken);
@@ -77,6 +86,7 @@ internal static class PilotSmokeGmailMessagePicker
     private static async Task<IReadOnlyList<EmailSummary>> QueryAsync(
         IEmailGateway gateway,
         string? subject,
+        EmailMailboxScope mailboxScope,
         bool attachmentsOnly,
         int pageSize,
         CancellationToken cancellationToken)
@@ -85,7 +95,7 @@ internal static class PilotSmokeGmailMessagePicker
             new EmailMailboxQuery
             {
                 Subject = subject,
-                MailboxScope = EmailMailboxScope.AllMail,
+                MailboxScope = mailboxScope,
                 AttachmentsOnly = attachmentsOnly,
                 PageSize = pageSize,
             },
