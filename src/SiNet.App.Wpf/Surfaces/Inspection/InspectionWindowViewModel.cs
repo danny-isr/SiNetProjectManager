@@ -24,9 +24,6 @@ namespace SiNet.App.Wpf.Surfaces.Inspection;
 /// </summary>
 public sealed class InspectionWindowViewModel : ObservableObject
 {
-    private const string NotWiredYet =
-        "\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D6\u05D5 \u05D8\u05E8\u05DD \u05D7\u05D5\u05D1\u05E8\u05D4 (\u05E9\u05DC\u05D3 \u05D5\u05D9\u05D6\u05D5\u05D0\u05DC\u05D9 \u05D1\u05DC\u05D1\u05D3).";
-
     private readonly IInspectionWorkspace? _workspace;
     private readonly ITaskCompletionService? _taskCompletion;
     private readonly ITaskCompletionMetadataResolver? _completionMetadata;
@@ -44,6 +41,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
     private readonly IInspectionDrawingCommandService? _drawingCommands;
     private readonly IInspectionReportComposeDraftService? _composeDraft;
     private readonly ISystemSettingsQueryService? _systemSettings;
+    private readonly IInspectionPlannerResponseService? _plannerResponses;
 
     private WorkSurfaceContext? _taskContext;
     private InspectionReportComposeDraft? _plannerComposeDraft;
@@ -92,7 +90,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         IInspectionReportTaskLinkService? reportTaskLinks = null,
         IInspectionDrawingCommandService? drawingCommands = null,
         IInspectionReportComposeDraftService? composeDraft = null,
-        ISystemSettingsQueryService? systemSettings = null)
+        ISystemSettingsQueryService? systemSettings = null,
+        IInspectionPlannerResponseService? plannerResponses = null)
     {
         _workspace = workspace;
         _taskCompletion = taskCompletion;
@@ -111,6 +110,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
         _drawingCommands = drawingCommands;
         _composeDraft = composeDraft;
         _systemSettings = systemSettings;
+        _plannerResponses = plannerResponses;
 
         CreateStrip = new InspectionCreateReportStripViewModel();
         Questionnaire = new InspectionQuestionnaireViewModel();
@@ -176,8 +176,12 @@ public sealed class InspectionWindowViewModel : ObservableObject
             () => ShowPlannerComposeStrip && PlannerComposeDraft is not null);
 
         CreateReportCommand = new AsyncRelayCommand(CreateReportAsync, () => CanCreateReport);
-        MarkResponseReceivedCommand = Stub();
-        RepullPlannerResponsesCommand = Stub();
+        MarkResponseReceivedCommand = new AsyncRelayCommand(
+            () => PullPlannerResponsesAsync(isRepull: false),
+            CanPullPlannerResponses);
+        RepullPlannerResponsesCommand = new AsyncRelayCommand(
+            () => PullPlannerResponsesAsync(isRepull: true),
+            CanPullPlannerResponses);
         OpenSourceReportCommand = new AsyncRelayCommand(OpenSourceReportAsync, () => !string.IsNullOrWhiteSpace(_cachedSourceFileUrn));
         UnlockReportCommand = new AsyncRelayCommand(UnlockReportAsync, () => SelectedReport is not null && _reportCommands is not null && !IsBusy);
         ShareReportCommand = new AsyncRelayCommand(ShareReportAsync, () => SelectedReport is not null && _exportPort is not null && !IsBusy);
@@ -1571,6 +1575,53 @@ public sealed class InspectionWindowViewModel : ObservableObject
         }
     }
 
+    private bool CanPullPlannerResponses() =>
+        SelectedReport is not null
+        && _plannerResponses is not null
+        && !IsBusy
+        && !string.IsNullOrWhiteSpace(Metadata.SentSpreadsheetUrl);
+
+    private async Task PullPlannerResponsesAsync(bool isRepull)
+    {
+        if (_plannerResponses is null || SelectedReport is null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(Metadata.SentSpreadsheetUrl))
+        {
+            StatusMessage = "לדוח אין מזהה גיליון שנשלח";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            StatusMessage = isRepull ? "מושך מחדש תגובות מתכנן..." : "מסמן תגובות מתכנן שהתקבלו...";
+            var result = await _plannerResponses
+                .PullAndPersistAsync(SelectedReport.ReportId, isRepull)
+                .ConfigureAwait(true);
+            if (!result.Succeeded)
+            {
+                StatusMessage = result.ErrorMessage ?? "ייבוא תגובות מתכנן נכשל.";
+                return;
+            }
+
+            if (ResolveActiveProjectId() is int projectId)
+            {
+                await LoadReportContentAsync(projectId, SelectedReport.ReportId).ConfigureAwait(true);
+            }
+
+            StatusMessage = result.SavedCount > 0
+                ? $"נשמרו {result.SavedCount} תגובות מתכנן (התאמות: {result.MatchedCount})."
+                : result.MatchedCount > 0
+                    ? $"נמצאו {result.MatchedCount} התאמות אך לא נשמר שינוי."
+                    : "לא נמצאו תגובות מתכנן בגיליון.";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private Task OpenSourceReportAsync()
     {
         if (string.IsNullOrWhiteSpace(_cachedSourceFileUrn))
@@ -1961,6 +2012,8 @@ public sealed class InspectionWindowViewModel : ObservableObject
         (UnlockReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ShareReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ExportReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (MarkResponseReceivedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (RepullPlannerResponsesCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (OpenSourceReportCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (SelectReviewedPlanCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (AddDrawingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
@@ -2078,10 +2131,4 @@ public sealed class InspectionWindowViewModel : ObservableObject
 
         await ReviewNoteAiAsync(Questionnaire.SelectedNote).ConfigureAwait(true);
     }
-
-    private AsyncRelayCommand Stub() => new(() =>
-    {
-        StatusMessage = NotWiredYet;
-        return Task.CompletedTask;
-    });
 }

@@ -84,6 +84,7 @@ public static class GoogleServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Transient<
             IInspectionReportExportPort,
             GoogleSheetsInspectionReportExportPort>());
+        services.TryAddTransient<IInspectionPlannerResponseService, GoogleInspectionPlannerResponseService>();
 
         // ProjectWork Google Drive: Shared Drive primitives + IFileStore over the shared session.
         services.AddSingleton<IGoogleDriveFileService, GoogleDriveFileService>();
