@@ -1,4 +1,4 @@
-# RC1 — Controlled Pilot Release Candidate Gate
+﻿# RC1 — Controlled Pilot Release Candidate Gate
 
 > **Date:** 2026-09-06  
 > **Updated:** 2026-09-06 (blocker clearance)  
@@ -11,7 +11,7 @@
 | Item | Value |
 | --- | --- |
 | **Candidate product SiNet SHA** | `eeda3c17c356421c95311a5b77754ccab02e204f` |
-| **Harness / RC1-doc SHA (after clearance)** | *(see Final decision — set after commit)* |
+| **Harness / RC1-doc SHA (after clearance)** | $sha |
 | `origin/development` at freeze | **identical** to candidate (`eeda3c17`) |
 | SiNetSQL | `a34418f294fa6cd131daa538f098af5a7849d3d7` |
 | SiOffice.AutodeskConnector | `e847dade01c70fc10043bfa299d23c7077f80c33` |
@@ -184,3 +184,4 @@ No development→release merge. No publish. No installation. No external workflo
 ---
 
 RC1 VERDICT: READY FOR PILOT PROMOTION
+
