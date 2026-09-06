@@ -1,8 +1,8 @@
 # Inspection Report — Phase 2 Feature Inventory & Certification Matrix
 
-> **Status:** Substantially certified (LIVE UI operator paths closed 2026-09-06)  
-> **Updated:** 2026-09-06 (TRUE OPERATOR PATHS final phase)  
-> **Fresh baseline:** `90c8d93254a300661ffd1f980ff0ce6217dd9bd5`  
+> **Status:** CERTIFIED WITH EXPLICIT SAFETY BOUNDARIES (2026-09-06)  
+> **Updated:** 2026-09-06 (final LIVE UI gap closure)  
+> **Fresh baseline:** `bd3545ccd78a626143ef0351a5c66fe2daa82713`  
 > **Host:** Standalone `SiNet.App.Wpf` (production)  
 > **Safe E2E report:** ReportId **#9** (project 136, ReportNumber=2, Inspector=E2E-CREATE)  
 > **Workflow report:** ReportId **#4** (ReportNumber=1) — Task #300 target  
@@ -15,7 +15,7 @@ This document is the Phase 2 source of truth for **every** user-facing Inspectio
 | Tag | Meaning |
 | --- | --- |
 | **PASS (UNIT)** | Automated unit / pure VM / builder test — no live DB/UI |
-| **PASS (LIVE INTEGRATION)** | Live DEV services (`IInspectionNoteCommandService`, export port, Ollama reviewer, etc.) — **not** WPF operator path |
+| **PASS (LIVE INTEGRATION)** | Live DEV services — **not** WPF operator path |
 | **PASS (LIVE UI)** | Real WPF UI exercised (WpfPilot / UIA / operator) on Standalone host |
 | `FIXED + PASS (*)` | Defect fixed; evidence level in parentheses |
 | `NOT APPLICABLE` | Capability absent by design |
@@ -30,20 +30,22 @@ Do **not** label direct-service live tests as PASS (LIVE UI).
 | Seam | Standalone binding | Result |
 | --- | --- | --- |
 | `IInspectionWorkspace` | `SqlInspectionWorkspace` | PASS (UNIT composition) |
-| `IInspectionNoteCommandService` | `SqlInspectionNoteCommandService` | PASS (UNIT) + PASS (LIVE INTEGRATION) |
+| `IInspectionNoteCommandService` | `SqlInspectionNoteCommandService` | PASS (UNIT) + PASS (LIVE INTEGRATION); **FIXED** AddNote next ordinal = max+1 (gap-safe) |
 | `IInspectionReportCommandService` | `SqlInspectionReportCommandService` | PASS (UNIT composition) |
-| `IInspectionDrawingCommandService` | `SqlInspectionDrawingCommandService` + UI Add/Remove | FIXED + PASS (UNIT); LIVE UI OpenFileDialog see §8 |
+| `IInspectionDrawingCommandService` | `SqlInspectionDrawingCommandService` + UI Add/Remove | FIXED + PASS (UNIT); LIVE UI cancel PASS; Add with safe PDF see §6–8 |
 | `IInspectionReportTaskLinkService` | `SqlInspectionReportTaskLinkService` | PASS (UNIT composition) |
 | `IInspectionNoteAiReviewer` | `OllamaInspectionNoteAiReviewer` | PASS (LIVE INTEGRATION); LIVE UI see §4 |
 | `IInspectionTemplateCatalog` | `GoogleDriveInspectionTemplateCatalog` | PASS (LIVE UI list visible on #136) |
 | `IInspectionReportExportPort` | `GoogleSheetsInspectionReportExportPort` | PASS (LIVE INTEGRATION); LIVE UI Export button see §11 |
-| `IInspectionPlannerResponseService` | `GoogleInspectionPlannerResponseService` | FIXED + PASS (UNIT Mark/Repull); live import boundary see §13 |
-| `IInspectionNoteScreenshotHost` | `StandaloneInspectionNoteScreenshotHost` | wired; LIVE UI see §5 |
+| `IInspectionPlannerResponseService` | `GoogleInspectionPlannerResponseService` | FIXED + PASS (UNIT Mark/Repull); live import see §13 |
+| `IInspectionNoteScreenshotHost` | `StandaloneInspectionNoteScreenshotHost` | PASS (LIVE UI) see §5 |
 | `IInspectionFileTreePickerHost` | `StandaloneInspectionFileTreePickerHost` via `IProjectFileQueryService` | FIXED + PASS (UNIT); LIVE UI see §6–7 |
 | `IInspectionReportComposeDraftService` | `SqlInspectionReportComposeDraftService` | FIXED + PASS (UNIT + LIVE UI Task #300 compose strip) |
 | `IInspectionReportEmailHost` | `NoOpInspectionReportEmailHost` | PASS (hard stop — no send) |
 
 **Export lifecycle:** Export may create Google artifact + `SentSpreadsheetId`/`Url`. Must **not** set `SentAt` or `IsLockedAfterSend`.
+
+**AutomationIds added (operator chrome):** `Inspection.Screenshot` (+`.OpenLast`/`.Attach`), `Inspection.LinkedFile` (+`.Open`/`.Set`/`.Clear`), `Inspection.MoveNoteUp`/`Down`, `Inspection.General.AutoManualToggle`/`Value`, `Inspection.Note.StatusCombo`/`RichEditor`(+color menu ids), `Inspection.ExportReport`/`ShareReport`/`RepullPlannerResponses`/`MarkPlannerReceived`, `Inspection.Section.AddNote`.
 
 ---
 
@@ -51,12 +53,10 @@ Do **not** label direct-service live tests as PASS (LIVE UI).
 
 | # | Capability | Result |
 | --- | --- | --- |
-| V1–V6 | Rules (empty general, missing status, N/A, ManagerReview blocks, aggregate) | PASS (UNIT) |
-| V7–V10 | Full status/text matrix on #9 NoteId **53** (`1.1.1`): no status, Passed±text, Failed±text, RecurringFailed±text, NotApplicable empty, ManagerReview+text | **PASS (LIVE UI)** — real ComboBox + editor + `ValidationSummary` + Export enabled/disabled; DbKeys stored English; restore to NotApplicable |
-| V9 | `StatusLabel_*` → ComboBox display | **PASS (LIVE UI)** — labels: מקובל / הערה / הערה חוזרת / לא רלוונטי / הערה לבדיקת המנהל; DB remains Passed/Failed/RecurringFailed/NotApplicable/ManagerReview |
-| V10b | Same matrix via note commands | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveValidationMatrixTests` (serialized Collection) |
-
-Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
+| V1–V6 | Rules | PASS (UNIT) |
+| V7–V10 | Full status/text matrix on #9 NoteId **53** | **PASS (LIVE UI)** |
+| V9 | `StatusLabel_*` ComboBox display | **PASS (LIVE UI)** |
+| V10b | Same matrix via note commands | **PASS (LIVE INTEGRATION)** |
 
 ---
 
@@ -65,7 +65,7 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 | # | Capability | Result |
 | --- | --- | --- |
 | G1–G2 | Auto-fill / inspector email | PASS (UNIT) / prior LIVE UI |
-| G3–G6 | Manual override ↔ restore auto | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveGeneralOverrideTests`; LIVE UI see sweep evidence |
+| G3–G6 | Manual override ↔ restore auto | **PASS (LIVE INTEGRATION)** + **PASS (LIVE UI)** Auto→Manual→edit→reopen→Auto; auto value returned (`אשקלון`) |
 
 ---
 
@@ -74,17 +74,18 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 | # | Capability | Result |
 | --- | --- | --- |
 | Q1–Q2 | Tree load / numbering | PASS (LIVE UI open #9) |
-| Q3–Q6 | Add note / Move Up/Down | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveNoteCrudReorderTests`; LIVE UI toolbar/▲▼ see sweep |
-| Q7–Q9 | Save text/status / reload | PASS (LIVE UI validation matrix) |
+| Q3 | Add note (toolbar / section +) | **PASS (LIVE UI)** — toolbar `Inspection.Toolbar.AddNote` (e.g. NoteId 92 cleaned up) |
+| Q4–Q6 | Move Up/Down buttons | **PASS (LIVE UI)** ▲/▼ AutomationIds invoked on created note; also **PASS (LIVE INTEGRATION)** |
+| Q7–Q9 | Save text/status / reload | PASS (LIVE UI) |
 
 ---
 
-## 4. AI (`OllamaInspectionNoteAiReviewer`)
+## 4. AI
 
 | # | Capability | Result |
 | --- | --- | --- |
-| AI1–AI5 | Grammar/rephrase via `ReviewAsync` | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveAiTests` — **not** UI proof |
-| AI UI | Operator: imperfect Hebrew → בדיקת AI → context menu → Apply grammar/rephrase; non-apply; stale | **PASS (LIVE UI)** — see `tmp-e2e/UI_SWEEP_EVIDENCE.md` |
+| AI1–AI5 | `ReviewAsync` | **PASS (LIVE INTEGRATION)** |
+| AI UI | Apply grammar/rephrase + stale | **PASS (LIVE UI)** |
 
 ---
 
@@ -92,9 +93,11 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | # | Capability | Result |
 | --- | --- | --- |
-| S1–S7 | Clipboard → 📷 → Drive → DB (NoteId 53, file id, URL) | **PASS (LIVE UI)** — `note-53-20260906-111452.png` / `12tL5p4yTcwxOWMAgwOlEG8MTGV0MXzqU` |
-| S8 | Open Last | **NOT EXERCISED — context menu item not discovered via UIA this run** (attachment exists) |
-| S9 | Duplicate | **NOT EXERCISED — second attach did not insert new row (likely content-hash dedupe)** |
+| S1–S7 | Clipboard → 📷 → Drive → DB | **PASS (LIVE UI)** |
+| S8 | Open Last | **PASS (LIVE UI)** — Edge opened `note-53-…png` via primary/context (`Inspection.Screenshot.OpenLast`) |
+| S9 | Duplicate same image | **PASS (LIVE UI)** — contract **`rejected`**; message `התמונה הזו כבר צורפה להערה הזו.`; count 3→4→4 |
+
+Evidence: `tmp-e2e/ui-gap-closure-final.json`.
 
 ---
 
@@ -102,8 +105,10 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | Area | Result |
 | --- | --- |
-| Linked/reviewed picker without Project Work first | FIXED + PASS (UNIT); LIVE UI picker see sweep |
-| Drawings Add → OpenFileDialog cancel | **PASS (LIVE UI)** cancel via Esc after Add |
+| Linked picker without Project Work | **PASS (LIVE UI)** picker opens via `IProjectFileQueryService` fallback; selection **NOT EXERCISED — no selectable file** (empty / no usable tree files on #136) |
+| Reviewed picker without Project Work | **PASS (LIVE UI)** picker opens; selection **NOT EXERCISED — no selectable file** |
+| Drawings Add → cancel | **PASS (LIVE UI)** |
+| Drawings Add → safe DEV PDF → remove | **NOT EXERCISED — OpenFileDialog automation did not accept safe PDF path** (filter pdf/dwf/dwfx; cancel path certified) |
 
 ---
 
@@ -111,7 +116,8 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | # | Capability | Result |
 | --- | --- | --- |
-| E1–E6 | Multiline / RTL / colors / bold / paste / reopen | Partial LIVE UI via validation text entry; full matrix see sweep |
+| E codec | Colors/bold/multiline/mixed scripts round-trip | **PASS (UNIT)** `RichTextCodecTests.Full_operator_matrix_*` |
+| E UI | RTL Hebrew + EN + numbers + colors 1/2/3/4 + bold + default + long text + color menu; save/reopen DB | **PASS (LIVE UI)** — persisted RichTextCodec markup on NoteId 53; MinWidth fix for editor column |
 
 ---
 
@@ -127,10 +133,10 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | # | Capability | Result |
 | --- | --- | --- |
-| X1 | Validation gate disables Export | **PASS (LIVE UI)** (matrix) |
-| X3–X6 | Direct `ExportAsync` #9; SentAt NULL; unlocked | **PASS (LIVE INTEGRATION)** `InspectionReport9LiveExportTests` |
-| X UI | Click 📤 Export on #9 | **PASS (LIVE UI)** — SpreadsheetId `1-VGpF7j5…`; SentAt NULL; unlocked |
-| X7 | Share anyone-with-link | **NOT EXERCISED — STOP before permission mutation** |
+| X1 | Validation gate disables Export | **PASS (LIVE UI)** |
+| X3–X6 | Direct `ExportAsync` #9; SentAt NULL; unlocked | **PASS (LIVE INTEGRATION)** |
+| X UI | Click 📤 Export on #9 | **PASS (LIVE UI)** — SentAt NULL; unlocked |
+| X7 | Share anyone-with-link | **NOT EXERCISED — external permission side effect** |
 
 ---
 
@@ -138,7 +144,7 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | # | Capability | Result |
 | --- | --- | --- |
-| K1–K3 | Lock lifecycle | NOT EXERCISED — no email finalize; #4/#9 SentAt NULL |
+| K1–K3 | Lock lifecycle | **NOT EXERCISED — external email finalize / no-send boundary** (integration/unit paths only) |
 
 ---
 
@@ -146,9 +152,9 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | # | Capability | Result |
 | --- | --- | --- |
-| P2–P3 | Mark / Repull wired (not Stub) | FIXED + PASS (UNIT) |
-| P live import | Column-A pull | **NOT EXERCISED — no safe planner-filled cells invented** |
-| P UI no-response | Commands produce understandable empty/no-response state | see sweep |
+| P2–P3 | Mark / Repull wired | FIXED + PASS (UNIT) |
+| P UI no-response | Mark/Repull empty sheet message | **PASS (LIVE UI commands)** |
+| P live import | Column-A pull with written response | **NOT EXERCISED — E2E sheet Column-A/D planner cells not safely verified for write without Share/side-effect risk on artifact `1ysJ9…`** |
 
 ---
 
@@ -156,7 +162,7 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | # | Result |
 | --- | --- |
-| M1–M3 | NOT EXERCISED — multi-round workflow not in this gate |
+| M1–M3 | **PASS (UNIT)** `InspectionTemplateCreatePipelineTests` — same Series, ReportNumber 1→2, previous report notes preserved, RecurringFailed status key on round-2; **NOT EXERCISED — active Review workflow #83 advancement** |
 
 ---
 
@@ -166,7 +172,7 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 | --- | --- | --- |
 | TM1–TM4 | Routing #300 → Inspection / Report #4 | PASS (LIVE UI prior) |
 | TM5 | Compose STOP BEFORE SEND | PASS (LIVE UI) |
-| TM6 | Recipient SoT = **ProjectPlanners** only; empty → warning; Send disabled | PASS (LIVE UI) — **do not invent fallback; do not Export/send #4 to green** |
+| TM6 | Recipient SoT = **ProjectPlanners** only; empty → warning; Send disabled | PASS (LIVE UI) |
 | TM7 | Complete blocked | PASS |
 
 ---
@@ -175,7 +181,7 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | # | Capability | Result |
 | --- | --- | --- |
-| CP1–CP4 | Menu Inspection; Project 136; Report #9 | **PASS (LIVE UI)** — note: Inspection must open **after** Current Project is set (`InitializeBrowseAsync` snapshots project at load) |
+| CP1–CP4 | Menu Inspection; Project 136; Report #9 | **PASS (LIVE UI)** — set Current Project **before** Inspection |
 
 ---
 
@@ -183,6 +189,7 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 - External Review / OPN send / Task #300 completion
 - Release / publish / PROD
+- Public Share permission mutation
 - L4W PilotSmoke
 - Unrelated dirty: PilotSmoke docs/tests, `ProposalWorkflowHarness`, continuation starter files, `tmp-e2e/` (evidence only — do not commit)
 
@@ -192,22 +199,34 @@ Evidence: `tmp-e2e/ui-validation-matrix.json` (FAIL_COUNT=0).
 
 | Date | Scope | Evidence |
 | --- | --- | --- |
-| 2026-09-06 | LIVE INTEGRATION suite serialized (`InspectionReport9LiveCollection`) | 5/5 PASS |
-| 2026-09-06 | LIVE UI validation + StatusLabel_* ComboBox | `tmp-e2e/ui-validation-matrix.json` FAIL_COUNT=0 |
-| 2026-09-06 | Remaining operator paths | `tmp-e2e/UI_SWEEP_EVIDENCE.md` |
+| 2026-09-06 | LIVE INTEGRATION suite serialized | 5/5 PASS |
+| 2026-09-06 | Validation matrix | `tmp-e2e/ui-validation-matrix.json` |
+| 2026-09-06 | Operator sweep + continuation | `tmp-e2e/UI_SWEEP_EVIDENCE.md` |
+| 2026-09-06 | Final gap closure | `tmp-e2e/ui-gap-closure-final.json` |
 
-### Report #9 mutation serialization
+### Report #9 notes
 
-All `InspectionReport9Live*Tests` classes use `[Collection(InspectionReport9LiveCollection.Name)]` and restore changed state in `finally` where practical.
+Numbered notes restored to `NotApplicable` after anomaly cleanup (2026-09-06). `SentAt`/`IsLockedAfterSend` remain null/false.
+
+### Unicode-safe automation
+
+Helpers: `tmp-e2e/InspectionUiGapClosure.ps1` — Unicode escapes, PID-scoped UIA, AutomationIds, Normalize-UiText. Context menus via Shift+F10 when mouse right-click fails.
 
 ---
 
 ## 19. Certification verdict
 
-**INSPECTION REPORT MODULE = SUBSTANTIALLY CERTIFIED (LIVE UI)** for operator paths exercised 2026-09-06.
+**INSPECTION REPORT MODULE = CERTIFIED WITH EXPLICIT SAFETY BOUNDARIES**
 
-Closed as **PASS (LIVE UI):** Validation matrix · StatusLabel_* · AI Apply grammar/rephrase + stale · Screenshot Drive/DB · Export button (SentAt/lock invariant) · Drawings cancel.
+Closed as **PASS (LIVE UI)** for local operator paths including Open Last, same-image duplicate **rejected**, rich editor codec persistence, CRUD chrome ▲▼, general Auto/Manual, linked/reviewed picker open without Project Work, Export button, AI, validation.
 
-Still bounded / lighter: linked-reviewed full select cycle · rich-editor full color matrix · planner live Column-A · Task #300 remains send-blocked (correct).
+Remaining **NOT EXERCISED** only where genuinely blocked:
+
+- Share public permission mutation
+- Lock via external email finalize
+- Planner live Column-A write/import on export artifact (safety)
+- Drawings Add with file (OpenFileDialog automation; cancel certified)
+- Linked/reviewed **selection** (no selectable files on #136)
+- Multi-round via advancing WF #83
 
 Do not treat LIVE INTEGRATION as LIVE UI.

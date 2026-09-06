@@ -319,6 +319,7 @@
                                         Background="#43A047" Foreground="White"
                                         BorderBrush="#2E7D32" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
+                                        AutomationProperties.AutomationId="Inspection.MarkPlannerReceived"
                                         ToolTip="התקבלה תגובה מהמתכנן" />
                                 <Button Content="🔄"
                                         Command="{Binding RepullPlannerResponsesCommand}"
@@ -328,6 +329,7 @@
                                         Background="Transparent" Foreground="#2E7D32"
                                         BorderBrush="#2E7D32" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
+                                        AutomationProperties.AutomationId="Inspection.RepullPlannerResponses"
                                         ToolTip="משיכת תגובות המתכנן מחדש" />
                                 <Button Content="🔗"
                                         Command="{Binding OpenSourceReportCommand}"
@@ -337,6 +339,7 @@
                                         Background="Transparent" Foreground="#1565C0"
                                         BorderBrush="#1565C0" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
+                                        AutomationProperties.AutomationId="Inspection.OpenSourceReport"
                                         ToolTip="פתח את דוח המקור" />
                                 <Button Content="🔓"
                                         Command="{Binding UnlockReportCommand}"
@@ -346,6 +349,7 @@
                                         Background="Transparent" Foreground="#6D4C00"
                                         BorderBrush="#FFB300" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
+                                        AutomationProperties.AutomationId="Inspection.UnlockReport"
                                         ToolTip="שחרר נעילה" />
                                 <Button Content="🌐"
                                         Command="{Binding ShareReportCommand}"
@@ -355,6 +359,7 @@
                                         Background="Transparent" Foreground="#6D4C00"
                                         BorderBrush="#FFB300" BorderThickness="1"
                                         Cursor="Hand" Margin="0,0,4,0"
+                                        AutomationProperties.AutomationId="Inspection.ShareReport"
                                         ToolTip="שתף קישור לכל מי שיש לו הקישור" />
                                 <Button Content="📤"
                                         Command="{Binding ExportReportCommand}"
@@ -364,6 +369,7 @@
                                         Background="Transparent" Foreground="#1565C0"
                                         BorderBrush="#1565C0" BorderThickness="1"
                                         Cursor="Hand"
+                                        AutomationProperties.AutomationId="Inspection.ExportReport"
                                         ToolTip="{Binding ExportTooltip}"
                                         ToolTipService.ShowOnDisabled="True" />
                                 <ComboBox AutomationProperties.AutomationId="Inspection.ResultPicker"
@@ -622,6 +628,7 @@
                                                      Padding="3,2"
                                                      VerticalAlignment="Top"
                                                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                     AutomationProperties.AutomationId="Inspection.General.Value"
                                                      LostFocus="GeneralField_LostFocus">
                                                 <TextBox.Style>
                                                     <Style TargetType="TextBox" BasedOn="{StaticResource SiTextBoxStyle}">
@@ -650,6 +657,7 @@
                                                           Margin="4,0,0,0"
                                                           MinHeight="22"
                                                           VerticalAlignment="Top"
+                                                          AutomationProperties.AutomationId="Inspection.General.AutoManualToggle"
                                                           ToolTip="לחץ כדי לעבור בין מילוי אוטומטי לידני"
                                                           Click="AutoManualToggle_Click">
                                                 <ToggleButton.Style>
@@ -706,6 +714,7 @@
                                                 Style="{StaticResource CardActionButton}"
                                                 Padding="2,0" FontWeight="Bold"
                                                 MinWidth="18" MinHeight="18"
+                                                AutomationProperties.AutomationId="Inspection.Section.AddNote"
                                                 ToolTip="הוסף הערה חדשה" />
                                     </Grid>
                                 </HierarchicalDataTemplate>
@@ -747,12 +756,14 @@
                                                         Command="{Binding DataContext.MoveNoteUpCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
                                                         Style="{StaticResource CardActionButton}"
+                                                        AutomationProperties.AutomationId="Inspection.MoveNoteUp"
                                                         ToolTip="הזז למעלה" />
                                                 <Button Content="▼" FontSize="{DynamicResource SiTextTinyFontSize}"
                                                         MinWidth="14" MinHeight="14" Padding="0"
                                                         Command="{Binding DataContext.MoveNoteDownCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
                                                         Style="{StaticResource CardActionButton}"
+                                                        AutomationProperties.AutomationId="Inspection.MoveNoteDown"
                                                         ToolTip="הזז למטה" />
                                             </StackPanel>
 
@@ -763,18 +774,22 @@
                                                         Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         Command="{Binding DataContext.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
+                                                        AutomationProperties.AutomationId="Inspection.LinkedFile"
                                                         ToolTip="פתח / בחר קובץ מקושר"
                                                         ToolTipService.ShowOnDisabled="True"
                                                         ContextMenuService.ShowOnDisabled="True">
                                                     <Button.ContextMenu>
                                                         <ContextMenu>
                                                             <MenuItem Header="פתח קובץ מקושר"
+                                                                      AutomationProperties.AutomationId="Inspection.LinkedFile.Open"
                                                                       Command="{Binding PlacementTarget.Tag.OpenNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                                             <MenuItem Header="בחר/שנה קובץ מקושר"
+                                                                      AutomationProperties.AutomationId="Inspection.LinkedFile.Set"
                                                                       Command="{Binding PlacementTarget.Tag.SetNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                                             <MenuItem Header="נקה קובץ מקושר"
+                                                                      AutomationProperties.AutomationId="Inspection.LinkedFile.Clear"
                                                                       Command="{Binding PlacementTarget.Tag.ClearNoteLinkedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                                         </ContextMenu>
@@ -795,15 +810,18 @@
                                                         Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         Command="{Binding DataContext.ScreenshotPrimaryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}"
+                                                        AutomationProperties.AutomationId="Inspection.Screenshot"
                                                         ToolTip="צרף תמונה / פתח אחרונה"
                                                         ToolTipService.ShowOnDisabled="True"
                                                         ContextMenuService.ShowOnDisabled="True">
                                                     <Button.ContextMenu>
                                                         <ContextMenu>
                                                             <MenuItem Header="פתח את התמונה האחרונה"
+                                                                      AutomationProperties.AutomationId="Inspection.Screenshot.OpenLast"
                                                                       Command="{Binding PlacementTarget.Tag.OpenLastAttachmentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                                             <MenuItem Header="צרף תמונה חדשה מהלוח"
+                                                                      AutomationProperties.AutomationId="Inspection.Screenshot.Attach"
                                                                       Command="{Binding PlacementTarget.Tag.AttachScreenshotCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                                         </ContextMenu>
@@ -858,6 +876,7 @@
                                                       FontSize="{DynamicResource SiTextSmallFontSize}" Padding="1,2" Margin="0,0,4,0"
                                                       MinHeight="22" VerticalAlignment="Top"
                                                       IsEnabled="{Binding DataContext.IsReportEditable, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                      AutomationProperties.AutomationId="Inspection.Note.StatusCombo"
                                                       ToolTip="סטטוס ההערה" />
 
                                             <local:InspectionNoteRichEditor Grid.Column="5"
@@ -865,6 +884,7 @@
                                                 NoteStatus="{Binding StatusText}"
                                                 IsReadOnly="{Binding DataContext.IsSelectedReportLocked, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 VerticalAlignment="Top"
+                                                AutomationProperties.AutomationId="Inspection.Note.RichEditor"
                                                 EditCompleted="NoteRichEditor_EditCompleted"
                                                 AiReviewRequested="NoteRichEditor_AiReviewRequested"/>
                                         </Grid>

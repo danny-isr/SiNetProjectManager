@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.Inspection;
 using SiNet.Infrastructure.Sql.Services.Inspection;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
@@ -196,7 +197,62 @@ public sealed class InspectionTemplateCreatePipelineTests
         var r1 = await db.InspectionReports.SingleAsync(r => r.ReportId == first.ReportId);
         var r2 = await db.InspectionReports.SingleAsync(r => r.ReportId == second.ReportId);
         Assert.Equal(r1.SeriesId, r2.SeriesId);
+        Assert.Equal(1, r1.ReportNumber);
+        Assert.Equal(2, r2.ReportNumber);
         Assert.Equal(1, await db.InspectionSeries.CountAsync(s => s.ProjectId == 100));
+        // Previous round report remains addressable and is not replaced
+        Assert.True(await db.InspectionReports.AnyAsync(r => r.ReportId == first.ReportId));
+        Assert.True(await db.InspectionNotes.AnyAsync(n => n.ReportId == first.ReportId));
+        Assert.True(await db.InspectionNotes.AnyAsync(n => n.ReportId == second.ReportId));
+    }
+
+    [Fact]
+    public async Task Second_round_preserves_first_report_notes_and_allows_recurring_status_key()
+    {
+        var (factory, reader) = await CreateHarnessAsync(ValidSheetRows());
+        var sut = new SqlInspectionReportCommandService(factory, new TemplateSyncService(factory), reader);
+
+        var first = await sut.CreateReportAsync(
+            projectId: 100,
+            templateUrl: "https://docs.google.com/spreadsheets/d/sheet-A/edit",
+            spreadsheetId: "sheet-A");
+        Assert.True(first.Succeeded, first.ErrorMessage);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var note = await db.InspectionNotes
+                .Where(n => n.ReportId == first.ReportId && n.NoteSubIndex != null)
+                .OrderBy(n => n.NoteId)
+                .FirstAsync();
+            note.NoteStatus = InspectionQuestionnaireRules.Failed;
+            note.NoteText = "round-1 finding";
+            await db.SaveChangesAsync();
+        }
+
+        var second = await sut.CreateReportAsync(
+            projectId: 100,
+            templateUrl: "https://docs.google.com/spreadsheets/d/sheet-A/edit",
+            spreadsheetId: "sheet-A");
+        Assert.True(second.Succeeded, second.ErrorMessage);
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var preserved = await verify.InspectionNotes
+            .Where(n => n.ReportId == first.ReportId && n.NoteText == "round-1 finding")
+            .SingleAsync();
+        Assert.Equal(InspectionQuestionnaireRules.Failed, preserved.NoteStatus);
+
+        var round2Note = await verify.InspectionNotes
+            .Where(n => n.ReportId == second.ReportId)
+            .OrderBy(n => n.NoteId)
+            .FirstAsync();
+        round2Note.NoteStatus = "RecurringFailed";
+        round2Note.NoteText = "same finding again";
+        await verify.SaveChangesAsync();
+
+        var reloaded = await verify.InspectionNotes.SingleAsync(n => n.NoteId == round2Note.NoteId);
+        Assert.Equal("RecurringFailed", reloaded.NoteStatus);
+        Assert.Equal("same finding again", reloaded.NoteText);
+        Assert.False(InspectionQuestionnaireRules.HasValidationError(reloaded.NoteStatus, reloaded.NoteText));
     }
 
     [Fact]

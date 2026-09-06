@@ -61,4 +61,33 @@ public sealed class RichTextCodecTests
         Assert.Equal("critical", result);
         Assert.Empty(stripped);
     }
+
+    [Fact]
+    public void Full_operator_matrix_round_trips_colors_bold_multiline_and_mixed_scripts()
+    {
+        // RTL Hebrew + English + numbers + multiline + all colors + bold + default
+        const string encoded =
+            "שורה1 HE mix 42\n" +
+            "{1 אדום} {2 כחול} {4 ירוק} {3 אפור}\n" +
+            "{1! בולט-אדום} {! bold-only} plain default\n" +
+            "long-" + "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+
+        var (plain, runs) = RichTextCodec.Parse(encoded);
+        Assert.Contains("שורה1", plain, StringComparison.Ordinal);
+        Assert.Contains("HE mix 42", plain, StringComparison.Ordinal);
+        Assert.Contains('\n', plain);
+        Assert.True(runs.Count >= 5);
+
+        var colors = runs.Select(r => r.Color).ToHashSet();
+        Assert.Contains(RichTextCodec.RichTextColor.Red, colors);
+        Assert.Contains(RichTextCodec.RichTextColor.Blue, colors);
+        Assert.Contains(RichTextCodec.RichTextColor.Green, colors);
+        Assert.Contains(RichTextCodec.RichTextColor.Gray, colors);
+        Assert.Contains(runs, r => r.Bold);
+
+        var again = RichTextCodec.Encode(plain, runs);
+        var (plain2, runs2) = RichTextCodec.Parse(again);
+        Assert.Equal(plain, plain2);
+        Assert.Equal(runs.Count, runs2.Count);
+    }
 }

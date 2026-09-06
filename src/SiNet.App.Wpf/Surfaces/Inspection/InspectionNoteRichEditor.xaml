@@ -1,7 +1,10 @@
 <UserControl x:Class="SiNet.App.Wpf.Surfaces.Inspection.InspectionNoteRichEditor"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Focusable="True">
+             Focusable="True"
+             MinWidth="160"
+             MinHeight="40"
+             HorizontalAlignment="Stretch">
     <Grid>
         <!-- Display mode: colored text preview (visible when NOT editing) -->
         <Border x:Name="DisplayBorder"
@@ -10,6 +13,7 @@
                 Padding="2,0"
                 MinHeight="40"
                 MouseLeftButtonDown="DisplayBorder_MouseDown"
+                AutomationProperties.AutomationId="Inspection.Note.RichEditor.Display"
                 Visibility="Visible">
             <Border.ContextMenu>
                 <ContextMenu Opened="AiContextMenu_Opened"/>
@@ -33,22 +37,23 @@
                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  Visibility="Collapsed"
+                 AutomationProperties.AutomationId="Inspection.Note.RichEditor.Edit"
                  TextChanged="EditBox_TextChanged"
                  LostFocus="EditBox_LostFocus">
             <TextBox.ContextMenu>
                 <ContextMenu Closed="ContextMenu_Closed">
-                    <MenuItem Header="🔴 אדום (בולט)" Tag="1!" Click="ColorText_Click"/>
-                    <MenuItem Header="🔵 כחול (בולט)" Tag="2!" Click="ColorText_Click"/>
-                    <MenuItem Header="🟢 ירוק (בולט)" Tag="4!" Click="ColorText_Click"/>
-                    <MenuItem Header="⬜ אפור (בולט)" Tag="3!" Click="ColorText_Click"/>
+                    <MenuItem Header="🔴 אדום (בולט)" Tag="1!" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.RedBold" Click="ColorText_Click"/>
+                    <MenuItem Header="🔵 כחול (בולט)" Tag="2!" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.BlueBold" Click="ColorText_Click"/>
+                    <MenuItem Header="🟢 ירוק (בולט)" Tag="4!" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.GreenBold" Click="ColorText_Click"/>
+                    <MenuItem Header="⬜ אפור (בולט)" Tag="3!" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.GrayBold" Click="ColorText_Click"/>
                     <Separator/>
-                    <MenuItem Header="🔴 אדום" Tag="1" Click="ColorText_Click"/>
-                    <MenuItem Header="🔵 כחול" Tag="2" Click="ColorText_Click"/>
-                    <MenuItem Header="🟢 ירוק" Tag="4" Click="ColorText_Click"/>
-                    <MenuItem Header="⬜ אפור" Tag="3" Click="ColorText_Click"/>
+                    <MenuItem Header="🔴 אדום" Tag="1" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.Red" Click="ColorText_Click"/>
+                    <MenuItem Header="🔵 כחול" Tag="2" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.Blue" Click="ColorText_Click"/>
+                    <MenuItem Header="🟢 ירוק" Tag="4" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.Green" Click="ColorText_Click"/>
+                    <MenuItem Header="⬜ אפור" Tag="3" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.Gray" Click="ColorText_Click"/>
                     <Separator/>
-                    <MenuItem Header="𝐁 בולט" Tag="!" Click="ColorText_Click"/>
-                    <MenuItem Header="⬛ ברירת מחדל" Tag="0" Click="ColorText_Click"/>
+                    <MenuItem Header="𝐁 בולט" Tag="!" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.Bold" Click="ColorText_Click"/>
+                    <MenuItem Header="⬛ ברירת מחדל" Tag="0" AutomationProperties.AutomationId="Inspection.Note.RichEditor.Color.Default" Click="ColorText_Click"/>
                 </ContextMenu>
             </TextBox.ContextMenu>
         </TextBox>

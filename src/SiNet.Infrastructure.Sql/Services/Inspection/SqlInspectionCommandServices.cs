@@ -127,9 +127,19 @@ internal sealed class SqlInspectionNoteCommandService(IDbContextFactory<SiNetSQL
                 .Select(n => n.NoteSubIndex)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
-            var subNoteCount = existingSubNotes.Count(idx =>
-                idx != null && idx.StartsWith(prefix, StringComparison.Ordinal));
-            var noteSubIndex = $"{prefix}{subNoteCount + 1}";
+            // Use max trailing ordinal (not Count+1) so gaps / prior renumber leftovers
+            // cannot collide with IX_InspectionNotes_Report_Section_SubIndex.
+            var nextOrdinal = 1;
+            foreach (var idx in existingSubNotes)
+            {
+                if (idx is null || !idx.StartsWith(prefix, StringComparison.Ordinal))
+                    continue;
+                var suffix = idx.AsSpan(prefix.Length);
+                if (int.TryParse(suffix, out var ordinal) && ordinal >= nextOrdinal)
+                    nextOrdinal = ordinal + 1;
+            }
+
+            var noteSubIndex = $"{prefix}{nextOrdinal}";
 
             var note = new InspectionNote
             {
