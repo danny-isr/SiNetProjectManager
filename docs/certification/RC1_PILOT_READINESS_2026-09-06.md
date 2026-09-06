@@ -11,7 +11,7 @@
 | Item | Value |
 | --- | --- |
 | **Candidate product SiNet SHA** | `eeda3c17c356421c95311a5b77754ccab02e204f` |
-| **Harness / RC1-doc SHA (after clearance)** | `a92767f709cb5e19c06cf6c9b651845c1096dc97` (tip; harness fix `612c4e1ed110283e950e586ec6b54ec993d2b703`) |
+| **Harness / RC1-doc SHA (after clearance)** | `612c4e1ed110283e950e586ec6b54ec993d2b703` (+ follow-up docs pin commits on same branch) |
 | `origin/development` at freeze | **identical** to candidate (`eeda3c17`) |
 | SiNetSQL | `a34418f294fa6cd131daa538f098af5a7849d3d7` |
 | SiOffice.AutodeskConnector | `e847dade01c70fc10043bfa299d23c7077f80c33` |
