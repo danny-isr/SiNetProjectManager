@@ -19,6 +19,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.ProjectCreate] = AppRole.Management,
             [AppFeatureCodes.ProjectUpdate] = AppRole.Management,
             [AppFeatureCodes.ShellOpenProjectsDashboard] = AppRole.Management,
+            [AppFeatureCodes.ShellOpenBillingCenter] = AppRole.Management,
             [AppFeatureCodes.ReportsManagement] = AppRole.Management,
             [AppFeatureCodes.SystemSettingsWrite] = AppRole.Administrator,
             [AppFeatureCodes.UsersManage] = AppRole.Administrator,

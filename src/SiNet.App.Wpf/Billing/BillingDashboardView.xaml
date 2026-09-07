@@ -1,0 +1,463 @@
+<UserControl x:Class="SiNet.App.Wpf.Billing.BillingDashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:billingApp="clr-namespace:SiNet.Application.Billing;assembly=SiNet.Application"
+             xmlns:shared="clr-namespace:SiNet.App.Wpf.Shared.Projects"
+             FlowDirection="RightToLeft"
+             Background="{DynamicResource SiBackgroundBrush}">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <shared:InverseBooleanConverter x:Key="InverseBool" />
+        <Style x:Key="WrapTextBlockStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Padding" Value="2,4" />
+        </Style>
+        <Style x:Key="KpiCardStyle" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource SiSecondaryBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Background" Value="{DynamicResource SiSurfaceBrush}" />
+        </Style>
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Foreground" Value="{DynamicResource SiPrimaryBrush}" />
+        </Style>
+        <Style x:Key="DetailLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource SiMutedForegroundBrush}" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+        <Style x:Key="DetailValueStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <DockPanel Margin="16" LastChildFill="True">
+            <!-- Header / freshness -->
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10" LastChildFill="True">
+                <Button DockPanel.Dock="Left"
+                        Content="רענון"
+                        Command="{Binding RefreshCommand}"
+                        Style="{DynamicResource SiPrimaryButtonStyle}"
+                        Padding="14,6"
+                        Margin="0,0,12,0"
+                        AutomationProperties.AutomationId="BillingDashboard.Refresh" />
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}"
+                               Style="{DynamicResource SiTextLargeStyle}"
+                               FontWeight="SemiBold" />
+                    <WrapPanel Margin="0,4,0,0">
+                        <TextBlock Text="נתונים לתאריך:"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}"
+                                   Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding AsOfDateText}"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,16,0" />
+                        <TextBlock Text="מצב Replica:"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}"
+                                   Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding FreshnessStatusText}"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,16,0" />
+                        <TextBlock Text="סנכרון אחרון:"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}"
+                                   Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding ReplicaLastSyncText}"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   Margin="0,0,16,0" />
+                        <TextBlock Text="תאריך snapshot חודשי:"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}"
+                                   Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding MonthlySnapshotDateText}"
+                                   Style="{DynamicResource SiTextSmallStyle}"
+                                   FontStyle="Italic" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Style="{DynamicResource SiTextSmallStyle}"
+                               Foreground="{DynamicResource SiSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,4,0,0"
+                               Visibility="{Binding ShowHeaderStatusMessage, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </DockPanel>
+
+            <!-- Warning banner: freshness Warning; candidates may still show -->
+            <Border DockPanel.Dock="Top"
+                    Margin="0,0,0,10"
+                    Padding="12,10"
+                    Background="#FEF3C7"
+                    BorderBrush="{DynamicResource SiWarningBrush}"
+                    BorderThickness="1"
+                    Visibility="{Binding ShowWarningBanner, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding WarningBannerText}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SiWarningBrush}"
+                           FontWeight="SemiBold" />
+            </Border>
+
+            <!-- Recoverable / fatal error -->
+            <Border DockPanel.Dock="Top"
+                    Margin="0,0,0,10"
+                    Padding="12,10"
+                    Background="{DynamicResource SiDangerSurfaceBrush}"
+                    BorderBrush="{DynamicResource SiDangerBrush}"
+                    BorderThickness="1"
+                    Visibility="{Binding ShowErrorBanner, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding ErrorMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SiDangerBrush}" />
+            </Border>
+
+            <!-- KPI cards: hidden while blocked/fatal so empty dashes do not occupy the screen -->
+            <UniformGrid DockPanel.Dock="Top" Columns="5" Margin="0,0,0,10"
+                         Visibility="{Binding ShowOperationalChrome, Converter={StaticResource BoolToVis}}">
+                <Border Style="{StaticResource KpiCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="לבדוק עכשיו"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}" />
+                        <TextBlock Text="{Binding ReviewNowCountText}"
+                                   Style="{DynamicResource SiTextLargeStyle}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource KpiCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="עבודה שהצטברה"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}" />
+                        <TextBlock Text="{Binding AccumulatedWorkCountText}"
+                                   Style="{DynamicResource SiTextLargeStyle}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource KpiCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="חשבון בהכנה"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}" />
+                        <TextBlock Text="{Binding BillInPreparationCountText}"
+                                   Style="{DynamicResource SiTextLargeStyle}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource KpiCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="מכוסה בחשבון האחרון"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}" />
+                        <TextBlock Text="{Binding CoveredCountText}"
+                                   Style="{DynamicResource SiTextLargeStyle}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource KpiCardStyle}" Margin="0">
+                    <StackPanel>
+                        <TextBlock Text="{Binding ReceivedThisMonthLabel}"
+                                   Style="{DynamicResource SiTextTinyStyle}"
+                                   Foreground="{DynamicResource SiSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding ReceivedThisMonthText}"
+                                   Style="{DynamicResource SiTextLargeStyle}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Client-side filters: hidden while blocked so they cannot imply they still apply -->
+            <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10"
+                       Visibility="{Binding ShowOperationalChrome, Converter={StaticResource BoolToVis}}"
+                       IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">
+                <TextBlock Text="חיפוש:" VerticalAlignment="Center" Margin="0,0,6,4"
+                           Style="{DynamicResource SiTextSmallStyle}" />
+                <TextBox Width="220" Margin="0,0,12,4"
+                         AutomationProperties.AutomationId="BillingDashboard.FilterText"
+                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalContentAlignment="Center"
+                         ToolTip="מספר פרויקט, שם פרויקט או שם לקוח" />
+
+                <TextBlock Text="מצב:" VerticalAlignment="Center" Margin="0,0,6,4"
+                           Style="{DynamicResource SiTextSmallStyle}" />
+                <ComboBox Width="200" Margin="0,0,12,4"
+                          ItemsSource="{Binding StateFilterOptions}"
+                          SelectedItem="{Binding StateFilter}"
+                          DisplayMemberPath="Label" />
+
+                <CheckBox Content="רק מצבים שדורשים בדיקה"
+                          IsChecked="{Binding ActionableOnly}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,12,4"
+                          ToolTip="לבדוק עכשיו, עבודה שהצטברה, חשבון בהכנה" />
+                <CheckBox Content="רק פרויקטים פעילים"
+                          IsChecked="{Binding ActiveOnly}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,12,4" />
+                <Button Content="נקה סינון"
+                        Command="{Binding ClearFiltersCommand}"
+                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                        Padding="12,4"
+                        Margin="0,0,0,4" />
+            </WrapPanel>
+
+            <!-- Fill remaining: blocking panel OR candidates. Do not leave an empty grid hole. -->
+            <Grid>
+            <!-- Blocked freshness panel: not an empty-candidate zero-state -->
+            <Border Margin="0,0,0,0"
+                    Padding="16"
+                    Background="{DynamicResource SiDangerSurfaceBrush}"
+                    BorderBrush="{DynamicResource SiDangerBrush}"
+                    BorderThickness="2"
+                    VerticalAlignment="Stretch"
+                    HorizontalAlignment="Stretch"
+                    Visibility="{Binding ShowBlockedPanel, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="{Binding BlockedHeadline}"
+                               Style="{DynamicResource SiTextLargeStyle}"
+                               FontWeight="Bold"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SiDangerBrush}"
+                               Margin="0,0,0,10" />
+                    <TextBlock Text="התוצאות חסומות בגלל עדכניות הנתונים. אין כאן רשימת מועמדים ריקה."
+                               Style="{DynamicResource SiTextSmallStyle}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,10" />
+                    <TextBlock Text="אבחון Replica"
+                               Style="{DynamicResource SiTextSmallStyle}"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="{Binding DiagnosticsSummary}"
+                               Style="{DynamicResource SiTextTinyStyle}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <!-- Candidates + details -->
+            <Grid Visibility="{Binding ShowCandidatesArea, Converter={StaticResource BoolToVis}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="420" />
+                    <ColumnDefinition Width="360" MinWidth="280" />
+                </Grid.ColumnDefinitions>
+
+                <Grid Grid.Column="0" Margin="0,0,10,0">
+                    <DataGrid ItemsSource="{Binding Rows}"
+                              SelectedItem="{Binding Selected}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserSortColumns="True"
+                              EnableRowVirtualization="True"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              GridLinesVisibility="Horizontal"
+                              HeadersVisibility="Column"
+                              RowBackground="White"
+                              AlternatingRowBackground="#F3F4F6"
+                              Background="{DynamicResource SiBackgroundBrush}"
+                              BorderBrush="{DynamicResource SiSecondaryBrush}"
+                              BorderThickness="1"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              AutomationProperties.AutomationId="BillingDashboard.Candidates">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CandidateState}"
+                                                 Value="{x:Static billingApp:BillingCandidateState.ReviewNow}">
+                                        <Setter Property="Background" Value="#FEE2E2" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CandidateState}"
+                                                 Value="{x:Static billingApp:BillingCandidateState.AccumulatedWork}">
+                                        <Setter Property="Background" Value="#FFEDD5" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CandidateState}"
+                                                 Value="{x:Static billingApp:BillingCandidateState.BillInPreparation}">
+                                        <Setter Property="Background" Value="#DBEAFE" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding CandidateState}"
+                                                 Value="{x:Static billingApp:BillingCandidateState.CoveredByLatestBill}">
+                                        <Setter Property="Background" Value="#D1FAE5" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="מצב"
+                                                Binding="{Binding StateDisplay}"
+                                                Width="120"
+                                                ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                            <DataGridTextColumn Header="מספר"
+                                                Binding="{Binding ProjectNumber}"
+                                                Width="64" />
+                            <DataGridTextColumn Header="שם פרויקט"
+                                                Binding="{Binding ProjectName}"
+                                                Width="160"
+                                                ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                            <DataGridTextColumn Header="לקוח"
+                                                Binding="{Binding CustomerName}"
+                                                Width="110"
+                                                ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                            <DataGridTextColumn Header="שעות 30"
+                                                Binding="{Binding Hours30Text}"
+                                                Width="64" />
+                            <DataGridTextColumn Header="שעות מאז חשבון"
+                                                Binding="{Binding HoursSinceLastBillText}"
+                                                Width="100" />
+                            <DataGridTextColumn Header="חשבון אחרון"
+                                                Binding="{Binding LastBillDateText}"
+                                                Width="90" />
+                            <DataGridTextColumn Header="ימים מאז חשבון"
+                                                Binding="{Binding DaysSinceLastBillText}"
+                                                Width="90" />
+                            <DataGridTextColumn Header="סטטוס חשבון אחרון"
+                                                Binding="{Binding LatestBillStatus}"
+                                                Width="100"
+                                                ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                            <DataGridTextColumn Header="יתרה לפי snapshot"
+                                                Binding="{Binding SnapshotBalanceText}"
+                                                Width="120">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource WrapTextBlockStyle}">
+                                        <Setter Property="FontStyle" Value="Italic" />
+                                        <Setter Property="ToolTip" Value="{Binding SnapshotBalanceCaption}" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="סיבה"
+                                                Binding="{Binding CandidateReason}"
+                                                Width="*"
+                                                MinWidth="160"
+                                                ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <Border Background="#F8FAFC"
+                            Padding="16"
+                            Visibility="{Binding ShowEmptyFilterState, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding EmptyListMessage}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                    </Border>
+                    <Border Background="#F8FAFC"
+                            Padding="16"
+                            Visibility="{Binding ShowEmptyServiceState, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding EmptyListMessage}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                    </Border>
+                </Grid>
+
+                <!-- Read-only details: Replica vs snapshot vs reason, never mixed -->
+                <ScrollViewer Grid.Column="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <Border Padding="12" Margin="0,0,0,10"
+                                BorderBrush="{DynamicResource SiBorderBrush}"
+                                BorderThickness="1"
+                                Background="{DynamicResource SiBackgroundBrush}">
+                            <StackPanel>
+                                <TextBlock Text="נתונים עדכניים — Replica"
+                                           Style="{StaticResource SectionHeaderStyle}" />
+                                <TextBlock Text="פרויקט" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Style="{StaticResource DetailValueStyle}">
+                                    <Run Text="{Binding Selected.ProjectNumber, Mode=OneWay}" />
+                                    <Run Text=" — " />
+                                    <Run Text="{Binding Selected.ProjectName, Mode=OneWay}" />
+                                </TextBlock>
+                                <TextBlock Text="לקוח" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.CustomerName}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="סטטוס" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.ProjectStatus}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="סכום שכר טרחה נוכחי" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.CurrentFeeSumText}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="שעות אחרונות" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.RecentHoursSummary}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="ימי עבודה 30" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.WorkDays30Text}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="שעות מאז החשבון האחרון" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.HoursSinceLastBillText}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="עבודה אחרונה" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.LastWorkDateText}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="חשבון אחרון" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.LatestBillSummary}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="חשבונות ביצירה / הוגשו" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.BillsInFlightSummary}" Style="{StaticResource DetailValueStyle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Padding="12" Margin="0,0,0,10"
+                                BorderBrush="{DynamicResource SiSecondaryBrush}"
+                                BorderThickness="1"
+                                Background="{DynamicResource SiSurfaceBrush}">
+                            <StackPanel>
+                                <TextBlock Text="נתוני snapshot חודשי"
+                                           Style="{StaticResource SectionHeaderStyle}"
+                                           FontStyle="Italic" />
+                                <TextBlock Text="תאריך snapshot" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.SnapshotDateText}"
+                                           Style="{StaticResource DetailValueStyle}"
+                                           FontStyle="Italic" />
+                                <TextBlock Text="{Binding Selected.SnapshotBalanceCaption}"
+                                           Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.SnapshotBalanceText}"
+                                           Style="{StaticResource DetailValueStyle}"
+                                           FontStyle="Italic" />
+                                <TextBlock Text="חשבונות פתוחים לפי snapshot" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.SnapshotOpenBillSumText}"
+                                           Style="{StaticResource DetailValueStyle}"
+                                           FontStyle="Italic" />
+                                <TextBlock Text="חשבונות מאושרים לפי snapshot" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.SnapshotApprovedBillSumText}"
+                                           Style="{StaticResource DetailValueStyle}"
+                                           FontStyle="Italic" />
+                                <TextBlock Text="% מחויב לפי snapshot" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.SnapshotBilledPercentText}"
+                                           Style="{StaticResource DetailValueStyle}"
+                                           FontStyle="Italic" />
+                                <TextBlock Text="סיווג שכר טרחה" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.FeeClassification}"
+                                           Style="{StaticResource DetailValueStyle}"
+                                           ToolTip="{Binding Selected.FeeTypesTooltip}" />
+                                <TextBlock Text="{Binding Selected.FeeTypesTooltip}"
+                                           Style="{DynamicResource SiTextTinyStyle}"
+                                           Foreground="{DynamicResource SiMutedForegroundBrush}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Padding="12"
+                                BorderBrush="{DynamicResource SiPrimaryBrush}"
+                                BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="למה הפרויקט מופיע כאן"
+                                           Style="{StaticResource SectionHeaderStyle}" />
+                                <TextBlock Text="מצב" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.StateDisplay}" Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="סיבה" Style="{StaticResource DetailLabelStyle}" />
+                                <TextBlock Text="{Binding Selected.CandidateReason}" Style="{StaticResource DetailValueStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+            </Grid>
+        </DockPanel>
+
+        <Border Background="#80FFFFFF"
+                Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <ProgressBar IsIndeterminate="True" Width="220" Height="6" Margin="0,0,0,8" />
+                <TextBlock Text="{Binding StatusMessage}" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

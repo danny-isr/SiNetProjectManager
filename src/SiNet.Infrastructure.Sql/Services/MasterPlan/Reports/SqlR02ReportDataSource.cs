@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using SiNet.Application.Identity;
 using SiNet.Application.MasterPlan.Reports;
+using SiNet.Infrastructure.Sql.Services.MasterPlan;
 
 namespace SiNet.Infrastructure.Sql.Services.MasterPlan.Reports;
 
@@ -268,7 +269,7 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
                 hoursRaw = reader.GetValue(thOrd);
             }
 
-            var hours = ConvertHoursRaw(hoursRaw, startTime, endTime);
+            var hours = MasterPlanHoursNormalizer.ConvertHoursRaw(hoursRaw, startTime, endTime);
 
             list.Add(new R02HoursRow(
                 HourReportId: reader.IsDBNull(0) ? 0 : reader.GetInt32(0),
@@ -299,108 +300,16 @@ public sealed class SqlR02ReportDataSource(IMasterPlanEmployeeConnectionProvider
     {
         if (reader.IsDBNull(ordinal))
             return null;
-        var value = reader.GetValue(ordinal);
-        return value switch
-        {
-            TimeSpan ts => ts,
-            DateTime dt => dt.TimeOfDay,
-            _ => TimeSpan.TryParse(Convert.ToString(value), out var parsed) ? parsed : null,
-        };
+        return MasterPlanHoursNormalizer.ReadTimeValue(reader.GetValue(ordinal));
     }
 
     /// <summary>
-    /// Converts DB hours payloads to decimal hours (parity with GoogleConnector R02ReportService).
-    /// Handles TimeSpan, decimal hours, minutes, milliseconds, and .NET ticks; falls back to start/end.
+    /// Converts DB hours payloads to decimal hours. Delegates to
+    /// <see cref="MasterPlanHoursNormalizer"/> so Billing and R02 stay aligned.
     /// </summary>
     internal static decimal ConvertHoursRaw(
         object? hoursRaw,
         TimeSpan? startTime = null,
-        TimeSpan? endTime = null)
-    {
-        if (hoursRaw is null or DBNull)
-            return CalculateFromStartEnd(startTime, endTime);
-
-        if (hoursRaw is TimeSpan ts)
-            return Math.Round((decimal)ts.TotalHours, 2);
-
-        var numericValue = hoursRaw switch
-        {
-            long l => l,
-            decimal d => d,
-            double dbl => (decimal)dbl,
-            float f => (decimal)f,
-            int i => i,
-            short s => s,
-            byte b => b,
-            _ => TryParseToDecimal(hoursRaw),
-        };
-
-        return ConvertNumericToHours(numericValue, startTime, endTime);
-    }
-
-    /// <summary>Heuristic conversion matching legacy GoogleConnector (plus start/end before ms).</summary>
-    private static decimal ConvertNumericToHours(decimal value, TimeSpan? startTime, TimeSpan? endTime)
-    {
-        const decimal MillisecondsPerHour = 3_600_000m;
-        const decimal TicksPerHour = 36_000_000_000m;
-        // TIME/ticks sometimes leak as Ticks/1e6 (2h → 72_000).
-        const decimal ScaledTicksPerHour = 36_000m;
-        const decimal MaxReasonableHours = 24m;
-        const decimal MinMilliseconds = 60_000m;
-        const decimal MaxMilliseconds = 86_400_000m;
-        const decimal MinTicks = 36_000_000_000m;
-
-        var absValue = Math.Abs(value);
-
-        if (absValue <= MaxReasonableHours)
-            return Math.Round(value, 2);
-
-        if (absValue >= MinTicks)
-            return Math.Round(value / TicksPerHour, 2);
-
-        // Prefer wall-clock duration when the raw number is clearly not decimal-hours.
-        var fromRange = CalculateFromStartEnd(startTime, endTime);
-        if (fromRange > 0)
-            return fromRange;
-
-        // Scaled ticks (Ticks / 1_000_000): 2h → 72_000. Check before ms (72_000 is also in ms range).
-        if (absValue >= ScaledTicksPerHour)
-        {
-            var scaledHours = absValue / ScaledTicksPerHour;
-            if (scaledHours <= MaxReasonableHours)
-                return Math.Round(value / ScaledTicksPerHour, 2);
-        }
-
-        if (absValue >= MinMilliseconds && absValue <= MaxMilliseconds)
-            return Math.Round(value / MillisecondsPerHour, 2);
-
-        // MasterPlan HoursReports.Hours is raw minutes.
-        if (absValue > MaxReasonableHours && absValue < MinMilliseconds)
-            return Math.Round(value / 60m, 2);
-
-        return Math.Round(value, 2);
-    }
-
-    private static decimal CalculateFromStartEnd(TimeSpan? startTime, TimeSpan? endTime)
-    {
-        if (!startTime.HasValue || !endTime.HasValue)
-            return 0m;
-
-        var duration = endTime.Value - startTime.Value;
-        if (duration < TimeSpan.Zero)
-            duration = duration.Add(TimeSpan.FromHours(24));
-
-        if (duration <= TimeSpan.Zero)
-            return 0m;
-
-        var hours = (decimal)duration.TotalHours;
-        return hours > 24m ? 0m : Math.Round(hours, 2);
-    }
-
-    private static decimal TryParseToDecimal(object? value)
-    {
-        if (value is null)
-            return 0m;
-        return decimal.TryParse(Convert.ToString(value), out var parsed) ? parsed : 0m;
-    }
+        TimeSpan? endTime = null) =>
+        MasterPlanHoursNormalizer.ConvertHoursRaw(hoursRaw, startTime, endTime);
 }

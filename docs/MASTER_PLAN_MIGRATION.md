@@ -12,7 +12,8 @@
 > [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md),
 > [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md) — SyncEngine watermark
 > semantics, hours lookback window and weekly reconciliation  
-> [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) — **DEV-018** mismatch report **inside** existing `--monthly` (same `Db_Mp_SiEng` + Replica; SyncEngine not folded into WPF)
+> [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) — **DEV-018** mismatch report **inside** existing `--monthly` (same `Db_Mp_SiEng` + Replica; SyncEngine not folded into WPF)  
+> [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md) — **מרכז חיובים V1**: Replica is authoritative for current billing facts; monthly `Db_Mp_SiEng` is enrichment only (do not copy R01/R02 live-MP fallback)
 
 ## Problem
 

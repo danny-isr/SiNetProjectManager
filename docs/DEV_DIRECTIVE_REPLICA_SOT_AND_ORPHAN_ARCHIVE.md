@@ -7,7 +7,7 @@
 > **Scope:** Two locked product rules for MasterPlan hours / reports. Native App.Wpf reports use one shared Replica-first resolver. After a successful full reconcile, replica hours IDs are aligned to the API (JSON archive then DELETE).  
 > **Branch:** Write/merge on `development`; ship via normal `release` process later.
 
-Related: [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) (DEV-019 — **superseded intent**), [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) (DEV-024), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) (DEV-020 staging folder), [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md).
+Related: [`DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md`](./DEV_PLAN_MASTERPLAN_ORPHAN_PURGE.md) (DEV-019 — **superseded intent**), [`DEV_DIAG_R02_GAP_AFTER_RECONCILE.md`](./DEV_DIAG_R02_GAP_AFTER_RECONCILE.md) (DEV-024), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md) (DEV-020 staging folder), [`MASTERPLAN_SYNC_WATERMARKS.md`](./MASTERPLAN_SYNC_WATERMARKS.md), [`DEV_BACKLOG.md`](./DEV_BACKLOG.md), [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md) (Billing Control Center: Replica required, no live-MP current-fact fallback).
 
 ---
 

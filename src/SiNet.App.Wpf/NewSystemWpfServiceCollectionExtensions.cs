@@ -11,6 +11,7 @@ using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Admin.WorkflowOps;
 using SiNet.App.Wpf.Autodesk;
+using SiNet.App.Wpf.Billing;
 using SiNet.App.Wpf.Projects.Dashboard;
 using SiNet.App.Wpf.Runtime;
 using SiNet.App.Wpf.Shared.Projects;
@@ -19,6 +20,7 @@ using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.App.Wpf.Surfaces.ProjectWork;
 using SiNet.App.Wpf.Surfaces.Tasks;
 using SiNet.App.Wpf.Surfaces.Workflow;
+using SiNet.Application.Billing;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Identity;
@@ -72,6 +74,12 @@ public static class NewSystemWpfServiceCollectionExtensions
                 sp.GetService<IAuthorizationQueryService>(),
                 sp.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>()));
         services.AddTransient<ProjectsDashboardWindow>();
+        services.AddTransient<BillingDashboardViewModel>(sp =>
+            new BillingDashboardViewModel(
+                sp.GetRequiredService<IBillingDashboardReadService>(),
+                TimeProvider.System,
+                sp.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>()));
+        services.AddTransient<BillingDashboardWindow>();
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();
         services.AddSiNetUserAdminWpf();

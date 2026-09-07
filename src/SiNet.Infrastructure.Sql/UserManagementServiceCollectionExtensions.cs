@@ -60,6 +60,7 @@ public static class UserManagementServiceCollectionExtensions
         services.AddTransient<IR03ReportDataSource, SqlR03ReportDataSource>();
         services.AddTransient<IR01ReportDataSource, SqlR01ReportDataSource>();
         services.AddTransient<IR02ReportDataSource, SqlR02ReportDataSource>();
+        services.AddSiNetBillingSql();
 
         return services;
     }

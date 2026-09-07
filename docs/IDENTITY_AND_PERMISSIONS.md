@@ -380,6 +380,7 @@ public interface IAuthorizationQueryService
 | `WorkflowOps.Retry` | Administrator |
 | `WorkflowOps.Start` | Administrator |
 | `ShellOpenProjectsDashboard` | Management |
+| `ShellOpenBillingCenter` | Management |
 | `ShellOpenMasterPlanMonthlyRestore` | Management |
 | `ShellImportWorkstationSecrets` | Employee |
 

@@ -34,6 +34,9 @@ public static class AppFeatureCodes
     /// <summary>Business projects overview dashboard («ריכוז פרויקטים»).</summary>
     public const string ShellOpenProjectsDashboard = "Shell.OpenProjectsDashboard";
 
+    /// <summary>Operational Billing Control Center («מרכז חיובים»). Not a MasterPlan report.</summary>
+    public const string ShellOpenBillingCenter = "Shell.OpenBillingCenter";
+
     /// <summary>Advance / pause / resume / complete a workflow instance from ops UI.</summary>
     public const string WorkflowOpsAdvance = "WorkflowOps.Advance";
 

@@ -110,6 +110,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`FILE_CATALOG_ADMIN.md`](./FILE_CATALOG_ADMIN.md) | File catalog admin |
 | [`WORK_SURFACE_WORKFLOW_INTEGRATION.md`](./WORK_SURFACE_WORKFLOW_INTEGRATION.md) | Work surface ↔ workflow contract |
 | [`WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md`](./WORKFLOW_COMMAND_SERVICE_ASSESSMENT.md) | Workflow command service assessment |
+| [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md) | **מרכז חיובים V1** — Replica-first; B1.5 freshness guard; B2 monthly snapshot enrichment |
 
 ---
 

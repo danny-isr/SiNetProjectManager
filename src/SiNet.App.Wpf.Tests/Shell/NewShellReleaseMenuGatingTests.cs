@@ -39,6 +39,7 @@ public sealed class NewShellReleaseMenuGatingTests
     [InlineData("בריאות תהליכים", AppFeatureCodes.ShellOpenWorkflowOpsDashboard)]
     [InlineData("מדיניות סוג↔תהליך", AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy)]
     [InlineData("ייבוא מפתחות תחנה", AppFeatureCodes.ShellImportWorkstationSecrets)]
+    [InlineData("מרכז חיובים", AppFeatureCodes.ShellOpenBillingCenter)]
     public void WhenFeatureGrantedThenMenuItemIsVisible(string title, string featureCode)
     {
         var items = BuildFlattened(granted: [featureCode], authenticated: true);
@@ -58,6 +59,7 @@ public sealed class NewShellReleaseMenuGatingTests
     [InlineData("בריאות תהליכים")]
     [InlineData("מדיניות סוג↔תהליך")]
     [InlineData("ייבוא מפתחות תחנה")]
+    [InlineData("מרכז חיובים")]
     public void WhenNoFeaturesGrantedThenGatedMenuItemsAreHidden(string title)
     {
         var items = BuildFlattened(granted: [], authenticated: true);
@@ -97,9 +99,12 @@ public sealed class NewShellReleaseMenuGatingTests
 
         Assert.Contains("ביקורת (מעטפת — DEBUG)", source, StringComparison.Ordinal);
         Assert.Contains("כלי פיתוח", source, StringComparison.Ordinal);
+        Assert.Contains("מרכז חיובים — Healthy fixture (DEBUG)", source, StringComparison.Ordinal);
 
         AssertInsideDebugBlock(source, "ביקורת (מעטפת — DEBUG)");
         AssertInsideDebugBlock(source, "כלי פיתוח");
+        AssertInsideDebugBlock(source, "מרכז חיובים — Healthy fixture (DEBUG)");
+        AssertInsideDebugBlock(source, "OpenBillingDashboardHealthyFixture");
     }
 
     private static void AssertInsideDebugBlock(string source, string marker)

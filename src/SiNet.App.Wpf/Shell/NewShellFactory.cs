@@ -13,6 +13,7 @@ using SiNet.App.Wpf.Admin.SystemStatus;
 using SiNet.App.Wpf.Admin.UserGroups;
 using SiNet.App.Wpf.Admin.Users;
 using SiNet.App.Wpf.Admin.WorkflowOps;
+using SiNet.App.Wpf.Billing;
 #if DEBUG
 using SiNet.App.Wpf.DevTools;
 using SiNet.App.Wpf.Inspection;
@@ -258,6 +259,19 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
 
         AddGroupIfAny(top, "דוחות", reports);
 
+        // ── כספים (Billing Control Center — not a MasterPlan report) ─────
+        var finance = new List<NewShellMenuItem>();
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenBillingCenter, cancellationToken).ConfigureAwait(true))
+        {
+            finance.Add(new NewShellMenuItem(
+                "מרכז חיובים",
+                OpenNativeBillingDashboard,
+                "ריכוז פרויקטים לבדיקה לחשבון, חשבונות ונתוני גבייה",
+                automationId: "Shell.Menu.BillingCenter"));
+        }
+
+        AddGroupIfAny(top, "כספים", finance);
+
         // ── מנהלה (הגדרות + כלי ניהול + מצב מערכת) ────────────────────────
         var admin = new List<NewShellMenuItem>();
         if (HasAuthenticatedUser())
@@ -347,6 +361,15 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         }
 
 #if DEBUG
+        if (await CanAccessFeatureAsync(AppFeatureCodes.ShellOpenBillingCenter, cancellationToken).ConfigureAwait(true))
+        {
+            admin.Add(new NewShellMenuItem(
+                "מרכז חיובים — Healthy fixture (DEBUG)",
+                OpenBillingDashboardHealthyFixture,
+                "Visual validation only. Fake IBillingDashboardReadService — does not read Replica.",
+                automationId: "Shell.Menu.BillingCenterHealthyFixture"));
+        }
+
         var devTools = await BuildDevToolsMenuItemsAsync(cancellationToken).ConfigureAwait(true);
         if (devTools.Count > 0)
         {
@@ -762,6 +785,52 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
             throw;
         }
     }
+
+    private void OpenNativeBillingDashboard()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var window = _services.GetRequiredService<BillingDashboardWindow>();
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת מרכז חיובים: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+
+#if DEBUG
+    private void OpenBillingDashboardHealthyFixture()
+    {
+        ThemeResourceLoader.EnsureApplicationResourcesMerged();
+        try
+        {
+            var viewModel = new BillingDashboardViewModel(
+                BillingDashboardHealthyVisualFixture.CreateService(),
+                TimeProvider.System,
+                _services.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>());
+            var window = new BillingDashboardWindow(viewModel);
+            ShowWindow(window);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+            MessageBox.Show(
+                $"שגיאה בפתיחת Healthy fixture: {ex.Message}",
+                "שגיאה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            throw;
+        }
+    }
+#endif
 
     private void OpenNativePersonalSettings()
     {

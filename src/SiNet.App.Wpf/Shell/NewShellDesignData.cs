@@ -49,6 +49,10 @@ public sealed class NewShellDesignData : NewShellViewModel
             new NewShellMenuItem("לוח משימות", static () => { }),
             new NewShellMenuItem("דוחות ביקורת", static () => { }),
         ]),
+        NewShellMenuItem.Group("כספים",
+        [
+            new NewShellMenuItem("מרכז חיובים", static () => { }),
+        ]),
         NewShellMenuItem.Group("מנהלה",
         [
             new NewShellMenuItem("הגדרות אישיות", static () => { }),

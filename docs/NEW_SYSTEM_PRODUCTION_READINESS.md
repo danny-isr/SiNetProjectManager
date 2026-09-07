@@ -104,6 +104,7 @@ Implemented in `NewShellFactory.BuildMigratedOnlyMenuAsync`
 | משימות | **דוחות ביקורת** | Native inspection reports | `Shell.OpenInspectionSurface` |
 | משימות | **צפייה בתהליכים (סגור)** | Read-only workflow canvas | `Shell.OpenWorkflowClosedViewer` |
 | דוחות | **R01 / R02 / R03** | MasterPlan → Google Sheets | `ReportsManagement` |
+| כספים | **מרכז חיובים** | Read-only billing candidates (B3/B4) | `Shell.OpenBillingCenter` |
 | משתמשים והרשאות | **ניהול / הוספת משתמש / הרשאות פעולה** | Native admin | `UsersManage` / `ActionPermissionsManage` |
 | מנהלה | **הגדרות / מפתחות / מיפוי MasterPlan / סטטוס ACC / מצב מערכת / בריאות תהליכים** | Native admin / operator | Authenticated / `SystemSettingsWrite` / `Shell.OpenWorkflowOpsDashboard` |
 | (host) | **NewShellWindow** | Menu + OS title (version via `NewShellWindowTitle`); **ProjectSelector is not in the shell header** -- Email embeds it | -- |

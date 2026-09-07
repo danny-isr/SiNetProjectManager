@@ -30,6 +30,7 @@ public sealed class AppFeatureCodesCoverageTests
             AppFeatureCodes.ShellOpenWorkflowOpsDashboard,
             AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy,
             AppFeatureCodes.ShellOpenProjectsDashboard,
+            AppFeatureCodes.ShellOpenBillingCenter,
             AppFeatureCodes.WorkflowOpsAdvance,
             AppFeatureCodes.WorkflowOpsCancel,
             AppFeatureCodes.WorkflowOpsRetry,
@@ -66,6 +67,9 @@ public sealed class AppFeatureCodesCoverageTests
     [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy, false)]
     [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenProjectsDashboard, true)]
     [InlineData(AppRole.Employee, AppFeatureCodes.ShellOpenProjectsDashboard, false)]
+    [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenBillingCenter, true)]
+    [InlineData(AppRole.Administrator, AppFeatureCodes.ShellOpenBillingCenter, true)]
+    [InlineData(AppRole.Employee, AppFeatureCodes.ShellOpenBillingCenter, false)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsAdvance, true)]
     [InlineData(AppRole.Management, AppFeatureCodes.WorkflowOpsAdvance, false)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsCancel, true)]
@@ -79,5 +83,31 @@ public sealed class AppFeatureCodesCoverageTests
     public void Feature_role_matrix(AppRole role, string featureCode, bool expected)
     {
         Assert.Equal(expected, AppFeatureAuthorization.CanAccessFeature(role, featureCode));
+    }
+
+    [Fact]
+    public void Every_public_feature_code_constant_is_mapped_and_listed()
+    {
+        var codes = typeof(AppFeatureCodes)
+            .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(f => f is { IsLiteral: true, IsInitOnly: false } && f.FieldType == typeof(string))
+            .Select(f => (string)f.GetRawConstantValue()!)
+            .OrderBy(c => c, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Contains(AppFeatureCodes.ShellOpenBillingCenter, codes);
+        Assert.Equal("Shell.OpenBillingCenter", AppFeatureCodes.ShellOpenBillingCenter);
+        Assert.Equal(AppRole.Management, AppFeatureAuthorization.GetRequiredRole(AppFeatureCodes.ShellOpenBillingCenter));
+
+        foreach (var code in codes)
+        {
+            Assert.True(AppFeatureAuthorization.GetRequiredRole(code) >= AppRole.Employee, code);
+        }
+
+        var listed = AllFeatureCodes
+            .Select(row => (string)row[0])
+            .OrderBy(c => c, StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(codes, listed);
     }
 }

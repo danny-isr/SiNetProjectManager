@@ -1,7 +1,7 @@
 # SiNet Project Manager — Documentation Index
 
 > **Created:** 26.05.2026
-> **Updated:** 16.08.2026
+> **Updated:** 06.09.2026
 > **Status:** Active documentation index -- Environments / Release / Production Monitoring linked; DeploymentPrinciples marked Superseded for desktop SoT (07.08.2026).
 > **Scope:** Entry point to the `SiNetProjectManagerV2\Docs\` documentation tree.
 > **Repo docs As-Is ledger:** [`docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md`](../../docs/DOCUMENTATION_RECONCILIATION_2026-08-07.md).
@@ -42,6 +42,7 @@ Historical material lives under **`Archive\`** and is **not** authoritative.
 | [`docs/DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md`](../../docs/DEV_DIRECTIVE_WORKSTATION_SECRETS_AND_HEALTH.md) | **DEV-027 Planning:** employee `.secrets` import; AccService 401 vs TLS in System Status |
 | [`docs/DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md`](../../docs/DEV_DIRECTIVE_STARTUP_LOG_WRITE_VERIFY.md) | **DEV-028 Planning:** startup log-write verify + System Status note |
 | [`docs/OPS_LLOG_REVIEW.md`](../../docs/OPS_LLOG_REVIEW.md) | **Agent:** incremental central Llog sweep |
+| [`docs/BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](../../docs/BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md) | **מרכז חיובים V1** — Replica-first billing candidates (New System) |
 
 Cross-domain deployment principles: [`Domains\Deployment\DeploymentPrinciples-2026-05-26.md`](Domains/Deployment/DeploymentPrinciples-2026-05-26.md) -- **Superseded for desktop production SoT** (use `docs/RELEASE_PROCESS.md` + root `DEPLOYMENT.md` / `SiNet.App.Wpf`). Kept for cross-cutting install/auth principles.
 
