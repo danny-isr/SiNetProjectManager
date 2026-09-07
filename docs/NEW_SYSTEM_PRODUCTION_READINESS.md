@@ -1,7 +1,7 @@
 # New System — Production cutover envelope (`SiNet.App.Wpf`)
 
 > **Status:** Active (2026-08-02) -- **cutover host** (replaces V2 distribution)
-> **Updated:** 02.09.2026 (Core Workflow Live Certification baseline `0803186`; interactive soak still Not Run)
+> **Updated:** 07.09.2026 (MasterPlan SyncEngine 1.0.26 deployed; Daily live proof deferred to 2026-09-08; Billing Control Center local Desktop test)
 > **Scope:** Defines what **`SiNet.App.Wpf.exe`** may expose as the **only shipped desktop app**.
 > V2 remains in-repo for reference/build; it is **not** published. Office safety net until
 > cutover sign-off is the external legacy system (outside this repo).
@@ -151,6 +151,7 @@ LinkToProject / CreateTask / Archive / CompleteTask commands that are not on the
 | S4 SyncEngine namespaces + logging | **Done** — `SiNet.Infrastructure.Logging` |
 | Ops MasterPlan API key rotation | **Open** — [`OPS-P0-SECRET-ROTATION.md`](./OPS-P0-SECRET-ROTATION.md) |
 | Retire V2 R0x dual path | **After soak** — not this pilot gate |
+| **SyncEngine 1.0.26 (2026-09-07)** | **DEPLOYED** — server-safe staging `D:\SharedFolder\ProjectsData\MasterPlanBakup` (no mapped `N:\`). Orphan archive under `…\OrphanArchive`. **No manual Daily rerun** (Daily may archive/delete orphans). **Runtime certification deferred to next scheduled `MasterPlandaily` on 2026-09-08.** Required proof: `LastTaskResult=0`, version `1.0.26.0`, no `N:\`, ProjectHoursExtended completes, orphan archive under D: path, exit 0. **Pilot = HOLD** until that proof. |
 
 UI parity vs V2 dialogs may be simplified (filters / R02 pivot); dual path retained until soak.
 
