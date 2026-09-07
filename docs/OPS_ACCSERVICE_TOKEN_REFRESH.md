@@ -1,7 +1,7 @@
 # AccService — refreshing the Autodesk 3-legged token (ops)
 
 > **Title:** AccService Autodesk refresh-token refresh  
-> **Date:** 07.09.2026 (Install health readiness poll after Restart-Service)  
+> **Date:** 07.09.2026 (startup fail-closed: no Autodesk OAuth before `app.Run`)  
 > **Status:** Active  
 > **Scope:** How an operator restores Autodesk OAuth for `SiOffice.AccService`. AccService owns a **dedicated** Autodesk token store, independent of the SiNet desktop user-context token. PROD uses **workstation AuthOnce → export → server install** because the server has no interactive browser.
 
@@ -88,7 +88,18 @@ A valid desktop Autodesk token **never** satisfies AccService Admin requirements
 
 PROD example: `C:\Users\sieng\AppData\Local\SiNet\Autodesk\AccService\refresh_token.json`
 
-There is **no Device Auth** flow. Interactive browser OAuth (`TokenProvider` → localhost:8080) is the mechanism.
+There is **no Device Auth** flow. Interactive browser OAuth (`TokenProvider` → localhost:8080) is the mechanism — **only** in `SiOffice.AccService.AuthOnce` on an operator workstation.
+
+### AccService Windows Service — startup and interactive auth (hard rules)
+
+| Rule | Behavior |
+| --- | --- |
+| **Before `app.Run()`** | PassivePassive diagnostics only** (WindowsIdentity, `TokenPurpose`, token path, file exists, ClientId configured, API key configured). **No** `GetThreeLeggedAdminTokenAsync`, userinfo, Admin API, or browser OAuth. |
+| **SCM / Kestrel** | AccService must reach listening / `GET /v1/acc/health` = 200 regardless of Autodesk availability or missing/invalid refresh token. |
+| **Runtime 3-legged** | AccService DI wraps `TokenProvider` in `NonInteractiveThreeLeggedTokenProvider` and profile/Admin probes use `TokenProvider.SuppressInteractiveBrowserAuthScope()`. Valid refresh → refresh normally; missing/invalid → `TokenMissing` / `AuthUnavailable`; **never** open browser or start localhost OAuth listener. |
+| **Authoritative proof** | `GET /v1/acc/admin-identity` **after** the host is running (may refresh + profile + Admin API probe, still non-interactive). |
+
+Root cause class for SCM Event **7009** (timeout waiting for service to connect): synchronous Autodesk AdminIdentity resolution before `app.Run()` must not return.
 
 ---
 
@@ -140,7 +151,11 @@ CMD wrappers use `pushd` (UNC-safe). DB reads normalize vault `Trust Server Cert
 Export logging uses `Start-Transcript` only (no `Add-Content` to the same file).  
 `publish-all.ps1` builds AuthOnce before the Server kit; `publish-server-kit.ps1` fails closed if AuthOnce was not built in the current session (no stale UNC EXE fallback).
 
-**Install:** resolves the AccService Windows service account when possible; installs into that account’s AccService store; does not touch the desktop UserContext file. Metadata must say `TokenPurpose=AccServiceAdmin` and Actual == configured Expected. After `Restart-Service`, the installer polls `GET https://localhost:8443/v1/acc/health` every 1–2s (timeout 60s) until HTTP 200 and `status=ok`, then calls `/v1/acc/admin-identity`. Failures log inner/exception transport detail. Localhost installer proof accepts the AccService self-signed certificate (same as before).
+**Install:** resolves the AccService Windows service account when possible; installs into that account’s AccService store; does not touch the desktop UserContext file. Metadata must say `TokenPurpose=AccServiceAdmin` and Actual == configured Expected.
+
+**Token rotation safety:** the drop `refresh_token.json` is a **one-shot transfer artifact**, not a permanent source of truth. After AccService successfully refreshes OAuth it may write a **newer** service token. Normal install **refuses** to overwrite an existing service token that is **newer** or not older than the drop (including refusing `-Force` when the drop is stale). Identical hash → skip copy and continue proof. If proof failed after a refresh may have occurred → create a **fresh** AuthOnce + Export; do **not** restore an old drop with `-Force`.
+
+After `Restart-Service`, the installer polls `GET https://localhost:8443/v1/acc/health` every 1–2s (timeout 60s) until HTTP 200 and `status=ok`, then calls `/v1/acc/admin-identity`. Failures log inner/exception transport detail. Localhost installer proof accepts the AccService self-signed certificate (same as before).
 
 **Authoritative proof after restart:** AccService runtime `/v1/acc/admin-identity` + System Health — not the export metadata alone.
 

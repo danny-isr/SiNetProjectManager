@@ -370,14 +370,42 @@ $desktopPath = Join-Path $env:SystemDrive ("Users\{0}\AppData\Local\SiNet\Autode
 Write-Host ("  Install target       : {0}" -f $targetToken)
 Write-Host ("  Desktop path (untouched): {0}" -f $desktopPath)
 
-if ((Test-Path $targetToken) -and -not $Force) {
-    $installed = Get-Item $targetToken
+# Token rotation safety: the drop is a one-shot transfer artifact.
+# After AccService refreshes OAuth it writes a newer refresh_token.json.
+# An older/stale drop must NEVER overwrite that live token (including -Force).
+$skipCopy = $false
+if (Test-Path -LiteralPath $targetToken) {
+    $installed = Get-Item -LiteralPath $targetToken
+    $dropHash = (Get-FileHash -LiteralPath $dropToken -Algorithm SHA256).Hash
+    $installedHash = (Get-FileHash -LiteralPath $targetToken -Algorithm SHA256).Hash
     Write-Host ("Installed LastWriteTime : {0}" -f $installed.LastWriteTime)
-    if ($dropItem.LastWriteTime -le $installed.LastWriteTime) {
-        Write-Banner "RESULT: FAILED - drop file is not newer" Red
-        Write-Host "Export a FRESH validated AccService token from the workstation,"
-        Write-Host "or re-run this installer with -Force to overwrite anyway."
+    Write-Host ("Drop SHA256             : {0}" -f $dropHash)
+    Write-Host ("Installed SHA256        : {0}" -f $installedHash)
+
+    if ($dropHash -eq $installedHash) {
+        Write-Host "Installed token already identical to drop; skipping copy." -ForegroundColor Green
+        $skipCopy = $true
+    }
+    elseif ($installed.LastWriteTime -gt $dropItem.LastWriteTime) {
+        Write-Banner "RESULT: FAILED - existing service token is NEWER than drop" Red
+        Write-Host "AccService may have refreshed/rotated the OAuth refresh token."
+        Write-Host "Restoring this drop would destroy the live token."
+        Write-Host "Do NOT use -Force. Create a FRESH AuthOnce + Export, then install ONCE."
         exit 3
+    }
+    elseif ($dropItem.LastWriteTime -le $installed.LastWriteTime) {
+        Write-Banner "RESULT: FAILED - drop is not newer than installed service token" Red
+        Write-Host "Export a FRESH AccService Admin token (AuthOnce + Export)."
+        Write-Host "Do not reuse a consumed/stale drop after a prior install/refresh."
+        if ($Force) {
+            Write-Host "WARNING: -Force was set, but overwrite is refused when drop is not newer." -ForegroundColor Yellow
+            Write-Host "Stale drop restore is unsafe after OAuth refresh-token rotation."
+        }
+        exit 3
+    }
+    elseif ($Force) {
+        Write-Host "WARNING: -Force overwrite of a DIFFERENT existing service token (drop is newer)." -ForegroundColor Yellow
+        Write-Host "Use only for controlled recovery of a known-good FRESH drop — not routine retry."
     }
 }
 
@@ -387,7 +415,9 @@ if (Test-Path $desktopPath) {
 }
 
 New-Item -ItemType Directory -Path $tokenDir -Force | Out-Null
-Copy-Item $dropToken $targetToken -Force
+if (-not $skipCopy) {
+    Copy-Item $dropToken $targetToken -Force
+}
 
 try {
     $acl = Get-Acl $targetToken

@@ -44,8 +44,16 @@ public static class AccServiceAdminApiProbe
         string accessToken;
         try
         {
-            accessToken = await tokenProvider.GetThreeLeggedAdminTokenAsync(cancellationToken)
-                .ConfigureAwait(false);
+            // AccService server-side: refresh OK; never browser / HttpListener.
+            using (TokenProvider.SuppressInteractiveBrowserAuthScope())
+            {
+                accessToken = await tokenProvider.GetThreeLeggedAdminTokenAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+        catch (TokenProvider.InteractiveAuthSuppressedException)
+        {
+            return "unavailable:token:AuthUnavailable";
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

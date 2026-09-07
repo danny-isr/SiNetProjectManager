@@ -16,67 +16,77 @@ public static class AccServiceAdminTokenProfile
     {
         ArgumentNullException.ThrowIfNull(tokenProvider);
 
-        if (!tokenProvider.HasThreeLeggedRefreshToken)
+        // AccService / server paths must never open browser OAuth. Refresh-only.
+        using (TokenProvider.SuppressInteractiveBrowserAuthScope())
         {
-            return AccServiceAdminTokenProfileResult.TokenMissing();
-        }
-
-        string accessToken;
-        try
-        {
-            accessToken = await tokenProvider.GetThreeLeggedAdminTokenAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return AccServiceAdminTokenProfileResult.Unavailable($"token: {ex.GetType().Name}");
-        }
-
-        if (string.IsNullOrWhiteSpace(accessToken))
-        {
-            return AccServiceAdminTokenProfileResult.TokenMissing();
-        }
-
-        var ownsClient = httpClient is null;
-        httpClient ??= new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, UserInfoUrl);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
+            if (!tokenProvider.HasThreeLeggedRefreshToken)
             {
-                return AccServiceAdminTokenProfileResult.Unavailable($"userinfo HTTP {(int)response.StatusCode}");
+                return AccServiceAdminTokenProfileResult.TokenMissing();
             }
 
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            var email = GetString(root, "email");
-            var userId = GetString(root, "sub") ?? GetString(root, "userId") ?? GetString(root, "userid");
-            var name = GetString(root, "name") ?? GetString(root, "preferred_username");
-
-            if (string.IsNullOrWhiteSpace(email))
+            string accessToken;
+            try
             {
-                return AccServiceAdminTokenProfileResult.Unavailable("userinfo missing email");
+                accessToken = await tokenProvider.GetThreeLeggedAdminTokenAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TokenProvider.InteractiveAuthSuppressedException)
+            {
+                return AccServiceAdminTokenProfileResult.Unavailable(
+                    "AuthUnavailable: interactive browser auth suppressed (refresh token missing or invalid).");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return AccServiceAdminTokenProfileResult.Unavailable($"token: {ex.GetType().Name}");
             }
 
-            return new AccServiceAdminTokenProfileResult(
-                TokenAvailable: true,
-                ProfileResolved: true,
-                Email: email.Trim(),
-                AutodeskUserId: userId,
-                DisplayName: name,
-                FailureReason: null);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return AccServiceAdminTokenProfileResult.Unavailable($"profile: {ex.GetType().Name}");
-        }
-        finally
-        {
-            if (ownsClient)
+            if (string.IsNullOrWhiteSpace(accessToken))
             {
-                httpClient.Dispose();
+                return AccServiceAdminTokenProfileResult.TokenMissing();
+            }
+
+            var ownsClient = httpClient is null;
+            httpClient ??= new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, UserInfoUrl);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return AccServiceAdminTokenProfileResult.Unavailable($"userinfo HTTP {(int)response.StatusCode}");
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                var email = GetString(root, "email");
+                var userId = GetString(root, "sub") ?? GetString(root, "userId") ?? GetString(root, "userid");
+                var name = GetString(root, "name") ?? GetString(root, "preferred_username");
+
+                if (string.IsNullOrWhiteSpace(email))
+                {
+                    return AccServiceAdminTokenProfileResult.Unavailable("userinfo missing email");
+                }
+
+                return new AccServiceAdminTokenProfileResult(
+                    TokenAvailable: true,
+                    ProfileResolved: true,
+                    Email: email.Trim(),
+                    AutodeskUserId: userId,
+                    DisplayName: name,
+                    FailureReason: null);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return AccServiceAdminTokenProfileResult.Unavailable($"profile: {ex.GetType().Name}");
+            }
+            finally
+            {
+                if (ownsClient)
+                {
+                    httpClient.Dispose();
+                }
             }
         }
     }

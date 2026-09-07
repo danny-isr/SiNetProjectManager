@@ -4,6 +4,7 @@ using Serilog;
 using SiNet.Application.Abstractions.Autodesk;
 using SiNet.Application.Configuration;
 using SiNet.Application.Settings;
+using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Secrets;
 using SiNetSQL.Data;
 using SiNetSQL.Services.AccBootstrap;
@@ -37,7 +38,9 @@ internal static class AccEndpoints
         }));
 
         // ── Admin identity (requires API key; emails/ids only — never tokens) ─
-        // Read-only diagnostics remain available during AdminEmailMismatch.
+        // Runs only after the host is listening. May refresh + userinfo + Admin API
+        // probe, but interactive browser OAuth is suppressed (AuthOnce is the only
+        // allowed interactive AccServiceAdmin login).
         v1.MapGet("/admin-identity", async (
             ITokenProvider tokenProvider,
             ISystemSettingsQueryService settingsQuery,
@@ -57,6 +60,8 @@ internal static class AccEndpoints
                 expected = SystemSettingsDefaults.AccBootstrapAdminEmail;
             }
 
+            // DI registers NonInteractiveThreeLeggedTokenProvider; profile resolve also
+            // opens SuppressInteractiveBrowserAuthScope. Fail-closed if token invalid.
             var profile = await SiNet.Infrastructure.Autodesk.AccServiceAdminTokenProfile
                 .ResolveAsync(tokenProvider, cancellationToken: ct);
 
@@ -910,10 +915,12 @@ internal static class AccEndpoints
                     : systemSettings.Acc.AccProjectTemplateName);
 
             await using var db = await dbFactory.CreateDbContextAsync(ct);
-            var tokenProvider = new TokenProvider(
-                clientId,
-                clientSecret,
-                AutodeskTokenStoreOptions.AccServiceAdmin);
+            // Fail-closed: AccService HTTP path must never open interactive Autodesk browser auth.
+            var tokenProvider = new NonInteractiveThreeLeggedTokenProvider(
+                new TokenProvider(
+                    clientId,
+                    clientSecret,
+                    AutodeskTokenStoreOptions.AccServiceAdmin));
             var bim360 = new Bim360Service(tokenProvider);
 
             var bootstrapAdminEmail = AccBootstrapAdminEmailResolver.ResolveForInboxProjectAdmin(

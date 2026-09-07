@@ -2,7 +2,7 @@
 
 > **Title:** docs/ README -- New System & ops documentation index
 > **Date:** 02.08.2026
-> **Updated:** 06.09.2026
+> **Updated:** 07.09.2026
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
 As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).

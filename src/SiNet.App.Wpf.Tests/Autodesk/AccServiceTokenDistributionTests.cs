@@ -161,7 +161,15 @@ public sealed class AccServiceTokenDistributionTests
         Assert.Contains("Wait-AccServiceHealthReady", install, StringComparison.Ordinal);
         Assert.Contains("/v1/acc/health", install, StringComparison.Ordinal);
         Assert.Contains("Format-ExceptionDetail", install, StringComparison.Ordinal);
+        Assert.Contains("existing service token is NEWER than drop", install, StringComparison.Ordinal);
+        Assert.Contains("Do NOT use -Force", install, StringComparison.Ordinal);
+        Assert.Contains("FRESH AuthOnce", install, StringComparison.Ordinal);
+        Assert.Contains("skipCopy", install, StringComparison.Ordinal);
         Assert.DoesNotContain("Start-Sleep -Seconds 3", install, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "or re-run this installer with -Force to overwrite anyway.",
+            install,
+            StringComparison.Ordinal);
         Assert.Contains("Remove-Item", install, StringComparison.Ordinal);
         Assert.Contains("Get-AccBootstrapAdminEmailFromDb", install, StringComparison.Ordinal);
         Assert.Contains("Convert-ToSystemDataSqlClientConnectionString", install, StringComparison.Ordinal);

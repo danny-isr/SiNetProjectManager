@@ -124,10 +124,13 @@ builder.Services.AddSingleton<MyOffice.AutodeskConnector.ITokenProvider>(_ =>
     var clientId = CredentialVault.GetSecret(SecretCatalog.AutodeskClientId) ?? string.Empty;
     var clientSecret = CredentialVault.GetSecret(SecretCatalog.AutodeskClientSecret) ?? string.Empty;
     // Dedicated AccService Admin store — never the desktop UserContext refresh_token.json.
-    return new MyOffice.AutodeskConnector.TokenProvider(
+    // Fail-closed for interactive browser OAuth: AccService Windows Service must never
+    // open Autodesk login / localhost:8080. Interactive AccServiceAdmin auth is AuthOnce only.
+    var inner = new MyOffice.AutodeskConnector.TokenProvider(
         clientId,
         clientSecret,
         MyOffice.AutodeskConnector.AutodeskTokenStoreOptions.AccServiceAdmin);
+    return new NonInteractiveThreeLeggedTokenProvider(inner);
 });
 builder.Services.AddSiNetAutodeskLocalFileTransfer();
 builder.Services.AddTransient<IAccProjectProvisioningService, AccProjectProvisioningService>();
@@ -241,7 +244,10 @@ try
         Log.Warning("[AccService][TokenProvider] startup diagnostics failed: {Error}", diagEx.Message);
     }
 
-    // [AccService][AdminIdentity] — expected vs connected Autodesk Admin profile (emails only; never tokens).
+    // [AccService][AdminIdentity] — PASSIVE only before app.Run().
+    // Never resolve Autodesk Admin profile / refresh OAuth / Admin API / browser login here:
+    // Windows Service SCM (Event 7009) must not wait on Autodesk network. Authoritative
+    // identity proof is GET /v1/acc/admin-identity after the host is listening.
     try
     {
         string? expectedAdmin = null;
@@ -262,38 +268,10 @@ try
             ? SiNet.Application.Settings.SystemSettingsDefaults.AccBootstrapAdminEmail
             : expectedAdmin;
 
-        AccServiceAdminTokenProfileResult profile;
-        try
-        {
-            var tokenProvider = app.Services.GetRequiredService<MyOffice.AutodeskConnector.ITokenProvider>();
-            profile = SiNet.Infrastructure.Autodesk.AccServiceAdminTokenProfile
-                .ResolveAsync(tokenProvider)
-                .GetAwaiter()
-                .GetResult();
-        }
-        catch (Exception profileEx)
-        {
-            Log.Warning("[AccService][AdminIdentity] Autodesk profile resolve failed: {Error}", profileEx.Message);
-            profile = AccServiceAdminTokenProfileResult.Unavailable(profileEx.Message);
-        }
-
-        var check = SiNet.Application.Identity.AccServiceAdminIdentity.Evaluate(
-            expectedAdmin,
-            profile.Email,
-            profile.TokenAvailable,
-            profile.ProfileResolved,
-            profile.AutodeskUserId,
-            profile.DisplayName);
         Log.Warning(
-            "[AccService][AdminIdentity] expected={Expected}, connected={Connected}, identityStatus={IdentityStatus}, adminApiStatus={AdminApiStatus}",
-            check.ExpectedAdminEmail,
-            check.ActualAdminEmail ?? "(unavailable)",
-            check.Status,
-            check.AdminApiStatus ?? "(not-checked)");
-        if (check.OperatorMessageHe is not null)
-        {
-            Log.Warning("{Warning}", check.OperatorMessageHe);
-        }
+            "[AccService][AdminIdentity] startup passive — expectedAdminEmail={Expected}, " +
+            "networkProfileResolve=deferred-until-admin-identity-endpoint (no Autodesk OAuth before app.Run).",
+            expectedAdmin);
     }
     catch (Exception adminIdEx)
     {
