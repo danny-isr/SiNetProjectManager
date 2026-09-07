@@ -155,7 +155,7 @@ Export logging uses `Start-Transcript` only (no `Add-Content` to the same file).
 
 **Token rotation safety:** the drop `refresh_token.json` is a **one-shot transfer artifact**, not a permanent source of truth. After AccService successfully refreshes OAuth it may write a **newer** service token. Normal install **refuses** to overwrite an existing service token that is **newer** or not older than the drop (including refusing `-Force` when the drop is stale). Identical hash → skip copy and continue proof. If proof failed after a refresh may have occurred → create a **fresh** AuthOnce + Export; do **not** restore an old drop with `-Force`.
 
-After `Restart-Service`, the installer polls `GET https://localhost:8443/v1/acc/health` every 1–2s (timeout 60s) until HTTP 200 and `status=ok`, then calls `/v1/acc/admin-identity`. Failures log inner/exception transport detail. Localhost installer proof accepts the AccService self-signed certificate (same as before).
+After `Restart-Service`, the installer polls `GET https://localhost:8443/v1/acc/health` every 1–2s (timeout 60s) until HTTP 200 and `status=ok`, then calls `/v1/acc/admin-identity`. Failures log inner/exception transport detail. Localhost installer proof accepts the AccService self-signed certificate via a **compiled C#** `HttpClientHandler` callback (`SiNetAccServiceLocalhostHttp`) — not a PowerShell `{ $true }` script block (PS 5.1 has no Runspace on HttpClient worker threads).
 
 **Authoritative proof after restart:** AccService runtime `/v1/acc/admin-identity` + System Health — not the export metadata alone.
 

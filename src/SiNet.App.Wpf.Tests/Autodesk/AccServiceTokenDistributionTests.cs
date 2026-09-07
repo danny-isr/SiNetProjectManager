@@ -161,6 +161,17 @@ public sealed class AccServiceTokenDistributionTests
         Assert.Contains("Wait-AccServiceHealthReady", install, StringComparison.Ordinal);
         Assert.Contains("/v1/acc/health", install, StringComparison.Ordinal);
         Assert.Contains("Format-ExceptionDetail", install, StringComparison.Ordinal);
+        Assert.Contains("SiNetAccServiceLocalhostHttp", install, StringComparison.Ordinal);
+        Assert.Contains("Ensure-AccServiceLocalhostHttpClientHelper", install, StringComparison.Ordinal);
+        // Forbid PowerShell ScriptBlock TLS callbacks (PS 5.1 Runspace crash on worker threads).
+        Assert.DoesNotContain(
+            "ServerCertificateCustomValidationCallback = { $true }",
+            install,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "ServerCertificateCustomValidationCallback={ $true }",
+            install,
+            StringComparison.Ordinal);
         Assert.Contains("existing service token is NEWER than drop", install, StringComparison.Ordinal);
         Assert.Contains("Do NOT use -Force", install, StringComparison.Ordinal);
         Assert.Contains("FRESH AuthOnce", install, StringComparison.Ordinal);
