@@ -416,7 +416,11 @@ Columns: `Id`, `ProjectId` (unique), `DecisionType`, `Reason`, `ReviewAgainDate`
 
 Cancel stamps `Cleared*` on the same row (does not delete). A later decision updates the same row (Created* kept; Updated* set; Cleared* cleared). Manual EF migration only — do not auto-run `Update-Database`.
 
-**Concurrency (V1, Option A):** last-write-wins. Unique `ProjectId` prevents duplicate active rows. There is no `RowVersion` / `DbUpdateConcurrencyException` handling. Two managers editing the same project: the later `SaveAsync` overwrites the current row and stamps `Updated*`.
+Generated migration (B5.1, not applied until operator approval): `20260907100932_AddBillingReviewDecision`.
+
+```
+dotnet ef migrations add AddBillingReviewDecision --context SiNetSQLDbContext --project src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj --startup-project SiNetProjectManagerV2\SiNetProjectManagerV2.csproj
+```
 
 Same MasterPlan `LatestBillId` with only a status change does **not** supersede a local decision (V1). Only a different/new latest bill id does.
 
