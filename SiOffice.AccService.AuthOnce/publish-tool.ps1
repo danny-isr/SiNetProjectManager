@@ -61,8 +61,26 @@ finally { Pop-Location }
 $exeName = "SiOffice.AccService.AuthOnce.exe"
 Get-ChildItem $OutputDir -Filter $exeName | Format-Table Name, Length, LastWriteTime
 
+# Fail-closed stamp so publish-server-kit refuses a stale Server-kit EXE fallback.
+$session = $env:SINET_AUTHONCE_BUILD_SESSION
+if ([string]::IsNullOrWhiteSpace($session)) {
+    $session = [guid]::NewGuid().ToString("N")
+    $env:SINET_AUTHONCE_BUILD_SESSION = $session
+}
+$stampPath = Join-Path $OutputDir "AUTHONCE_PUBLISH_STAMP.txt"
+$stampLines = @(
+    ("BuiltUtc={0}" -f [datetime]::UtcNow.ToString("o")),
+    ("Session={0}" -f $session),
+    ("Machine={0}" -f $env:COMPUTERNAME),
+    ("Exe={0}" -f $exeName),
+    ("OutputDir={0}" -f $OutputDir)
+)
+[System.IO.File]::WriteAllLines($stampPath, $stampLines, [System.Text.Encoding]::ASCII)
+Write-Host ("AuthOnce build stamp: {0} (Session={1})" -f $stampPath, $session) -ForegroundColor Cyan
+
 if ($SkipDeploy) {
     Write-Host "`n-SkipDeploy specified; not copying to network share." -ForegroundColor Yellow
+    Write-Host "Server kit must copy this artifact (publish-server-kit.ps1) — no silent reuse of an older UNC EXE." -ForegroundColor Yellow
     return
 }
 

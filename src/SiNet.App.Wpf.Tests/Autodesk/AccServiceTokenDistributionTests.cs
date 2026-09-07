@@ -239,6 +239,33 @@ public sealed class AccServiceTokenDistributionTests
 
         Assert.Contains("pushd \"\"%~dp0\"\"", kitPublisher, StringComparison.Ordinal);
         Assert.DoesNotContain("cd /d \"\"%~dp0\"\"", kitPublisher, StringComparison.Ordinal);
+        Assert.Contains("AUTHONCE_PUBLISH_STAMP.txt", kitPublisher, StringComparison.Ordinal);
+        Assert.Contains("Silent reuse of an older", kitPublisher, StringComparison.Ordinal);
+        Assert.Contains("Copied fresh AuthOnce from", kitPublisher, StringComparison.Ordinal);
+        Assert.DoesNotContain("WARNING: SiOffice.AccService.AuthOnce.exe not staged", kitPublisher, StringComparison.Ordinal);
+        Assert.DoesNotContain("$authOnceCandidates", kitPublisher, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Publish_all_builds_AuthOnce_before_Server_kit()
+    {
+        var publishAll = File.ReadAllText(Path.Combine(FindRepoRoot(), "publish-all.ps1"));
+        Assert.Contains("SiOffice.AccService.AuthOnce\\publish-tool.ps1", publishAll, StringComparison.Ordinal);
+        Assert.Contains("SINET_AUTHONCE_BUILD_SESSION", publishAll, StringComparison.Ordinal);
+        Assert.Contains("SkipDeploy", publishAll, StringComparison.Ordinal);
+        // AuthOnce block must appear before Server kit invocation.
+        var authIdx = publishAll.IndexOf("SiOffice.AccService.AuthOnce\\publish-tool.ps1", StringComparison.Ordinal);
+        var kitIdx = publishAll.IndexOf("build\\publish-server-kit.ps1", StringComparison.Ordinal);
+        Assert.True(authIdx > 0 && kitIdx > authIdx, "AuthOnce publish must run before publish-server-kit");
+    }
+
+    [Fact]
+    public void Export_script_does_not_AddContent_to_transcript_log()
+    {
+        var export = File.ReadAllText(Path.Combine(FindRepoRoot(), "SiOffice.AccService", "Export-AccAutodeskToken-ToShare.ps1"));
+        Assert.Contains("Start-Transcript", export, StringComparison.Ordinal);
+        Assert.DoesNotContain("Add-Content -Path $script:logFile", export, StringComparison.Ordinal);
+        Assert.Contains("sharing violation", export, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

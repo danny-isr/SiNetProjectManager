@@ -163,22 +163,42 @@ else {
     Write-Host "WARNING: Refresh-AccService-Token.ps1 not found; skipping token-refresh wrappers." -ForegroundColor Yellow
 }
 
-$authOnceCandidates = @(
-    (Join-Path $repoRoot "artifacts\SiOffice.AccService.AuthOnce_Publish\SiOffice.AccService.AuthOnce.exe"),
-    (Join-Path $DeployDir "SiOffice.AccService.AuthOnce.exe")
-)
-$authOnceCopied = $false
-foreach ($candidate in $authOnceCandidates) {
-    if (Test-Path $candidate) {
-        Copy-Item $candidate (Join-Path $DeployDir "SiOffice.AccService.AuthOnce.exe") -Force
-        Write-Host "Copied AuthOnce from $candidate" -ForegroundColor Green
-        $authOnceCopied = $true
-        break
+$authOnceDir = Join-Path $repoRoot "artifacts\SiOffice.AccService.AuthOnce_Publish"
+$authOnceExe = Join-Path $authOnceDir "SiOffice.AccService.AuthOnce.exe"
+$authOnceStamp = Join-Path $authOnceDir "AUTHONCE_PUBLISH_STAMP.txt"
+if (-not (Test-Path -LiteralPath $authOnceExe)) {
+    throw ("SiOffice.AccService.AuthOnce.exe missing at {0}. Run SiOffice.AccService.AuthOnce\publish-tool.ps1 (publish-all builds it before the Server kit). Silent reuse of an older UNC EXE is not allowed." -f $authOnceExe)
+}
+if (-not (Test-Path -LiteralPath $authOnceStamp)) {
+    throw ("AuthOnce build stamp missing at {0}. The EXE may be stale. Re-run SiOffice.AccService.AuthOnce\publish-tool.ps1 in this publish session." -f $authOnceStamp)
+}
+$stampMap = @{}
+Get-Content -LiteralPath $authOnceStamp | ForEach-Object {
+    $line = $_.Trim()
+    if ($line -and ($line.IndexOf('=') -gt 0)) {
+        $stampMap[$line.Substring(0, $line.IndexOf('=')).Trim()] = $line.Substring($line.IndexOf('=') + 1).Trim()
     }
 }
-if (-not $authOnceCopied) {
-    Write-Host "WARNING: SiOffice.AccService.AuthOnce.exe not staged. Run SiOffice.AccService.AuthOnce\publish-tool.ps1" -ForegroundColor Yellow
+$sessionExpected = $env:SINET_AUTHONCE_BUILD_SESSION
+if (-not [string]::IsNullOrWhiteSpace($sessionExpected)) {
+    $sessionActual = [string]$stampMap["Session"]
+    if (-not [string]::Equals($sessionExpected, $sessionActual, [StringComparison]::Ordinal)) {
+        throw ("AuthOnce stamp Session mismatch (expected current publish session '{0}', stamp has '{1}'). Rebuild AuthOnce in this run — do not copy a previous artifact." -f $sessionExpected, $sessionActual)
+    }
 }
+else {
+    # Standalone kit publish: require a stamp from the last 30 minutes (same operator session).
+    $builtUtcRaw = [string]$stampMap["BuiltUtc"]
+    $builtUtc = [datetime]::MinValue
+    if (-not [datetime]::TryParse($builtUtcRaw, [ref]$builtUtc)) {
+        throw ("AuthOnce stamp BuiltUtc unreadable ({0}). Rebuild AuthOnce before publish-server-kit." -f $builtUtcRaw)
+    }
+    if ($builtUtc.ToUniversalTime() -lt [datetime]::UtcNow.AddMinutes(-30)) {
+        throw ("AuthOnce artifact is older than 30 minutes (BuiltUtc={0}Z). Rebuild with SiOffice.AccService.AuthOnce\publish-tool.ps1 before Server kit. Silent reuse of an older EXE is not allowed." -f $builtUtc.ToUniversalTime().ToString("o"))
+    }
+}
+Copy-Item -LiteralPath $authOnceExe (Join-Path $DeployDir "SiOffice.AccService.AuthOnce.exe") -Force
+Write-Host ("Copied fresh AuthOnce from {0} (Session={1})" -f $authOnceExe, $stampMap["Session"]) -ForegroundColor Green
 
 # Workstation export + server install (preferred when server browser is blocked)
 $tokenScriptPairs = @(

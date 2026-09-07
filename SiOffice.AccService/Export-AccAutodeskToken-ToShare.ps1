@@ -32,7 +32,7 @@ function Write-Banner([string]$Title, [ConsoleColor]$Color = [ConsoleColor]::Cya
 function Write-Log([string]$Message) {
     $line = "{0}  {1}" -f (Get-Date -Format "HH:mm:ss"), $Message
     Write-Host $line
-    try { Add-Content -Path $script:logFile -Value $line -Encoding ASCII } catch { }
+    # Do NOT Add-Content to the transcript file — Start-Transcript locks it (sharing violation).
 }
 
 function Resolve-AuthOncePath {
@@ -149,7 +149,7 @@ function Read-IdentityMap([string]$Path) {
 
 function Pause-End {
     Write-Host ""
-    Write-Host ("Log file: {0}" -f $script:logFile) -ForegroundColor DarkCyan
+    Write-Host ("Transcript log: {0}" -f $script:logFile) -ForegroundColor DarkCyan
     Write-Host "Press Enter to close this window..." -ForegroundColor Yellow
     try { [void](Read-Host) } catch { Start-Sleep -Seconds 8 }
 }
@@ -401,7 +401,11 @@ try {
     [System.IO.File]::WriteAllLines($destMeta, $metaLines.ToArray(), [System.Text.Encoding]::ASCII)
 
     try {
-        Copy-Item -LiteralPath $script:logFile -Destination (Join-Path $DropDir "last-export.log") -Force
+        # Stop-Transcript first so the file is not locked when copying.
+        try { Stop-Transcript | Out-Null } catch { }
+        if (Test-Path -LiteralPath $script:logFile) {
+            Copy-Item -LiteralPath $script:logFile -Destination (Join-Path $DropDir "last-export.log") -Force
+        }
     } catch { }
 
     Write-Banner "RESULT: SUCCESS - validated AccService token dropped" Green

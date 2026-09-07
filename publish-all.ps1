@@ -63,9 +63,21 @@ if (-not $SkipTool) {
 }
 else { Write-Host "`n[SKIPPED] SiNet.SecretImport" -ForegroundColor DarkGray }
 
-# Assemble self-contained Server kit (MSI + SecretImport + Install-OnServer)
+# Assemble self-contained Server kit (MSI + SecretImport + Install-OnServer + fresh AuthOnce)
 # so admins can upgrade AccService from the UNC share without D:\repos.
 if (-not $SkipDeploy) {
+    Write-Host "`n############################################################" -ForegroundColor Magenta
+    Write-Host "  AuthOnce (AccService Admin token tool) — required for Server kit" -ForegroundColor Magenta
+    Write-Host "############################################################`n" -ForegroundColor Magenta
+    # Session binds this AuthOnce build to the following Server kit copy (fail-closed; no stale UNC EXE).
+    $env:SINET_AUTHONCE_BUILD_SESSION = [guid]::NewGuid().ToString("N")
+    Write-Host ("SINET_AUTHONCE_BUILD_SESSION={0}" -f $env:SINET_AUTHONCE_BUILD_SESSION) -ForegroundColor Cyan
+    $authOnceArgs = @{}
+    if ($NoBump) { $authOnceArgs['NoBump'] = $true }
+    $authOnceArgs['SkipDeploy'] = $true  # Server kit performs the only UNC copy
+    & (Join-Path $PSScriptRoot "SiOffice.AccService.AuthOnce\publish-tool.ps1") @authOnceArgs
+    $global:LASTEXITCODE = 0
+
     Write-Host "`n############################################################" -ForegroundColor Magenta
     Write-Host "  Server kit -> \\SI-WIN-2K19\AppFolder\AppNet\Server\"       -ForegroundColor Magenta
     Write-Host "############################################################`n" -ForegroundColor Magenta

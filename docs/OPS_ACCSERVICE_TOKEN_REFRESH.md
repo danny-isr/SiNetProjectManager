@@ -135,7 +135,9 @@ Get-Content "\\si-win-2k19\AutoCAD Data\log\AccService\SI-WIN-2K19\sieng\AccServ
 **Export:** only `%LOCALAPPDATA%\SiNet\Autodesk\AccService\refresh_token.json`.  
 Refuses the desktop path `%LOCALAPPDATA%\SiNet\Autodesk\refresh_token.json`.  
 Refuses export when ActualAdminEmail ≠ ExpectedAdminEmail.  
-CMD wrappers use `pushd` (UNC-safe). DB reads normalize vault `Trust Server Certificate` → `TrustServerCertificate` for `System.Data.SqlClient` only (vault secret unchanged).
+CMD wrappers use `pushd` (UNC-safe). DB reads normalize vault `Trust Server Certificate` → `TrustServerCertificate` for `System.Data.SqlClient` only (vault secret unchanged).  
+Export logging uses `Start-Transcript` only (no `Add-Content` to the same file).  
+`publish-all.ps1` builds AuthOnce before the Server kit; `publish-server-kit.ps1` fails closed if AuthOnce was not built in the current session (no stale UNC EXE fallback).
 
 **Install:** resolves the AccService Windows service account when possible; installs into that account’s AccService store; does not touch the desktop UserContext file. Metadata must say `TokenPurpose=AccServiceAdmin` and Actual == configured Expected.
 
