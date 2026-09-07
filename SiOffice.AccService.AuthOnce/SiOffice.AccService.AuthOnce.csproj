@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>SiOffice.AccService.AuthOnce</RootNamespace>
     <AssemblyName>SiOffice.AccService.AuthOnce</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
