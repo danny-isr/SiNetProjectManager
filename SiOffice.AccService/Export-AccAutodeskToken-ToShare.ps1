@@ -400,14 +400,6 @@ try {
     [void]$metaLines.Add(("LogFile={0}" -f $script:logFile))
     [System.IO.File]::WriteAllLines($destMeta, $metaLines.ToArray(), [System.Text.Encoding]::ASCII)
 
-    try {
-        # Stop-Transcript first so the file is not locked when copying.
-        try { Stop-Transcript | Out-Null } catch { }
-        if (Test-Path -LiteralPath $script:logFile) {
-            Copy-Item -LiteralPath $script:logFile -Destination (Join-Path $DropDir "last-export.log") -Force
-        }
-    } catch { }
-
     Write-Banner "RESULT: SUCCESS - validated AccService token dropped" Green
     Write-Log ("Drop file : {0}" -f $destToken)
     Write-Log ("Meta file : {0}" -f $destMeta)
@@ -415,6 +407,14 @@ try {
     Write-Host "NEXT: on the SERVER (SI-WIN-2K19), run:" -ForegroundColor Cyan
     Write-Host "  Install-AccAutodeskToken-FromShare.cmd"
     $script:ExitCode = 0
+
+    try {
+        # Stop transcript before copying so the file is not locked.
+        try { Stop-Transcript | Out-Null } catch { }
+        if (Test-Path -LiteralPath $script:logFile) {
+            Copy-Item -LiteralPath $script:logFile -Destination (Join-Path $DropDir "last-export.log") -Force
+        }
+    } catch { }
 }
 catch {
     Write-Banner "RESULT: FAILED - script error" Red
