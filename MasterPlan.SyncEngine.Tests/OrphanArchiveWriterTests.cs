@@ -89,14 +89,9 @@ public sealed class OrphanArchiveWriterTests
 public sealed class OrphanPurgeOptionsTests
 {
     [Fact]
-    public void FromConfiguration_defaults_enabled_and_archive_under_staging()
+    public void FromConfiguration_defaults_enabled_and_archive_under_server_staging()
     {
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["MasterPlanMonthlyBackup:ClientStagingPath"] = @"N:\MasterPlanBakup"
-            })
-            .Build();
+        var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
 
         var options = OrphanPurgeOptions.FromConfiguration(config);
 
@@ -104,9 +99,30 @@ public sealed class OrphanPurgeOptionsTests
         Assert.True(options.PurgeRequested);
         Assert.True(options.ShouldDelete);
         Assert.Equal(
-            Path.Combine(@"N:\MasterPlanBakup", OrphanPurgeOptions.ArchiveSubfolderName),
+            Path.Combine(
+                MonthlyBackupStagingOptions.DefaultProductionStagingPath,
+                OrphanPurgeOptions.ArchiveSubfolderName),
             options.ArchiveDirectory);
+        Assert.DoesNotContain(@"N:\", options.ArchiveDirectory, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(30, options.ArchiveRetentionDays);
+    }
+
+    [Fact]
+    public void FromConfiguration_derives_archive_from_configured_client_staging()
+    {
+        var staging = MonthlyBackupStagingOptions.DefaultProductionStagingPath;
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["MasterPlanMonthlyBackup:ClientStagingPath"] = staging
+            })
+            .Build();
+
+        var options = OrphanPurgeOptions.FromConfiguration(config);
+
+        Assert.Equal(
+            Path.Combine(staging, OrphanPurgeOptions.ArchiveSubfolderName),
+            options.ArchiveDirectory);
     }
 
     [Fact]
@@ -128,5 +144,54 @@ public sealed class OrphanPurgeOptionsTests
 
         Assert.False(hours.OrphanPurge.PurgeRequested);
         Assert.False(hours.OrphanPurge.ShouldDelete);
+    }
+}
+
+public sealed class OrphanPurgeArchiveBeforeDeleteTests
+{
+    [Fact]
+    public void OrphanPurgeRunner_writes_archive_before_delete_and_refuses_without_archive_dir()
+    {
+        var runnerSource = File.ReadAllText(
+            Path.Combine(FindRepoRoot(), "MasterPlan.SyncEngine", "OrphanPurgeRunner.cs"));
+
+        var writeIdx = runnerSource.IndexOf("OrphanArchiveWriter.WriteEventFile", StringComparison.Ordinal);
+        var deleteIdx = runnerSource.IndexOf("DeleteInBatchesAsync", StringComparison.Ordinal);
+        Assert.True(writeIdx > 0);
+        Assert.True(deleteIdx > writeIdx);
+
+        Assert.Contains(
+            "Orphan JSON archive directory is not configured; refusing DELETE",
+            runnerSource,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WriteEventFile_fail_closed_when_archive_root_cannot_be_created()
+    {
+        // Unmapped / non-existent drive letter (same failure class as N:\ for Task Scheduler).
+        var bogusRoot = @"Q:\SiNetOrphanArchiveDoesNotExist-" + Guid.NewGuid().ToString("N");
+        Assert.ThrowsAny<IOException>(() =>
+            OrphanArchiveWriter.WriteEventFile(
+                Path.Combine(bogusRoot, "OrphanArchive"),
+                "ProjectHoursExtended",
+                DateTime.UtcNow,
+                [new Dictionary<string, object?> { ["ID"] = 1 }]));
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "MasterPlan.SyncEngine")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repo root from " + AppContext.BaseDirectory);
     }
 }

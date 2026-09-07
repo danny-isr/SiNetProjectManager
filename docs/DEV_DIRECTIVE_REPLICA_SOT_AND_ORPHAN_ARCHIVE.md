@@ -27,7 +27,7 @@ Lock two operator decisions so DEV can refactor without re-debating:
 | Full reconcile | SyncEngine `--daily --reconcile` / DEV-023 post-monthly force reconcile |
 | Orphan detection | `CountOrphanCandidatesAsync` — IDs on replica ∉ API ID set |
 | DEV-019 purge plan | Gates G1–G10, CSV pre-delete, dry-run — **too defensive for locked intent**; keep useful pieces (full-pull only, pre-delete artifact, logging) |
-| Bak staging folder (DEV-020) | Client: `N:\MasterPlanBakup` · SQL view: `D:\SharedFolder\ProjectsData\MasterPlanBakup` |
+| Bak staging folder (DEV-020) | PROD: `D:\SharedFolder\ProjectsData\MasterPlanBakup` (ClientStagingPath == ServerStagingPath; no mapped `N:\`) |
 | R02 / R01 / R03 data sources | Shared `MasterPlanReportSqlSourceResolver` — **Replica first**. Live MP last-resort only if Replica is not configured (R03 is Replica-only). |
 | Live MP DB | `Db_Mp_SiEng` — monthly restore target; **not** default report SoT under this directive |
 
@@ -67,7 +67,7 @@ Lock two operator decisions so DEV can refactor without re-debating:
 
 | Item | Spec |
 | --- | --- |
-| Folder | **Same staging root as DEV-020** — client `N:\MasterPlanBakup` (configurable; SQL twin path already documented). Subfolder recommended: `OrphanArchive\` under that root |
+| Folder | **Same staging root as DEV-020** — PROD `D:\SharedFolder\ProjectsData\MasterPlanBakup` (configurable). Subfolder: `OrphanArchive\` under that root |
 | Format | JSON — one file per purge event: `orphan-purge-{entity}-{yyyyMMdd-HHmmss}.json` |
 | Retention | **30 days** — delete/archive-rotate files older than 30 days on each successful purge write |
 | Content (minimum per deleted row) | `Entity`, `ID`, `DeletedAtUtc` (day of purge), plus useful restore fields: `ReportDate`, `EmployeeID`, `EmployeeName`, `ProjectID`, `ProjectNumber`, `Duration`, `TotalHours`, `LastUpdated`, and other non-secret columns available on the row |
