@@ -36,7 +36,7 @@ Operator intent (locked 12.08.2026):
 When a new monthly `.bak` arrives:
 
 1. Office manager / admin selects the backup (UI) or ops runs the existing CLI.
-1b. **DEV-020 staging:** SyncEngine **moves** the file into the client staging folder (`N:\MasterPlanBakup` by default), keeps at most **10** `.bak` files there (configurable `MaxRetainedBackups`), and passes the **server** path (`D:\SharedFolder\ProjectsData\MasterPlanBakup\…`) to SQL `RESTORE` / `HEADERONLY`. No copy — avoids accumulating duplicate bak files on the share.
+1b. **DEV-020 staging:** SyncEngine **moves** the file into the client staging folder (`D:\SharedFolder\ProjectsData\MasterPlanBakup` by default on PROD — server-visible; scheduled tasks must not use mapped `N:\`), keeps at most **10** `.bak` files there (configurable `MaxRetainedBackups`), and passes the **server** path (`D:\SharedFolder\ProjectsData\MasterPlanBakup\…`) to SQL `RESTORE` / `HEADERONLY`. On PROD Client and Server staging paths may be identical. No copy — avoids accumulating duplicate bak files on the share.
 2. **Gate:** HEADERONLY `BackupFinishDate` must be later than `Sync_State.MonthlyRestore` (or first run).
 3. SyncEngine restores it onto the **configured** `Db_Mp_SiEng` (same as today).
 4. **Step 1b:** while replica still holds daily-sync data, compare it to the restored `HoursReports`, log classified mismatches.
@@ -51,7 +51,7 @@ If everything matches → log says aligned. If not → classified mismatches + e
 
 | Role | Path |
 | --- | --- |
-| Client staging (SyncEngine / workstation) | `N:\MasterPlanBakup` |
+| Client staging (SyncEngine / PROD scheduled task) | `D:\SharedFolder\ProjectsData\MasterPlanBakup` |
 | SQL Server view of the same folder | `D:\SharedFolder\ProjectsData\MasterPlanBakup` |
 | Retention | `MaxRetainedBackups` (default **10**); delete oldest `.bak` beyond the limit; always keep the file about to be restored |
 | Transfer | **`File.Move`** from the chosen path into client staging — **not** copy |
