@@ -161,6 +161,31 @@ function Format-ExceptionDetail([Exception]$Exception) {
     return ($lines -join [Environment]::NewLine)
 }
 
+function Ensure-AccServiceLocalhostHttpClientHelper {
+    # PS 5.1: a PowerShell ScriptBlock TLS callback is invoked by HttpClient on a
+    # worker thread with no PowerShell Runspace (PSInvalidOperationException).
+    # Use a compiled C# Func instead — localhost installer proof only.
+    if ("SiNetAccServiceLocalhostHttp" -as [type]) { return }
+    Add-Type -AssemblyName System.Net.Http | Out-Null
+    $httpAsm = [System.Net.Http.HttpClient].Assembly.Location
+    Add-Type -ReferencedAssemblies @($httpAsm) -TypeDefinition @"
+using System;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+public static class SiNetAccServiceLocalhostHttp {
+  public static HttpClient CreateClient(int timeoutSeconds) {
+    var handler = new HttpClientHandler();
+    handler.ServerCertificateCustomValidationCallback =
+      (HttpRequestMessage request, X509Certificate2 certificate, X509Chain chain, SslPolicyErrors errors) => true;
+    var client = new HttpClient(handler, disposeHandler: true);
+    client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+    return client;
+  }
+}
+"@
+}
+
 function Wait-AccServiceHealthReady(
     [string]$BaseUrl,
     [int]$TimeoutSeconds = 60,
@@ -168,7 +193,7 @@ function Wait-AccServiceHealthReady(
 ) {
     # After Restart-Service the process may be Running and TCP may Listen before Kestrel
     # serves /v1/acc/health. Poll until HTTP 200 + status=ok (or timeout).
-    Add-Type -AssemblyName System.Net.Http | Out-Null
+    Ensure-AccServiceLocalhostHttpClientHelper
     $url = ($BaseUrl.TrimEnd('/') + "/v1/acc/health")
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     $attempt = 0
@@ -178,18 +203,13 @@ function Wait-AccServiceHealthReady(
     Write-Host ("  URL              : {0}" -f $url)
     Write-Host ("  TimeoutSeconds   : {0}" -f $TimeoutSeconds)
     Write-Host ("  IntervalSeconds  : {0}" -f $IntervalSeconds)
-    Write-Host "  TLS              : accept self-signed (localhost installer proof only)"
+    Write-Host "  TLS              : accept self-signed via native .NET callback (localhost installer proof only)"
 
     while ([DateTime]::UtcNow -lt $deadline) {
         $attempt++
-        $handler = $null
         $client = $null
         try {
-            $handler = New-Object System.Net.Http.HttpClientHandler
-            # Same as admin-identity proof: accept AccService self-signed cert on localhost.
-            $handler.ServerCertificateCustomValidationCallback = { $true }
-            $client = New-Object System.Net.Http.HttpClient($handler)
-            $client.Timeout = [TimeSpan]::FromSeconds(5)
+            $client = [SiNetAccServiceLocalhostHttp]::CreateClient(5)
             $resp = $client.GetAsync($url).GetAwaiter().GetResult()
             $body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
             $code = [int]$resp.StatusCode
@@ -220,7 +240,6 @@ function Wait-AccServiceHealthReady(
         }
         finally {
             if ($null -ne $client) { $client.Dispose() }
-            if ($null -ne $handler) { $handler.Dispose() }
         }
 
         $remaining = [int][Math]::Ceiling(($deadline - [DateTime]::UtcNow).TotalSeconds)
@@ -237,11 +256,8 @@ function Wait-AccServiceHealthReady(
 
 function Invoke-AccAdminIdentityProof([string]$BaseUrl, [string]$ApiKey) {
     # Returns JSON object fields, or throws with full transport detail.
-    Add-Type -AssemblyName System.Net.Http | Out-Null
-    $handler = New-Object System.Net.Http.HttpClientHandler
-    $handler.ServerCertificateCustomValidationCallback = { $true }
-    $client = New-Object System.Net.Http.HttpClient($handler)
-    $client.Timeout = [TimeSpan]::FromSeconds(30)
+    Ensure-AccServiceLocalhostHttpClientHelper
+    $client = [SiNetAccServiceLocalhostHttp]::CreateClient(30)
     try {
         $url = ($BaseUrl.TrimEnd('/') + "/v1/acc/admin-identity")
         $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $url)
@@ -261,7 +277,6 @@ function Invoke-AccAdminIdentityProof([string]$BaseUrl, [string]$ApiKey) {
     }
     finally {
         $client.Dispose()
-        $handler.Dispose()
     }
 }
 
