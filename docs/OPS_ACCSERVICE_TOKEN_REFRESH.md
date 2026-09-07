@@ -1,7 +1,7 @@
 # AccService — refreshing the Autodesk 3-legged token (ops)
 
 > **Title:** AccService Autodesk refresh-token refresh  
-> **Date:** 06.09.2026 (Trust Server Certificate SQL + UNC pushd hotfix)  
+> **Date:** 07.09.2026 (Install health readiness poll after Restart-Service)  
 > **Status:** Active  
 > **Scope:** How an operator restores Autodesk OAuth for `SiOffice.AccService`. AccService owns a **dedicated** Autodesk token store, independent of the SiNet desktop user-context token. PROD uses **workstation AuthOnce → export → server install** because the server has no interactive browser.
 
@@ -105,8 +105,9 @@ There is **no Device Auth** flow. Interactive browser OAuth (`TokenProvider` →
 5. **Server install** into the **Windows service account** dedicated store  
    (`…\SiNet\Autodesk\AccService\refresh_token.json`, never the desktop UserContext path)  
 6. **Restart** AccService  
-7. **Runtime proof** — `GET /v1/acc/admin-identity` (authoritative)  
-8. **System Health** — ACC Admin Identity green (store + identity; Admin API separate)
+7. **Health readiness** — poll `GET /v1/acc/health` until HTTP 200 + `status=ok` (bounded; not a fixed sleep)  
+8. **Runtime proof** — `GET /v1/acc/admin-identity` (authoritative)  
+9. **System Health** — ACC Admin Identity green (store + identity; Admin API separate)
 
 Metadata fields (no secrets): `TokenPurpose`, `ExpectedAdminEmail`, `ActualAdminEmail`, `ExportedUtc`, `SourceMachine`, optional `AutodeskUserId`.
 
@@ -139,7 +140,7 @@ CMD wrappers use `pushd` (UNC-safe). DB reads normalize vault `Trust Server Cert
 Export logging uses `Start-Transcript` only (no `Add-Content` to the same file).  
 `publish-all.ps1` builds AuthOnce before the Server kit; `publish-server-kit.ps1` fails closed if AuthOnce was not built in the current session (no stale UNC EXE fallback).
 
-**Install:** resolves the AccService Windows service account when possible; installs into that account’s AccService store; does not touch the desktop UserContext file. Metadata must say `TokenPurpose=AccServiceAdmin` and Actual == configured Expected.
+**Install:** resolves the AccService Windows service account when possible; installs into that account’s AccService store; does not touch the desktop UserContext file. Metadata must say `TokenPurpose=AccServiceAdmin` and Actual == configured Expected. After `Restart-Service`, the installer polls `GET https://localhost:8443/v1/acc/health` every 1–2s (timeout 60s) until HTTP 200 and `status=ok`, then calls `/v1/acc/admin-identity`. Failures log inner/exception transport detail. Localhost installer proof accepts the AccService self-signed certificate (same as before).
 
 **Authoritative proof after restart:** AccService runtime `/v1/acc/admin-identity` + System Health — not the export metadata alone.
 

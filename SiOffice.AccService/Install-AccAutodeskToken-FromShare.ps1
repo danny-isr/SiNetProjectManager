@@ -127,8 +127,116 @@ function Resolve-ServiceAccount([string]$ServiceName, [string]$FallbackUser) {
     return $FallbackUser
 }
 
+function Format-ExceptionDetail([Exception]$Exception) {
+    # ASCII-only nested exception dump for PS 5.1 transport / TLS failures.
+    if ($null -eq $Exception) { return "(null exception)" }
+    $lines = New-Object System.Collections.Generic.List[string]
+    $cur = $Exception
+    $depth = 0
+    while ($null -ne $cur -and $depth -lt 10) {
+        $typeName = $cur.GetType().FullName
+        $msg = [string]$cur.Message
+        [void]$lines.Add(("  [{0}] {1}: {2}" -f $depth, $typeName, $msg))
+        if ($cur -is [System.Net.Sockets.SocketException]) {
+            $sock = [System.Net.Sockets.SocketException]$cur
+            [void]$lines.Add(("       SocketErrorCode={0} NativeErrorCode={1}" -f $sock.SocketErrorCode, $sock.NativeErrorCode))
+        }
+        if ($cur -is [System.Net.WebException]) {
+            $web = [System.Net.WebException]$cur
+            [void]$lines.Add(("       WebExceptionStatus={0}" -f $web.Status))
+            if ($null -ne $web.Response) {
+                try {
+                    $httpResp = [System.Net.HttpWebResponse]$web.Response
+                    [void]$lines.Add(("       ResponseStatusCode={0}" -f [int]$httpResp.StatusCode))
+                }
+                catch { }
+            }
+        }
+        if ($cur.HResult -ne 0) {
+            [void]$lines.Add(("       HResult=0x{0:X8}" -f $cur.HResult))
+        }
+        $cur = $cur.InnerException
+        $depth++
+    }
+    return ($lines -join [Environment]::NewLine)
+}
+
+function Wait-AccServiceHealthReady(
+    [string]$BaseUrl,
+    [int]$TimeoutSeconds = 60,
+    [int]$IntervalSeconds = 2
+) {
+    # After Restart-Service the process may be Running and TCP may Listen before Kestrel
+    # serves /v1/acc/health. Poll until HTTP 200 + status=ok (or timeout).
+    Add-Type -AssemblyName System.Net.Http | Out-Null
+    $url = ($BaseUrl.TrimEnd('/') + "/v1/acc/health")
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $attempt = 0
+    $lastDetail = "no attempts yet"
+
+    Write-Banner "STEP: Wait for AccService health readiness"
+    Write-Host ("  URL              : {0}" -f $url)
+    Write-Host ("  TimeoutSeconds   : {0}" -f $TimeoutSeconds)
+    Write-Host ("  IntervalSeconds  : {0}" -f $IntervalSeconds)
+    Write-Host "  TLS              : accept self-signed (localhost installer proof only)"
+
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $attempt++
+        $handler = $null
+        $client = $null
+        try {
+            $handler = New-Object System.Net.Http.HttpClientHandler
+            # Same as admin-identity proof: accept AccService self-signed cert on localhost.
+            $handler.ServerCertificateCustomValidationCallback = { $true }
+            $client = New-Object System.Net.Http.HttpClient($handler)
+            $client.Timeout = [TimeSpan]::FromSeconds(5)
+            $resp = $client.GetAsync($url).GetAwaiter().GetResult()
+            $body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            $code = [int]$resp.StatusCode
+            if ($code -eq 200) {
+                $json = $null
+                try { $json = $body | ConvertFrom-Json } catch {
+                    $lastDetail = ("HTTP 200 but body is not JSON: {0}" -f $body)
+                    $json = $null
+                }
+                if ($null -ne $json -and [string]::Equals([string]$json.status, "ok", [StringComparison]::OrdinalIgnoreCase)) {
+                    Write-Host ("  Health READY after {0} attempt(s): HTTP 200 status=ok buildVersion={1}" -f `
+                        $attempt, $json.buildVersion) -ForegroundColor Green
+                    return
+                }
+                if ($null -eq $json) {
+                    # lastDetail already set
+                }
+                else {
+                    $lastDetail = ("HTTP 200 but status='{0}' (require ok). Body: {1}" -f $json.status, $body)
+                }
+            }
+            else {
+                $lastDetail = ("HTTP {0}. Body: {1}" -f $code, $body)
+            }
+        }
+        catch {
+            $lastDetail = Format-ExceptionDetail $_.Exception
+        }
+        finally {
+            if ($null -ne $client) { $client.Dispose() }
+            if ($null -ne $handler) { $handler.Dispose() }
+        }
+
+        $remaining = [int][Math]::Ceiling(($deadline - [DateTime]::UtcNow).TotalSeconds)
+        if ($remaining -le 0) { break }
+        Write-Host ("  attempt {0}: not ready (remaining ~{1}s)" -f $attempt, $remaining) -ForegroundColor DarkYellow
+        Write-Host $lastDetail -ForegroundColor DarkGray
+        $sleepFor = [Math]::Min($IntervalSeconds, [Math]::Max(1, $remaining))
+        Start-Sleep -Seconds $sleepFor
+    }
+
+    throw ("AccService /v1/acc/health not ready within {0}s ({1} attempt(s)). Last detail:`n{2}" -f `
+        $TimeoutSeconds, $attempt, $lastDetail)
+}
+
 function Invoke-AccAdminIdentityProof([string]$BaseUrl, [string]$ApiKey) {
-    # Returns hashtable of JSON fields, or throws.
+    # Returns JSON object fields, or throws with full transport detail.
     Add-Type -AssemblyName System.Net.Http | Out-Null
     $handler = New-Object System.Net.Http.HttpClientHandler
     $handler.ServerCertificateCustomValidationCallback = { $true }
@@ -138,12 +246,18 @@ function Invoke-AccAdminIdentityProof([string]$BaseUrl, [string]$ApiKey) {
         $url = ($BaseUrl.TrimEnd('/') + "/v1/acc/admin-identity")
         $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $url)
         [void]$req.Headers.TryAddWithoutValidation("X-AccService-Key", $ApiKey)
-        $resp = $client.SendAsync($req).GetAwaiter().GetResult()
-        $body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-        if (-not $resp.IsSuccessStatusCode) {
-            throw ("admin-identity HTTP {0}: {1}" -f [int]$resp.StatusCode, $body)
+        try {
+            $resp = $client.SendAsync($req).GetAwaiter().GetResult()
+            $body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if (-not $resp.IsSuccessStatusCode) {
+                throw ("admin-identity HTTP {0}: {1}" -f [int]$resp.StatusCode, $body)
+            }
+            return $body | ConvertFrom-Json
         }
-        return $body | ConvertFrom-Json
+        catch {
+            $detail = Format-ExceptionDetail $_.Exception
+            throw ("admin-identity request failed.`n{0}" -f $detail)
+        }
     }
     finally {
         $client.Dispose()
@@ -305,8 +419,18 @@ Restart-Service -Name $ServiceName -Force -ErrorAction Stop
 (Get-Service -Name $ServiceName).WaitForStatus('Running', [TimeSpan]::FromSeconds(60))
 Get-Service -Name $ServiceName | Format-Table Name, Status, StartType -AutoSize
 
+try {
+    Wait-AccServiceHealthReady -BaseUrl $AccServiceBaseUrl -TimeoutSeconds 60 -IntervalSeconds 2
+}
+catch {
+    Write-Banner "RESULT: FAILED - AccService health readiness timed out; drop token NOT deleted" Red
+    Write-Host (Format-ExceptionDetail $_.Exception) -ForegroundColor Red
+    Write-Host "Installed token left in place for controlled recovery."
+    Write-Host ("Drop token still at: {0}" -f $dropToken)
+    exit 8
+}
+
 Write-Banner "STEP: Runtime proof GET /v1/acc/admin-identity"
-Start-Sleep -Seconds 3
 $apiKey = Get-SiNetVaultSecret "SiNet/AccService/ApiKey"
 if ([string]::IsNullOrWhiteSpace($apiKey)) {
     Write-Banner "RESULT: FAILED - AccService API key missing from vault; drop token NOT deleted" Red
@@ -320,7 +444,10 @@ try {
 }
 catch {
     Write-Banner "RESULT: FAILED - runtime admin-identity verification failed; drop token NOT deleted" Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host (Format-ExceptionDetail $_.Exception) -ForegroundColor Red
+    if (-not [string]::IsNullOrWhiteSpace([string]$_.Exception.Message)) {
+        Write-Host ("Message: {0}" -f $_.Exception.Message) -ForegroundColor Red
+    }
     Write-Host "Installed token left in place for controlled recovery."
     Write-Host ("Drop token still at: {0}" -f $dropToken)
     exit 8
@@ -334,6 +461,7 @@ Write-Host ("  ActualAdmin      : {0}" -f $proof.actualAdminEmail)
 Write-Host ("  EmailMatch       : {0}" -f $proof.emailMatch)
 Write-Host ("  Status           : {0}" -f $proof.status)
 Write-Host ("  AdminApiStatus   : {0}" -f $proof.adminApiStatus)
+Write-Host ("  WindowsIdentity  : {0}" -f $proof.windowsIdentity)
 
 $storeOk = ($proof.tokenPurpose -eq "AccServiceAdmin") `
     -and ($proof.tokenStoragePath -match '(?i)[\\/]Autodesk[\\/]AccService[\\/]refresh_token\.json$') `

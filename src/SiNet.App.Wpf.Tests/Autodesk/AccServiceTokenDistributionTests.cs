@@ -158,6 +158,10 @@ public sealed class AccServiceTokenDistributionTests
         Assert.Contains("Resolve-ServiceAccount", install, StringComparison.Ordinal);
         Assert.Contains("desktopPath", install, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("admin-identity", install, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Wait-AccServiceHealthReady", install, StringComparison.Ordinal);
+        Assert.Contains("/v1/acc/health", install, StringComparison.Ordinal);
+        Assert.Contains("Format-ExceptionDetail", install, StringComparison.Ordinal);
+        Assert.DoesNotContain("Start-Sleep -Seconds 3", install, StringComparison.Ordinal);
         Assert.Contains("Remove-Item", install, StringComparison.Ordinal);
         Assert.Contains("Get-AccBootstrapAdminEmailFromDb", install, StringComparison.Ordinal);
         Assert.Contains("Convert-ToSystemDataSqlClientConnectionString", install, StringComparison.Ordinal);
