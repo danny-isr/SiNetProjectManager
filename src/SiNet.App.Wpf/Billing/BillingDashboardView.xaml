@@ -192,7 +192,7 @@
                           IsChecked="{Binding ActionableOnly}"
                           VerticalAlignment="Center"
                           Margin="0,0,12,4"
-                          ToolTip="לבדוק עכשיו, עבודה שהצטברה, חשבון בהכנה" />
+                          ToolTip="לבדוק עכשיו, עבודה שהצטברה, חשבון בהכנה, וסומן להכנת חשבון. השהיה עם תאריך עתידי מוסתרת." />
                 <CheckBox Content="רק פרויקטים פעילים"
                           IsChecked="{Binding ActiveOnly}"
                           VerticalAlignment="Center"
@@ -283,6 +283,12 @@
                                                  Value="{x:Static billingApp:BillingCandidateState.CoveredByLatestBill}">
                                         <Setter Property="Background" Value="#D1FAE5" />
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding HasActivePrepareBill}" Value="True">
+                                        <Setter Property="Background" Value="#E9D5FF" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HasActiveNotNow}" Value="True">
+                                        <Setter Property="Background" Value="#E5E7EB" />
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.RowStyle>
@@ -290,6 +296,10 @@
                             <DataGridTextColumn Header="מצב"
                                                 Binding="{Binding StateDisplay}"
                                                 Width="120"
+                                                ElementStyle="{StaticResource WrapTextBlockStyle}" />
+                            <DataGridTextColumn Header="החלטה"
+                                                Binding="{Binding LocalDecisionLabel}"
+                                                Width="110"
                                                 ElementStyle="{StaticResource WrapTextBlockStyle}" />
                             <DataGridTextColumn Header="מספר"
                                                 Binding="{Binding ProjectNumber}"
@@ -444,6 +454,60 @@
                                 <TextBlock Text="{Binding Selected.StateDisplay}" Style="{StaticResource DetailValueStyle}" />
                                 <TextBlock Text="סיבה" Style="{StaticResource DetailLabelStyle}" />
                                 <TextBlock Text="{Binding Selected.CandidateReason}" Style="{StaticResource DetailValueStyle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Padding="12" Margin="0,10,0,0"
+                                BorderBrush="{DynamicResource SiPrimaryBrush}"
+                                BorderThickness="2"
+                                Background="{DynamicResource SiSurfaceBrush}">
+                            <StackPanel>
+                                <TextBlock Text="החלטת ניהול"
+                                           Style="{StaticResource SectionHeaderStyle}" />
+                                <TextBlock Text="{Binding Selected.LocalDecisionHeadline}"
+                                           Style="{StaticResource DetailValueStyle}"
+                                           FontWeight="SemiBold" />
+
+                                <StackPanel Visibility="{Binding HasActivePrepareBill, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="מי / מתי" Style="{StaticResource DetailLabelStyle}" />
+                                    <TextBlock Text="{Binding Selected.LocalDecisionActorText}" Style="{StaticResource DetailValueStyle}" />
+                                    <TextBlock Text="הערה" Style="{StaticResource DetailLabelStyle}" />
+                                    <TextBlock Text="{Binding Selected.LocalDecisionReasonText}" Style="{StaticResource DetailValueStyle}" />
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding HasActiveNotNow, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="סיבה" Style="{StaticResource DetailLabelStyle}" />
+                                    <TextBlock Text="{Binding Selected.LocalDecisionReasonText}" Style="{StaticResource DetailValueStyle}" />
+                                    <TextBlock Text="בדיקה מחדש" Style="{StaticResource DetailLabelStyle}" />
+                                    <TextBlock Text="{Binding Selected.LocalDecisionReviewAgainText}" Style="{StaticResource DetailValueStyle}" />
+                                    <TextBlock Text="מי / מתי" Style="{StaticResource DetailLabelStyle}" />
+                                    <TextBlock Text="{Binding Selected.LocalDecisionActorText}" Style="{StaticResource DetailValueStyle}" />
+                                </StackPanel>
+
+                                <WrapPanel Margin="0,8,0,0"
+                                           Visibility="{Binding ShowDecisionWriteButtons, Converter={StaticResource BoolToVis}}">
+                                    <Button Content="להכין חשבון"
+                                            Command="{Binding PrepareBillCommand}"
+                                            Style="{DynamicResource SiPrimaryButtonStyle}"
+                                            Padding="12,6"
+                                            Margin="0,0,8,4"
+                                            AutomationProperties.AutomationId="BillingDashboard.PrepareBill" />
+                                    <Button Content="לא עכשיו"
+                                            Command="{Binding NotNowCommand}"
+                                            Style="{DynamicResource SiSecondaryButtonStyle}"
+                                            Padding="12,6"
+                                            Margin="0,0,0,4"
+                                            AutomationProperties.AutomationId="BillingDashboard.NotNow" />
+                                </WrapPanel>
+
+                                <Button Content="בטל החלטה"
+                                        Command="{Binding ClearDecisionCommand}"
+                                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                                        Padding="12,6"
+                                        Margin="0,8,0,0"
+                                        HorizontalAlignment="Left"
+                                        Visibility="{Binding ShowClearDecisionButton, Converter={StaticResource BoolToVis}}"
+                                        AutomationProperties.AutomationId="BillingDashboard.ClearDecision" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

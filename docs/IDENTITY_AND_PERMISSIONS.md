@@ -381,6 +381,7 @@ public interface IAuthorizationQueryService
 | `WorkflowOps.Start` | Administrator |
 | `ShellOpenProjectsDashboard` | Management |
 | `ShellOpenBillingCenter` | Management |
+| `Billing.RecordReviewDecision` | Management |
 | `ShellOpenMasterPlanMonthlyRestore` | Management |
 | `ShellImportWorkstationSecrets` | Employee |
 

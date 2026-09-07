@@ -197,6 +197,8 @@ public partial class SiNetSQLDbContext : DbContext
     public virtual DbSet<ProjectTypeWorkflowStage> ProjectTypeWorkflowStages { get; set; }
     public virtual DbSet<ProjectTypeDiscipline> ProjectTypeDisciplines { get; set; }
 
+    public virtual DbSet<BillingReviewDecision> BillingReviewDecisions { get; set; }
+
     /// <summary>
     /// Design-time only fallback for EF migrations (Add-Migration, Update-Database).
     /// At runtime, options are provided via DI (AddDbContextFactory in App.xaml.cs)

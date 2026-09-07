@@ -5,12 +5,13 @@ using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Billing;
+using SiNet.Application.Identity;
 
 namespace SiNet.App.Wpf.Billing;
 
 /// <summary>
-/// Read-only Billing Control Center. Consumes <see cref="IBillingDashboardReadService"/> only.
-/// Does not resolve candidate state, query SQL, or run MasterPlan sync.
+/// Billing Control Center. Reads candidates from <see cref="IBillingDashboardReadService"/>
+/// and records SiNet-local review decisions without writing MasterPlan.
 /// </summary>
 public sealed class BillingDashboardViewModel : ObservableObject
 {
@@ -24,7 +25,13 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private readonly IBillingDashboardReadService _service;
     private readonly TimeProvider _timeProvider;
     private readonly IAppLogger? _logger;
+    private readonly IBillingReviewDecisionService? _reviewDecisions;
+    private readonly IAuthorizationQueryService? _authorization;
+    private readonly IBillingReviewPrompts? _prompts;
     private readonly AsyncRelayCommand _refreshCommand;
+    private readonly AsyncRelayCommand _prepareBillCommand;
+    private readonly AsyncRelayCommand _notNowCommand;
+    private readonly AsyncRelayCommand _clearDecisionCommand;
 
     private CancellationTokenSource? _loadCts;
     private IReadOnlyList<BillingDashboardRowVm> _allRows = [];
@@ -33,12 +40,14 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private bool _isBusy;
     private bool _activeOnly = true;
     private bool _actionableOnly = true;
+    private bool _canWriteBillingDecisions;
     private string _filterText = string.Empty;
     private BillingDashboardStateFilterOption _stateFilter = BillingDashboardStateFilterOption.All;
     private BillingDashboardRowVm? _selected;
     private string _statusMessage = string.Empty;
     private string _errorMessage = string.Empty;
     private string _asOfDateText = BillingDashboardFormatters.EmDash;
+    private DateTime _asOfDate = DateTime.Today;
     private string _freshnessStatusText = BillingDashboardFormatters.EmDash;
     private string _replicaLastSyncText = BillingDashboardFormatters.EmDash;
     private string _monthlySnapshotDateText = BillingDashboardFormatters.UnknownSnapshotDate;
@@ -54,12 +63,21 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public BillingDashboardViewModel(
         IBillingDashboardReadService service,
         TimeProvider? timeProvider = null,
-        IAppLogger? logger = null)
+        IAppLogger? logger = null,
+        IBillingReviewDecisionService? reviewDecisions = null,
+        IAuthorizationQueryService? authorization = null,
+        IBillingReviewPrompts? prompts = null)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger;
+        _reviewDecisions = reviewDecisions;
+        _authorization = authorization;
+        _prompts = prompts;
         _refreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
+        _prepareBillCommand = new AsyncRelayCommand(PrepareBillAsync, CanWriteNewDecision);
+        _notNowCommand = new AsyncRelayCommand(NotNowAsync, CanWriteNewDecision);
+        _clearDecisionCommand = new AsyncRelayCommand(ClearDecisionAsync, CanClearDecision);
         ClearFiltersCommand = new RelayCommand(_ => ClearFilters());
         Rows = new ObservableCollection<BillingDashboardRowVm>();
         StateFilterOptions =
@@ -69,7 +87,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
             new("עבודה שהצטברה", BillingCandidateState.AccumulatedWork),
             new("חשבון בהכנה", BillingCandidateState.BillInPreparation),
             new("מכוסה בחשבון האחרון", BillingCandidateState.CoveredByLatestBill),
-            new("לא דחוף", BillingCandidateState.NotUrgent)
+            new("לא דחוף", BillingCandidateState.NotUrgent),
+            BillingDashboardStateFilterOption.MarkedPrepareBill,
+            BillingDashboardStateFilterOption.Held
         ];
     }
 
@@ -77,6 +97,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public IReadOnlyList<BillingDashboardStateFilterOption> StateFilterOptions { get; }
     public ICommand RefreshCommand => _refreshCommand;
     public ICommand ClearFiltersCommand { get; }
+    public ICommand PrepareBillCommand => _prepareBillCommand;
+    public ICommand NotNowCommand => _notNowCommand;
+    public ICommand ClearDecisionCommand => _clearDecisionCommand;
 
     public string Title => "מרכז חיובים";
     public string ReceivedThisMonthLabel => BillingDashboardFormatters.ReceivedThisMonthLabel;
@@ -100,6 +123,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowEmptyFilterState));
             OnPropertyChanged(nameof(ShowEmptyServiceState));
             OnPropertyChanged(nameof(EmptyListMessage));
+            OnPropertyChanged(nameof(ShowDecisionWriteButtons));
+            OnPropertyChanged(nameof(ShowClearDecisionButton));
+            RaiseDecisionCommands();
         }
     }
 
@@ -109,7 +135,10 @@ public sealed class BillingDashboardViewModel : ObservableObject
         private set
         {
             if (SetField(ref _isBusy, value))
+            {
                 _refreshCommand.RaiseCanExecuteChanged();
+                RaiseDecisionCommands();
+            }
         }
     }
 
@@ -183,10 +212,36 @@ public sealed class BillingDashboardViewModel : ObservableObject
             if (!SetField(ref _selected, value))
                 return;
             OnPropertyChanged(nameof(HasSelection));
+            OnPropertyChanged(nameof(HasActiveLocalDecision));
+            OnPropertyChanged(nameof(HasActivePrepareBill));
+            OnPropertyChanged(nameof(HasActiveNotNow));
+            OnPropertyChanged(nameof(ShowDecisionWriteButtons));
+            OnPropertyChanged(nameof(ShowClearDecisionButton));
+            RaiseDecisionCommands();
         }
     }
 
     public bool HasSelection => Selected is not null;
+    public bool CanWriteBillingDecisions
+    {
+        get => _canWriteBillingDecisions;
+        private set
+        {
+            if (!SetField(ref _canWriteBillingDecisions, value))
+                return;
+            OnPropertyChanged(nameof(ShowDecisionWriteButtons));
+            OnPropertyChanged(nameof(ShowClearDecisionButton));
+            RaiseDecisionCommands();
+        }
+    }
+
+    public bool HasActiveLocalDecision => Selected?.HasActiveLocalDecision == true;
+    public bool HasActivePrepareBill => Selected?.HasActivePrepareBill == true;
+    public bool HasActiveNotNow => Selected?.HasActiveNotNow == true;
+    public bool ShowDecisionWriteButtons =>
+        CanWriteBillingDecisions && HasSelection && !HasActiveLocalDecision && ShowCandidatesArea;
+    public bool ShowClearDecisionButton =>
+        CanWriteBillingDecisions && HasSelection && HasActiveLocalDecision && ShowCandidatesArea;
     public string StatusMessage
     {
         get => _statusMessage;
@@ -286,7 +341,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
         {
             _serviceCallCount++;
             var asOf = _timeProvider.GetLocalNow().Date;
+            _asOfDate = asOf;
             AsOfDateText = asOf.ToString("dd/MM/yyyy");
+            CanWriteBillingDecisions = await ResolveCanWriteAsync(ct).ConfigureAwait(true);
             var result = await _service.GetAsync(
                     new BillingDashboardRequest(ActiveOnly: ActiveOnly),
                     ct)
@@ -376,13 +433,21 @@ public sealed class BillingDashboardViewModel : ObservableObject
             return;
 
         IEnumerable<BillingDashboardRowVm> query = _allRows;
-        if (StateFilter.State is BillingCandidateState specific)
+        if (StateFilter.LocalDecision is BillingLocalDecisionType localType)
+        {
+            query = query.Where(r =>
+                r.HasActiveLocalDecision && r.Source.LocalDecision!.DecisionType == localType);
+        }
+        else if (StateFilter.State is BillingCandidateState specific)
         {
             query = query.Where(r => r.CandidateState == specific);
         }
         else if (ActionableOnly)
         {
-            query = query.Where(r => DefaultActionableStates.Contains(r.CandidateState));
+            query = query.Where(r => BillingLocalDecisionApplier.IncludeInDefaultActionableView(
+                r.Source,
+                DefaultActionableStates,
+                _asOfDate));
         }
 
         var text = FilterText.Trim();
@@ -402,7 +467,159 @@ public sealed class BillingDashboardViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowEmptyFilterState));
         OnPropertyChanged(nameof(ShowEmptyServiceState));
         OnPropertyChanged(nameof(EmptyListMessage));
+        OnPropertyChanged(nameof(HasActiveLocalDecision));
+        OnPropertyChanged(nameof(HasActivePrepareBill));
+        OnPropertyChanged(nameof(HasActiveNotNow));
+        OnPropertyChanged(nameof(ShowDecisionWriteButtons));
+        OnPropertyChanged(nameof(ShowClearDecisionButton));
+        RaiseDecisionCommands();
     }
+
+    public async Task PrepareBillAsync()
+    {
+        var row = Selected;
+        if (row is null || _reviewDecisions is null || !CanWriteNewDecision())
+            return;
+
+        var label = ProjectLabel(row);
+        if (_prompts is not null && !_prompts.ConfirmPrepareBill(label))
+            return;
+
+        await WriteDecisionAsync(
+            row,
+            BillingLocalDecisionType.PrepareBill,
+            reason: null,
+            reviewAgain: null).ConfigureAwait(true);
+    }
+
+    public async Task NotNowAsync()
+    {
+        var row = Selected;
+        if (row is null || _reviewDecisions is null || !CanWriteNewDecision())
+            return;
+
+        var label = ProjectLabel(row);
+        string? reason = null;
+        DateTime? reviewAgain = null;
+        if (_prompts is not null)
+        {
+            var prompt = _prompts.PromptNotNow(label);
+            if (prompt is null)
+                return;
+            reason = prompt.Reason;
+            reviewAgain = prompt.ReviewAgainDate;
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            ErrorMessage = "חובה לציין סיבה להשהיה.";
+            return;
+        }
+
+        await WriteDecisionAsync(
+            row,
+            BillingLocalDecisionType.NotNow,
+            reason,
+            reviewAgain).ConfigureAwait(true);
+    }
+
+    public async Task ClearDecisionAsync()
+    {
+        var row = Selected;
+        if (row is null || _reviewDecisions is null || !CanClearDecision())
+            return;
+
+        if (_prompts is not null && !_prompts.ConfirmClearDecision(ProjectLabel(row)))
+            return;
+
+        try
+        {
+            await _reviewDecisions.ClearAsync(row.ProjectId).ConfigureAwait(true);
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("[Billing] clear local decision failed", ex);
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private async Task WriteDecisionAsync(
+        BillingDashboardRowVm row,
+        BillingLocalDecisionType type,
+        string? reason,
+        DateTime? reviewAgain)
+    {
+        if (_reviewDecisions is null)
+            return;
+
+        var source = row.Source;
+        var request = new BillingReviewDecisionWriteRequest(
+            source.ProjectId,
+            type,
+            reason,
+            reviewAgain,
+            source.LatestBillId,
+            source.LatestBillStatusId,
+            source.LastBillDate,
+            source.HoursSinceLastBill,
+            source.LastWorkDate);
+        try
+        {
+            await _reviewDecisions.SaveAsync(request).ConfigureAwait(true);
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("[Billing] save local decision failed", ex);
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private async Task<bool> ResolveCanWriteAsync(CancellationToken cancellationToken)
+    {
+        if (_reviewDecisions is null)
+            return false;
+        if (_authorization is null)
+            return true;
+        return await _authorization
+            .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.BillingRecordReviewDecision, cancellationToken)
+            .ConfigureAwait(true);
+    }
+
+    private bool CanWriteNewDecision() =>
+        !IsBusy
+        && CanWriteBillingDecisions
+        && Selected is not null
+        && !HasActiveLocalDecision
+        && ShowCandidatesArea;
+
+    private bool CanClearDecision() =>
+        !IsBusy
+        && CanWriteBillingDecisions
+        && Selected is not null
+        && HasActiveLocalDecision
+        && ShowCandidatesArea;
+
+    private void RaiseDecisionCommands()
+    {
+        _prepareBillCommand.RaiseCanExecuteChanged();
+        _notNowCommand.RaiseCanExecuteChanged();
+        _clearDecisionCommand.RaiseCanExecuteChanged();
+    }
+
+    private static string ProjectLabel(BillingDashboardRowVm row) =>
+        string.IsNullOrWhiteSpace(row.ProjectNumber)
+            ? row.ProjectName ?? $"פרויקט {row.ProjectId}"
+            : $"{row.ProjectNumber} — {row.ProjectName}";
 
     private static bool Matches(BillingDashboardRowVm row, string text) =>
         Contains(row.ProjectNumber, text)
@@ -440,9 +657,16 @@ public sealed class BillingDashboardViewModel : ObservableObject
     }
 }
 
-public sealed record BillingDashboardStateFilterOption(string Label, BillingCandidateState? State)
+public sealed record BillingDashboardStateFilterOption(
+    string Label,
+    BillingCandidateState? State,
+    BillingLocalDecisionType? LocalDecision = null)
 {
     public static BillingDashboardStateFilterOption All { get; } = new("כל המצבים", null);
+    public static BillingDashboardStateFilterOption MarkedPrepareBill { get; } =
+        new("סומן להכנת חשבון", null, BillingLocalDecisionType.PrepareBill);
+    public static BillingDashboardStateFilterOption Held { get; } =
+        new("מושהה", null, BillingLocalDecisionType.NotNow);
 
     public override string ToString() => Label;
 }

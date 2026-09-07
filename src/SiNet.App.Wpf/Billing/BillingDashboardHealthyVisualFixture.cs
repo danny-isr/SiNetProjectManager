@@ -11,8 +11,112 @@ internal static class BillingDashboardHealthyVisualFixture
     private static readonly DateTime SnapshotDate = new(2026, 8, 2);
     private static readonly DateTime LastSync = new(2026, 9, 7, 7, 40, 0);
 
-    public static IBillingDashboardReadService CreateService() =>
-        new FakeService(CreateHealthyResult());
+    public static IBillingDashboardReadService CreateService(
+        IBillingReviewDecisionStore? localDecisions = null) =>
+        new FakeService(CreateHealthyResult(), localDecisions);
+
+    /// <summary>
+    /// In-memory write session for the DEBUG Healthy fixture. Does not touch SiNet SQL or MasterPlan.
+    /// </summary>
+    internal sealed class LocalDecisionSession : IBillingReviewDecisionService, IBillingReviewDecisionStore
+    {
+        private readonly Dictionary<int, BillingReviewDecisionRecord> _byProject = new();
+        private readonly TimeProvider _time;
+
+        public LocalDecisionSession(TimeProvider? timeProvider = null)
+        {
+            _time = timeProvider ?? TimeProvider.System;
+        }
+
+        public Task<IReadOnlyList<BillingReviewDecisionRecord>> GetByProjectIdsAsync(
+            IReadOnlyList<int> projectIds,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<BillingReviewDecisionRecord> rows = _byProject.Values
+                .Where(r => projectIds.Contains(r.ProjectId))
+                .ToList();
+            return Task.FromResult(rows);
+        }
+
+        public Task SaveAsync(
+            BillingReviewDecisionWriteRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            if (request.DecisionType == BillingLocalDecisionType.NotNow
+                && string.IsNullOrWhiteSpace(request.Reason))
+            {
+                throw new ArgumentException("NotNow requires a reason.", nameof(request));
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var utcNow = _time.GetUtcNow().UtcDateTime;
+            if (_byProject.TryGetValue(request.ProjectId, out var existing))
+            {
+                _byProject[request.ProjectId] = existing with
+                {
+                    DecisionType = request.DecisionType,
+                    Reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim(),
+                    ReviewAgainDate = request.ReviewAgainDate?.Date,
+                    UpdatedAtUtc = utcNow,
+                    UpdatedByUserId = 0,
+                    UpdatedByLogin = "Healthy fixture",
+                    ClearedAtUtc = null,
+                    ClearedByUserId = null,
+                    ClearedByLogin = null,
+                    ObservedLatestBillId = request.ObservedLatestBillId,
+                    ObservedLatestBillStatusId = request.ObservedLatestBillStatusId,
+                    ObservedLastBillDate = request.ObservedLastBillDate,
+                    ObservedHoursSinceLastBill = request.ObservedHoursSinceLastBill,
+                    ObservedLastWorkDate = request.ObservedLastWorkDate
+                };
+            }
+            else
+            {
+                _byProject[request.ProjectId] = new BillingReviewDecisionRecord(
+                    request.ProjectId,
+                    request.DecisionType,
+                    string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim(),
+                    request.ReviewAgainDate?.Date,
+                    utcNow,
+                    0,
+                    "Healthy fixture",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    request.ObservedLatestBillId,
+                    request.ObservedLatestBillStatusId,
+                    request.ObservedLastBillDate,
+                    request.ObservedHoursSinceLastBill,
+                    request.ObservedLastWorkDate);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_byProject.TryGetValue(projectId, out var existing))
+                return Task.CompletedTask;
+
+            var utcNow = _time.GetUtcNow().UtcDateTime;
+            _byProject[projectId] = existing with
+            {
+                ClearedAtUtc = utcNow,
+                ClearedByUserId = 0,
+                ClearedByLogin = "Healthy fixture",
+                UpdatedAtUtc = utcNow,
+                UpdatedByUserId = 0,
+                UpdatedByLogin = "Healthy fixture"
+            };
+            return Task.CompletedTask;
+        }
+    }
 
     public static BillingDashboardResult CreateHealthyResult()
     {
@@ -178,15 +282,25 @@ internal static class BillingDashboardHealthyVisualFixture
             state,
             reason);
 
-    private sealed class FakeService(BillingDashboardResult result) : IBillingDashboardReadService
+    private sealed class FakeService(
+        BillingDashboardResult result,
+        IBillingReviewDecisionStore? localDecisions) : IBillingDashboardReadService
     {
-        public Task<BillingDashboardResult> GetAsync(
+        public async Task<BillingDashboardResult> GetAsync(
             BillingDashboardRequest request,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(request);
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(result);
+            if (localDecisions is null || result.Candidates.Count == 0)
+                return result;
+
+            var stored = await localDecisions
+                .GetByProjectIdsAsync(result.Candidates.Select(r => r.ProjectId).ToList(), cancellationToken)
+                .ConfigureAwait(false);
+            var asOf = (request.AsOfDate ?? DateTime.Today).Date;
+            var rows = BillingLocalDecisionApplier.Apply(result.Candidates, stored, asOf);
+            return result with { Candidates = rows };
         }
     }
 }

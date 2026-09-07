@@ -62,15 +62,17 @@ public sealed class BillingShellMenuTests
     }
 
     [Fact]
-    public void B4_does_not_add_b5_persistence_or_actions()
+    public void B5_details_actions_do_not_write_masterplan()
     {
         var vm = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingDashboardViewModel.cs");
         var factory = ReadRepoFile("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
-        Assert.DoesNotContain("PrepareBill", vm, StringComparison.Ordinal);
-        Assert.DoesNotContain("NotNow", vm, StringComparison.Ordinal);
+        Assert.Contains("PrepareBillAsync", vm, StringComparison.Ordinal);
+        Assert.Contains("NotNowAsync", vm, StringComparison.Ordinal);
+        Assert.Contains("IBillingReviewDecisionService", vm, StringComparison.Ordinal);
+        Assert.Contains("ReviewAgainDate", vm, StringComparison.Ordinal);
         Assert.DoesNotContain("SaveChanges", vm, StringComparison.Ordinal);
-        Assert.DoesNotContain("IBillingDecision", vm, StringComparison.Ordinal);
-        Assert.DoesNotContain("ReviewAgainDate", vm, StringComparison.Ordinal);
+        Assert.DoesNotContain("MP_Bills", vm, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequireReplica", vm, StringComparison.Ordinal);
         Assert.DoesNotContain("PrepareBill", factory, StringComparison.Ordinal);
         Assert.DoesNotContain("BillingHold", factory, StringComparison.Ordinal);
     }

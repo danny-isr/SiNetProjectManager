@@ -74,11 +74,15 @@ public static class NewSystemWpfServiceCollectionExtensions
                 sp.GetService<IAuthorizationQueryService>(),
                 sp.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>()));
         services.AddTransient<ProjectsDashboardWindow>();
+        services.AddTransient<IBillingReviewPrompts, WpfBillingReviewPrompts>();
         services.AddTransient<BillingDashboardViewModel>(sp =>
             new BillingDashboardViewModel(
                 sp.GetRequiredService<IBillingDashboardReadService>(),
                 TimeProvider.System,
-                sp.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>()));
+                sp.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>(),
+                sp.GetService<IBillingReviewDecisionService>(),
+                sp.GetService<IAuthorizationQueryService>(),
+                sp.GetService<IBillingReviewPrompts>()));
         services.AddTransient<BillingDashboardWindow>();
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();

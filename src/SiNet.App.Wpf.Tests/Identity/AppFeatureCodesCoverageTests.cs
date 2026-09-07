@@ -31,6 +31,7 @@ public sealed class AppFeatureCodesCoverageTests
             AppFeatureCodes.ShellOpenProjectTypeWorkflowPolicy,
             AppFeatureCodes.ShellOpenProjectsDashboard,
             AppFeatureCodes.ShellOpenBillingCenter,
+            AppFeatureCodes.BillingRecordReviewDecision,
             AppFeatureCodes.WorkflowOpsAdvance,
             AppFeatureCodes.WorkflowOpsCancel,
             AppFeatureCodes.WorkflowOpsRetry,
@@ -69,8 +70,11 @@ public sealed class AppFeatureCodesCoverageTests
     [InlineData(AppRole.Employee, AppFeatureCodes.ShellOpenProjectsDashboard, false)]
     [InlineData(AppRole.Management, AppFeatureCodes.ShellOpenBillingCenter, true)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.ShellOpenBillingCenter, true)]
-    [InlineData(AppRole.Employee, AppFeatureCodes.ShellOpenBillingCenter, false)]
-    [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsAdvance, true)]
+        [InlineData(AppRole.Employee, AppFeatureCodes.ShellOpenBillingCenter, false)]
+        [InlineData(AppRole.Management, AppFeatureCodes.BillingRecordReviewDecision, true)]
+        [InlineData(AppRole.Administrator, AppFeatureCodes.BillingRecordReviewDecision, true)]
+        [InlineData(AppRole.Employee, AppFeatureCodes.BillingRecordReviewDecision, false)]
+        [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsAdvance, true)]
     [InlineData(AppRole.Management, AppFeatureCodes.WorkflowOpsAdvance, false)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsCancel, true)]
     [InlineData(AppRole.Administrator, AppFeatureCodes.WorkflowOpsRetry, true)]
@@ -98,6 +102,9 @@ public sealed class AppFeatureCodesCoverageTests
         Assert.Contains(AppFeatureCodes.ShellOpenBillingCenter, codes);
         Assert.Equal("Shell.OpenBillingCenter", AppFeatureCodes.ShellOpenBillingCenter);
         Assert.Equal(AppRole.Management, AppFeatureAuthorization.GetRequiredRole(AppFeatureCodes.ShellOpenBillingCenter));
+        Assert.Contains(AppFeatureCodes.BillingRecordReviewDecision, codes);
+        Assert.Equal("Billing.RecordReviewDecision", AppFeatureCodes.BillingRecordReviewDecision);
+        Assert.Equal(AppRole.Management, AppFeatureAuthorization.GetRequiredRole(AppFeatureCodes.BillingRecordReviewDecision));
 
         foreach (var code in codes)
         {

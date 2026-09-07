@@ -2,8 +2,8 @@
 
 > **Title:** Billing Control Center V1 — decision layer over MasterPlan Replica  
 > **Date:** 06.09.2026  
-> **Updated:** 07.09.2026 (B4.1 UI polish + Healthy visual fixture)  
-> **Status:** Active (B0–B4 accepted; B4.1 polish; B5 not started)  
+> **Updated:** 07.09.2026 (B5 local review decisions)  
+> **Status:** Active (B0–B4.1 accepted; B5 implemented — operator EF migration pending)  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) operational Billing Control Center. Replica_DB is the primary current-fact store. Monthly `Db_Mp_SiEng` is enrichment only. Local SiNet rows are supplemental workflow notes after explicit human action.  
 > **Target application:** New System WPF (`SiNet.App.Wpf`)  
 > **Primary goal:** A reliable management screen that answers “Which projects should we review now for billing?” without creating a second financial system alongside MasterPlan.
@@ -302,7 +302,7 @@ Source precedence is unchanged:
 
 1. Replica current facts (`MP_Projects`, `MP_Bills`, `MP_ProjectHoursExtended`, `MP_Intakes`)
 2. Monthly snapshot enrichment (`Db_Mp_SiEng` via vault `MasterPlanDatabase`)
-3. SiNet supplemental / local decisions (B5 — not this round)
+3. SiNet supplemental / local decisions (B5)
 
 B2 does **not** weaken the Replica freshness guard. A stale Development Replica may still block a **current** dashboard. B2 is validated with fixtures, isolated enrichment tests, and historical `AsOfDate` (which does not bypass structural Replica failures).
 
@@ -389,13 +389,72 @@ V1 does **not** union the tables while parity remains one-directional and Extend
 
 ---
 
-## 10. Local SiNet workflow metadata
+## 10. Local SiNet workflow metadata (B5)
 
 Do not persist a row simply because a project appears as a candidate. Candidates are a calculated read model. Only create local state after an explicit human action.
 
-Recommended actions: PrepareBill, Hold, NotRelevant.
+**`BillingCandidateState` is computed from Replica facts only.** It is never rewritten by a human decision.  
+**`BillingReviewDecision` is a SiNet supplemental note.** It is never a second ledger: it does not create or change MasterPlan bills, amounts, statuses, hours, or balances.
 
-**Do not add this persistence table in B0/B1.** Read-only candidate screen first (B3), then B5 after validation. Manual EF migration only. Do not auto-run Update-Database.
+Precedence is unchanged: Replica fact > monthly snapshot > SiNet local decision. When Replica facts materially advance, the local decision is superseded and no longer controls display.
+
+### 10.1 Actions (details panel only)
+
+| Action | Meaning | Does not |
+| --- | --- | --- |
+| **להכין חשבון** (`PrepareBill`) | Management reviewed the candidate and wants preparation to proceed | Create an MP bill, change `MP_Bills`, send mail, or calculate an amount |
+| **לא עכשיו** (`NotNow`) | Hold. Reason required. Review-again date optional | Hide the project with no trace |
+| **בטל החלטה** | Clears the active local decision; computed candidate state is shown again | Delete Replica/MasterPlan facts |
+
+No automatic MasterPlan write in B5. No suggested bill amount.
+
+### 10.2 Persistence
+
+SiNet table `BillingReviewDecision` on `SiNetSQLDbContext` (not Replica, not `SiNetDbContext`). One current row per MasterPlan `ProjectId` (unique index). No FK to SiNet `Project` — MasterPlan project identity is an external id. No FK to invoices/payments.
+
+Columns: `Id`, `ProjectId` (unique), `DecisionType`, `Reason`, `ReviewAgainDate`, `CreatedAtUtc`, `CreatedByUserId`, `CreatedByLogin`, `UpdatedAtUtc`, `UpdatedByUserId`, `UpdatedByLogin`, `ClearedAtUtc`, `ClearedByUserId`, `ClearedByLogin`, plus observed Replica evidence at decision time (`ObservedLatestBillId`, `ObservedLatestBillStatusId`, `ObservedLastBillDate`, `ObservedHoursSinceLastBill`, `ObservedLastWorkDate`). Observed fields are audit/supersession only.
+
+Cancel stamps `Cleared*` on the same row (does not delete). A later decision updates the same row (Created* kept; Updated* set; Cleared* cleared). Manual EF migration only — do not auto-run `Update-Database`.
+
+**Concurrency (V1, Option A):** last-write-wins. Unique `ProjectId` prevents duplicate active rows. There is no `RowVersion` / `DbUpdateConcurrencyException` handling. Two managers editing the same project: the later `SaveAsync` overwrites the current row and stamps `Updated*`.
+
+Same MasterPlan `LatestBillId` with only a status change does **not** supersede a local decision (V1). Only a different/new latest bill id does.
+
+### 10.3 Supersession and expiry (read-time; do not require a manual clear)
+
+Computed in `BillingLocalDecisionApplier`. Does not mutate `BillingCandidateState` or Replica numbers.
+
+| Stored decision | Becomes inactive when |
+| --- | --- |
+| `PrepareBill` | Current `LatestBillId` is non-null and different from `ObservedLatestBillId` (including “no bill observed, a bill now exists”) |
+| `NotNow` with `ReviewAgainDate` | `ReviewAgainDate.Date <= as-of date` (expired) **or** a newer/changed latest bill as above |
+| `NotNow` without date | Manual hold: stays active until cancel or a newer bill. Remains **visible** in the default actionable view (not an invisible permanent hide) |
+| Any | `ClearedAtUtc` is set |
+
+Inactive decisions no longer suppress or restyle the candidate.
+
+### 10.4 Default visibility
+
+- **PrepareBill (active):** stay in default “דורש בדיקה”; presentation “להכין חשבון”.
+- **NotNow with future date (active):** excluded from default actionable filter; visible under “כל המצבים” or the local-decision filter.
+- **NotNow without date (active):** shown as a manual hold; not hidden.
+- **Expired / superseded / cleared:** default view follows computed `BillingCandidateState` only.
+
+### 10.5 Read pipeline order
+
+1. Replica facts  
+2. Freshness gate (stale Replica still **blocks before local decisions are loaded**)  
+3. Compute `BillingCandidateState`  
+4. Monthly snapshot enrichment  
+5. Load local decisions  
+6. Apply visibility/supersession overlay  
+
+Local decisions never change Hours30, HoursSinceLastBill, bill status, balances, or resolver inputs.
+
+### 10.6 Permissions
+
+View: existing `Shell.OpenBillingCenter` (Management).  
+Write: separate `Billing.RecordReviewDecision` (Management), matching WorkflowOps view/write split. Employee cannot write. Service re-checks; the UI only hides buttons.
 
 ---
 
@@ -405,7 +464,9 @@ Recommended actions: PrepareBill, Hold, NotRelevant.
 
 **B4 (accepted):** New Shell top-level group **כספים** → **מרכז חיובים**. Feature code `AppFeatureCodes.ShellOpenBillingCenter` = `Shell.OpenBillingCenter`, minimum role **Management** (Administrator inherits; Employee denied). Not under **דוחות**, not `ReportsManagement`. Read-only through B4 — no Hold / Prepare / Not Now persistence. Release data-parity validation remains deferred.
 
-**B4.1 (this round):** Blocked/fatal UI polish + Healthy visual validation. When `CandidatesBlocked` (or fatal/recoverable error), show **one** primary blocking message, keep header freshness + Refresh, hide KPI cards and all candidate filters, and let the blocking panel fill the content area (no empty grid). Default grid shows the operational core; secondary financial fields stay in the details panel. DEBUG-only Healthy fixture launches the real `BillingDashboardWindow` over a fake `IBillingDashboardReadService` — not a production Replica bypass. B5 is not started.
+**B4.1 (accepted):** Blocked/fatal UI polish + Healthy visual validation. When `CandidatesBlocked` (or fatal/recoverable error), show **one** primary blocking message, keep header freshness + Refresh, hide KPI cards and all candidate filters, and let the blocking panel fill the content area (no empty grid). Default grid shows the operational core; secondary financial fields stay in the details panel. DEBUG-only Healthy fixture launches the real `BillingDashboardWindow` over a fake `IBillingDashboardReadService` — not a production Replica bypass.
+
+**B5 (implemented, operator EF migration pending):** Local review decisions in the details panel (`PrepareBill` / `NotNow` / clear). `BillingCandidateState` stays computed. MasterPlan is never written. Stale Replica still blocks before local rows matter. DEBUG Healthy fixture is unchanged (no production DEV Replica refresh).
 
 ---
 
@@ -494,8 +555,8 @@ B4: feature-code coverage, authorization mapping, menu gating.
 | **B2** — Monthly enrichment | snapshot fields, snapshot date, customer fallback, fee-type summary | **accepted** |
 | **B3** — Read-only WPF screen | dashboard window/VM, table, filters, freshness, reasons | **accepted** |
 | **B4** — Shell + permissions | `Shell.OpenBillingCenter`, כספים > מרכז חיובים, Management | **accepted** |
-| **B4.1** — UI polish + Healthy visual fixture | Single blocked message; hide KPI/filters while blocked; core grid columns; DEBUG Healthy fixture | **this round** |
-| **B5** — Human decisions | Hold / Prepare / Not relevant; manual EF migration | after user validation of read-only screen |
+| **B4.1** — UI polish + Healthy visual fixture | Single blocked message; hide KPI/filters while blocked; core grid columns; DEBUG Healthy fixture | **accepted** |
+| **B5** — Human decisions | `BillingReviewDecision`; PrepareBill / NotNow / clear; supersession; Management write code | **implemented (operator migration pending)** |
 | **B6** — Later Replica enrichment | API/Replica entities to reduce monthly snapshot dependence | post-V1 |
 
 B0 acceptance: builds with no UI and no DB schema changes.  
@@ -504,7 +565,8 @@ B1 acceptance: backend returns candidate rows matching the validated SQL behavio
 **B2 acceptance:** monthly `ProjectsExtraData` / fee-type fields are labelled as snapshot, never override Replica current facts, never drive `CandidateState`, and missing enrichment leaves Replica candidates intact. Replica freshness guard is unchanged.  
 **B3 acceptance:** read-only WPF surface over `IBillingDashboardReadService`; blocked freshness is not shown as an empty candidate list.  
 **B4 acceptance:** New Shell exposes **כספים → מרכז חיובים** gated by `Shell.OpenBillingCenter` (Management); Employee does not see the group; opening a stale Replica shows the B3 blocking panel; no B5 persistence.  
-**B4.1 acceptance:** Blocked/fatal UI shows one primary message, no KPI/filter chrome, no empty grid hole; default grid is the operational core; Healthy layout validated via DEBUG fixture (not a Replica bypass); no B5 persistence.
+**B4.1 acceptance:** Blocked/fatal UI shows one primary message, no KPI/filter chrome, no empty grid hole; default grid is the operational core; Healthy layout validated via DEBUG fixture (not a Replica bypass); no B5 persistence.  
+**B5 acceptance:** Management can record/clear a local PrepareBill or NotNow from the details panel; Employee cannot write; one row per MasterPlan `ProjectId`; a newer Replica bill supersedes PrepareBill/NotNow; expired NotNow is actionable again; `BillingCandidateState` and Replica numbers are unchanged; stale Replica still blocks before local decisions load; no MasterPlan writes; operator runs the EF migration (agent does not).
 
 ---
 
@@ -589,7 +651,7 @@ These are intentionally deferred:
 - Current project/bill linkage for `MP_Intakes`.
 - Whether Invoice entities can be added to Replica via the API.
 - Whether Contracts/SubContracts can be made current via API rather than monthly enrichment.
-- Final local decision table design after management validates the read-only candidate workflow.
+- Whether a later B-stage should keep a full decision history table (B5 keeps one current row + Created/Updated/Cleared audit).
 
 None of these should block the candidate engine backend.
 
@@ -636,9 +698,8 @@ Replica `MP_ProjectHoursExtended` has `Duration`, `TotalHours`, `StartTime`, `En
 
 ---
 
-## Out of Scope (this document / B0–B4.1)
+## Out of Scope (this document / B0–B5)
 
-- Local Hold / Prepare / Not relevant persistence and EF migration (B5)
 - Automatic bill creation or suggested bill amount
 - Duplicate invoice/payment ledger
 - Drill-down project details
@@ -657,6 +718,6 @@ Replica `MP_ProjectHoursExtended` has `Duration`, `TotalHours`, `StartTime`, `En
 | `SubmittedOpenAmount` KPI | Postponed | Semantics not proven from Replica-only data |
 | Project-level intake allocation | Postponed | Replica intakes lack project/bill linkage |
 | Live MasterPlan fallback for Billing | Cancelled | Would violate Replica-authoritative current facts |
-| Local decision table in B0/B1 | Postponed to B5 | Validate read-only candidates first |
+| Local decision table in B0/B1 | Done in B5 | Validated read-only candidates first |
 | WPF / permissions in B0/B1 | Postponed to B3/B4 | Backend contracts and Replica engine first |
 | Hostname allow-list for Replica | Cancelled | Freshness is the gate; server identity is diagnostic only |

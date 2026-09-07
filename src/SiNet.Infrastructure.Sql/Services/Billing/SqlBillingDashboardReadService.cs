@@ -4,16 +4,18 @@ using SiNet.Application.Billing;
 namespace SiNet.Infrastructure.Sql.Services.Billing;
 
 /// <summary>
-/// Replica-first billing dashboard with optional monthly snapshot enrichment (B2).
-/// Freshness vs now gates current requests; <c>AsOfDate</c> is never the freshness clock.
-/// Snapshot fields never override Replica facts and never drive candidate state.
+/// Replica-first billing dashboard with optional monthly snapshot enrichment (B2)
+/// and SiNet local-decision overlay (B5). Freshness vs now gates current requests;
+/// stale Replica still blocks before local decisions are loaded.
+/// Snapshot fields and local decisions never override Replica facts or <see cref="BillingCandidateState"/>.
 /// </summary>
 public sealed class SqlBillingDashboardReadService(
     IReplicaBillingDataSource replica,
     IMonthlyBillingEnrichmentDataSource? monthly = null,
     TimeProvider? timeProvider = null,
     BillingReplicaFreshnessOptions? freshnessOptions = null,
-    IAppLogger? logger = null) : IBillingDashboardReadService
+    IAppLogger? logger = null,
+    IBillingReviewDecisionStore? localDecisions = null) : IBillingDashboardReadService
 {
     private readonly IReplicaBillingDataSource _replica =
         replica ?? throw new ArgumentNullException(nameof(replica));
@@ -95,6 +97,14 @@ public sealed class SqlBillingDashboardReadService(
                 logger));
             allRows = BillingSnapshotEnrichmentApplier.Apply(allRows, monthlyLoad.Projects, monthlyDate);
             freshness = freshness with { MonthlySnapshotDate = monthlyDate };
+        }
+
+        if (localDecisions is not null && allRows.Count > 0)
+        {
+            var stored = await localDecisions
+                .GetByProjectIdsAsync(allRows.Select(r => r.ProjectId).ToList(), cancellationToken)
+                .ConfigureAwait(false);
+            allRows = BillingLocalDecisionApplier.Apply(allRows, stored, asOf);
         }
 
         IReadOnlyList<BillingCandidateRow> rows = allRows;

@@ -1,0 +1,59 @@
+<Window x:Class="SiNet.App.Wpf.Billing.BillingNotNowDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="לא עכשיו"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="ProjectLabelText"
+                   Grid.Row="0"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12"
+                   FontWeight="SemiBold" />
+
+        <TextBlock Grid.Row="1"
+                   Text="סיבה (חובה)"
+                   Margin="0,0,0,4"
+                   Foreground="{DynamicResource SiMutedForegroundBrush}" />
+        <TextBox x:Name="ReasonBox"
+                 Grid.Row="2"
+                 MinHeight="72"
+                 TextWrapping="Wrap"
+                 AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto"
+                 Margin="0,0,0,12" />
+
+        <StackPanel Grid.Row="3" Margin="0,0,0,16">
+            <TextBlock Text="בדיקה מחדש בתאריך (רשות)"
+                       Margin="0,0,0,4"
+                       Foreground="{DynamicResource SiMutedForegroundBrush}" />
+            <DatePicker x:Name="ReviewDatePicker"
+                        SelectedDateFormat="Short" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button Content="שמירה"
+                    IsDefault="True"
+                    Click="Save_Click"
+                    Style="{DynamicResource SiPrimaryButtonStyle}"
+                    Padding="16,6"
+                    Margin="0,0,8,0" />
+            <Button Content="ביטול"
+                    IsCancel="True"
+                    Click="Cancel_Click"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="16,6" />
+        </StackPanel>
+    </Grid>
+</Window>

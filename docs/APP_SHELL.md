@@ -197,7 +197,7 @@ Top groups (when they have children):
   משימות             → לוח משימות, דוחות ביקורת, תהליכים, …
   משתמשים והרשאות    → ניהול משתמשים, הוספת משתמש, הרשאות פעולה
   דוחות              → R01 / R02 / R03
-  כספים              → מרכז חיובים (`Shell.OpenBillingCenter`, Management)
+  כספים              → מרכז חיובים (`Shell.OpenBillingCenter`, Management; writes `Billing.RecordReviewDecision`)
   מנהלה              → הגדרות, מפתחות, ACC, שחזור חודשי MasterPlan, מצב מערכת, כלי פיתוח (DEBUG)
 ```
 

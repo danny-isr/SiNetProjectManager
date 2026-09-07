@@ -812,10 +812,14 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         ThemeResourceLoader.EnsureApplicationResourcesMerged();
         try
         {
+            var session = new BillingDashboardHealthyVisualFixture.LocalDecisionSession();
             var viewModel = new BillingDashboardViewModel(
-                BillingDashboardHealthyVisualFixture.CreateService(),
+                BillingDashboardHealthyVisualFixture.CreateService(session),
                 TimeProvider.System,
-                _services.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>());
+                _services.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>(),
+                session,
+                authorization: null,
+                prompts: new WpfBillingReviewPrompts());
             var window = new BillingDashboardWindow(viewModel);
             ShowWindow(window);
         }

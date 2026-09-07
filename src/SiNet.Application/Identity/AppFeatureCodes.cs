@@ -37,6 +37,9 @@ public static class AppFeatureCodes
     /// <summary>Operational Billing Control Center («מרכז חיובים»). Not a MasterPlan report.</summary>
     public const string ShellOpenBillingCenter = "Shell.OpenBillingCenter";
 
+    /// <summary>Record or clear a local billing review decision (PrepareBill / NotNow). Does not write MasterPlan.</summary>
+    public const string BillingRecordReviewDecision = "Billing.RecordReviewDecision";
+
     /// <summary>Advance / pause / resume / complete a workflow instance from ops UI.</summary>
     public const string WorkflowOpsAdvance = "WorkflowOps.Advance";
 

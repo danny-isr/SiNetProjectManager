@@ -1,5 +1,6 @@
 using SiNet.App.Wpf.Billing;
 using SiNet.Application.Billing;
+using SiNet.Application.Identity;
 using Xunit;
 
 namespace SiNet.App.Wpf.Tests.Billing;
@@ -274,6 +275,109 @@ public sealed class BillingDashboardViewModelTests
     }
 
     [Fact]
+    public async Task Future_NotNow_is_hidden_from_default_actionable_filter()
+    {
+        var overlay = ActiveNotNow(new DateTime(2026, 9, 15), "ממתינים ללקוח");
+        var held = Candidate(5905, "5905", "גשר הצפון", "לקוח רפליקה", BillingCandidateState.ReviewNow, "שעות")
+            with { LocalDecision = overlay };
+        var other = Candidate(5893, "5893", "מגדל", "לקוח", BillingCandidateState.AccumulatedWork, "עבודה");
+        var fake = new FakeBillingDashboardReadService(
+            Result(
+                BillingReplicaFreshnessStatus.Healthy,
+                blocked: false,
+                new BillingDashboardSummary(1, 0, null, 0m, LastSync, SnapshotDate, 1, 0, 0),
+                held,
+                other));
+        var vm = new BillingDashboardViewModel(fake, new FrozenLocalClock(new DateTime(2026, 9, 7)));
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        Assert.True(vm.ActionableOnly);
+        var visible = Assert.Single(vm.Rows);
+        Assert.Equal("5893", visible.ProjectNumber);
+
+        vm.ActionableOnly = false;
+        Assert.Equal(2, vm.Rows.Count);
+
+        vm.StateFilter = BillingDashboardStateFilterOption.Held;
+        var heldRow = Assert.Single(vm.Rows);
+        Assert.Equal("5905", heldRow.ProjectNumber);
+        Assert.Equal("מושהה עד 15/09", heldRow.LocalDecisionLabel);
+        Assert.Equal(BillingCandidateState.ReviewNow, heldRow.CandidateState);
+    }
+
+    [Fact]
+    public async Task Active_PrepareBill_stays_in_default_actionable_view()
+    {
+        var overlay = ActivePrepare();
+        var marked = Candidate(6982, "6982", "כיסוי", "לקוח", BillingCandidateState.CoveredByLatestBill, "אין שעות")
+            with { LocalDecision = overlay };
+        var fake = new FakeBillingDashboardReadService(
+            Result(
+                BillingReplicaFreshnessStatus.Healthy,
+                blocked: false,
+                new BillingDashboardSummary(0, 0, null, 0m, LastSync, SnapshotDate, 0, 1, 0),
+                marked));
+        var vm = new BillingDashboardViewModel(fake, new FrozenLocalClock(new DateTime(2026, 9, 7)));
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        var row = Assert.Single(vm.Rows);
+        Assert.Equal(BillingCandidateState.CoveredByLatestBill, row.CandidateState);
+        Assert.Equal("להכין חשבון", row.LocalDecisionLabel);
+        Assert.True(row.HasActivePrepareBill);
+    }
+
+    [Fact]
+    public async Task PrepareBill_command_saves_observed_facts_without_changing_candidate_state()
+    {
+        var source = Candidate(5905, "5905", "גשר", "לקוח", BillingCandidateState.ReviewNow, "שעות",
+            hours30: 18m, hoursSinceLastBill: 22m);
+        var fake = new FakeBillingDashboardReadService(
+            Result(
+                BillingReplicaFreshnessStatus.Healthy,
+                blocked: false,
+                new BillingDashboardSummary(1, 0, null, 0m, LastSync, SnapshotDate, 0, 0, 0),
+                source));
+        var write = new RecordingWrite();
+        var vm = new BillingDashboardViewModel(
+            fake,
+            new FrozenLocalClock(new DateTime(2026, 9, 7)),
+            reviewDecisions: write,
+            authorization: new StubAuth(true),
+            prompts: new FakePrompts());
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        Assert.True(vm.CanWriteBillingDecisions);
+        Assert.True(vm.ShowDecisionWriteButtons);
+        await vm.PrepareBillAsync().ConfigureAwait(true);
+
+        var saved = Assert.Single(write.Saves);
+        Assert.Equal(5905, saved.ProjectId);
+        Assert.Equal(BillingLocalDecisionType.PrepareBill, saved.DecisionType);
+        Assert.Equal(18m, source.Hours30);
+        Assert.Equal(BillingCandidateState.ReviewNow, vm.Selected!.CandidateState);
+        Assert.Equal(source.HoursSinceLastBill, saved.ObservedHoursSinceLastBill);
+        Assert.Equal(source.LatestBillId, saved.ObservedLatestBillId);
+    }
+
+    [Fact]
+    public async Task Employee_cannot_write_from_the_view_model()
+    {
+        var fake = new FakeBillingDashboardReadService(HealthyResult());
+        var write = new RecordingWrite();
+        var vm = new BillingDashboardViewModel(
+            fake,
+            reviewDecisions: write,
+            authorization: new StubAuth(false),
+            prompts: new FakePrompts());
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        Assert.False(vm.CanWriteBillingDecisions);
+        Assert.False(vm.ShowDecisionWriteButtons);
+        await vm.PrepareBillAsync().ConfigureAwait(true);
+        Assert.Empty(write.Saves);
+    }
+
+    [Fact]
     public void Snapshot_formatters_never_label_current_balance()
     {
         Assert.Equal("יתרה לפי snapshot 02/08/2026", BillingDashboardFormatters.SnapshotBalanceCaption(SnapshotDate));
@@ -437,6 +541,82 @@ public sealed class BillingDashboardViewModelTests
         BillingCandidateState state,
         string reason) =>
         Candidate(id, number, name, "לקוח", state, reason, hours30, hoursSinceLastBill, null, null, null, null, null, null);
+
+    private static BillingLocalDecisionOverlay ActiveNotNow(DateTime reviewAgain, string reason) =>
+        new(
+            BillingLocalDecisionType.NotNow,
+            reason,
+            reviewAgain,
+            new DateTime(2026, 9, 6, 10, 0, 0, DateTimeKind.Utc),
+            7,
+            "manager",
+            null,
+            null,
+            null,
+            BillingLocalDecisionEffect.Active);
+
+    private static BillingLocalDecisionOverlay ActivePrepare() =>
+        new(
+            BillingLocalDecisionType.PrepareBill,
+            null,
+            null,
+            new DateTime(2026, 9, 6, 10, 0, 0, DateTimeKind.Utc),
+            7,
+            "manager",
+            null,
+            null,
+            null,
+            BillingLocalDecisionEffect.Active);
+
+    private sealed class FrozenLocalClock(DateTime localDate) : TimeProvider
+    {
+        private readonly DateTimeOffset _utcNow = new(DateTime.SpecifyKind(localDate, DateTimeKind.Utc));
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+    }
+
+    private sealed class StubAuth(bool allow) : IAuthorizationQueryService
+    {
+        public Task<bool> IsCurrentUserInRoleAsync(AppRole requiredRole, CancellationToken cancellationToken = default) =>
+            Task.FromResult(allow);
+
+        public Task<bool> CanCurrentUserAccessFeatureAsync(
+            string featureCode,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(allow && featureCode == AppFeatureCodes.BillingRecordReviewDecision);
+    }
+
+    private sealed class FakePrompts : IBillingReviewPrompts
+    {
+        public bool ConfirmPrepareBill(string projectLabel) => true;
+
+        public BillingNotNowPromptResult? PromptNotNow(string projectLabel) =>
+            new("סיבת בדיקה", new DateTime(2026, 9, 20));
+
+        public bool ConfirmClearDecision(string projectLabel) => true;
+    }
+
+    private sealed class RecordingWrite : IBillingReviewDecisionService
+    {
+        public List<BillingReviewDecisionWriteRequest> Saves { get; } = [];
+        public List<int> Cleared { get; } = [];
+
+        public Task SaveAsync(
+            BillingReviewDecisionWriteRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Saves.Add(request);
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            Cleared.Add(projectId);
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class FakeBillingDashboardReadService(BillingDashboardResult result) : IBillingDashboardReadService
     {

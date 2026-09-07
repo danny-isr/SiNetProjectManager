@@ -49,4 +49,58 @@ public sealed class BillingDashboardRowVm
         Source.LatestBillId is int id
             ? $"{Source.LatestBillNumber ?? id.ToString()} · {Source.LatestBillStatus ?? BillingDashboardFormatters.EmDash} · {BillingDashboardFormatters.Money(Source.LatestBillSum)}"
             : BillingDashboardFormatters.EmDash;
+
+    public bool HasActiveLocalDecision =>
+        Source.LocalDecision is { Effect: BillingLocalDecisionEffect.Active };
+
+    public bool HasActivePrepareBill =>
+        HasActiveLocalDecision && Source.LocalDecision!.DecisionType == BillingLocalDecisionType.PrepareBill;
+
+    public bool HasActiveNotNow =>
+        HasActiveLocalDecision && Source.LocalDecision!.DecisionType == BillingLocalDecisionType.NotNow;
+
+    public string LocalDecisionLabel
+    {
+        get
+        {
+            if (!HasActiveLocalDecision || Source.LocalDecision is null)
+                return string.Empty;
+            if (Source.LocalDecision.DecisionType == BillingLocalDecisionType.PrepareBill)
+                return "להכין חשבון";
+            if (Source.LocalDecision.ReviewAgainDate is DateTime review)
+                return "מושהה עד " + review.ToString("dd/MM");
+            return "מושהה ידנית";
+        }
+    }
+
+    public string LocalDecisionHeadline =>
+        HasActivePrepareBill
+            ? "סומן להכנת חשבון"
+            : HasActiveNotNow
+                ? LocalDecisionLabel
+                : "אין החלטת ניהול פעילה";
+
+    public string LocalDecisionReasonText =>
+        string.IsNullOrWhiteSpace(Source.LocalDecision?.Reason)
+            ? BillingDashboardFormatters.EmDash
+            : Source.LocalDecision!.Reason!;
+
+    public string LocalDecisionReviewAgainText =>
+        BillingDashboardFormatters.Date(Source.LocalDecision?.ReviewAgainDate);
+
+    public string LocalDecisionActorText
+    {
+        get
+        {
+            var local = Source.LocalDecision;
+            if (local is null)
+                return BillingDashboardFormatters.EmDash;
+            var who = !string.IsNullOrWhiteSpace(local.UpdatedByLogin)
+                ? local.UpdatedByLogin
+                : local.CreatedByLogin;
+            var when = local.UpdatedAtUtc ?? local.CreatedAtUtc;
+            var whoText = string.IsNullOrWhiteSpace(who) ? $"משתמש #{local.UpdatedByUserId ?? local.CreatedByUserId}" : who;
+            return $"{whoText} · {BillingDashboardFormatters.DateTimeStamp(when)}";
+        }
+    }
 }

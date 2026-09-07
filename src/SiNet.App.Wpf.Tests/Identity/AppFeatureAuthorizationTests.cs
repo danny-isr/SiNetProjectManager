@@ -19,6 +19,7 @@ public sealed class AppFeatureAuthorizationTests
         Assert.False(AppFeatureAuthorization.CanAccessFeature(AppRole.Employee, AppFeatureCodes.ProjectCreate));
         Assert.False(AppFeatureAuthorization.CanAccessFeature(AppRole.Employee, AppFeatureCodes.ReportsManagement));
         Assert.False(AppFeatureAuthorization.CanAccessFeature(AppRole.Employee, AppFeatureCodes.ShellOpenBillingCenter));
+        Assert.False(AppFeatureAuthorization.CanAccessFeature(AppRole.Employee, AppFeatureCodes.BillingRecordReviewDecision));
         Assert.False(AppFeatureAuthorization.CanAccessFeature(AppRole.Employee, AppFeatureCodes.SystemSettingsWrite));
         Assert.False(AppFeatureAuthorization.CanAccessFeature(AppRole.Employee, AppFeatureCodes.UsersManage));
         Assert.False(AppFeatureAuthorization.CanAccessFeature(AppRole.Employee, AppFeatureCodes.ActionPermissionsManage));
@@ -31,6 +32,7 @@ public sealed class AppFeatureAuthorizationTests
         Assert.True(AppFeatureAuthorization.CanAccessFeature(AppRole.Management, AppFeatureCodes.ProjectCreate));
         Assert.True(AppFeatureAuthorization.CanAccessFeature(AppRole.Management, AppFeatureCodes.ReportsManagement));
         Assert.True(AppFeatureAuthorization.CanAccessFeature(AppRole.Management, AppFeatureCodes.ShellOpenBillingCenter));
+        Assert.True(AppFeatureAuthorization.CanAccessFeature(AppRole.Management, AppFeatureCodes.BillingRecordReviewDecision));
     }
 
     [Fact]
@@ -51,6 +53,7 @@ public sealed class AppFeatureAuthorizationTests
                      AppFeatureCodes.ProjectCreate,
                      AppFeatureCodes.ReportsManagement,
                      AppFeatureCodes.ShellOpenBillingCenter,
+                     AppFeatureCodes.BillingRecordReviewDecision,
                      AppFeatureCodes.SystemSettingsWrite,
                      AppFeatureCodes.UsersManage,
                      AppFeatureCodes.ActionPermissionsManage,
