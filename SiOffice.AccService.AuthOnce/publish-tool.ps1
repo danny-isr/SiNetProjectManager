@@ -80,7 +80,7 @@ Write-Host ("AuthOnce build stamp: {0} (Session={1})" -f $stampPath, $session) -
 
 if ($SkipDeploy) {
     Write-Host "`n-SkipDeploy specified; not copying to network share." -ForegroundColor Yellow
-    Write-Host "Server kit must copy this artifact (publish-server-kit.ps1) — no silent reuse of an older UNC EXE." -ForegroundColor Yellow
+    Write-Host "Server kit must copy this artifact (publish-server-kit.ps1) - no silent reuse of an older UNC EXE." -ForegroundColor Yellow
     return
 }
 

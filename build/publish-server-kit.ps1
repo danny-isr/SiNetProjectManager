@@ -183,7 +183,7 @@ $sessionExpected = $env:SINET_AUTHONCE_BUILD_SESSION
 if (-not [string]::IsNullOrWhiteSpace($sessionExpected)) {
     $sessionActual = [string]$stampMap["Session"]
     if (-not [string]::Equals($sessionExpected, $sessionActual, [StringComparison]::Ordinal)) {
-        throw ("AuthOnce stamp Session mismatch (expected current publish session '{0}', stamp has '{1}'). Rebuild AuthOnce in this run — do not copy a previous artifact." -f $sessionExpected, $sessionActual)
+        throw ("AuthOnce stamp Session mismatch (expected current publish session '{0}', stamp has '{1}'). Rebuild AuthOnce in this run - do not copy a previous artifact." -f $sessionExpected, $sessionActual)
     }
 }
 else {
