@@ -33,6 +33,8 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private readonly AsyncRelayCommand _prepareBillCommand;
     private readonly AsyncRelayCommand _notNowCommand;
     private readonly AsyncRelayCommand _clearDecisionCommand;
+    private readonly RelayCommand _addHourlyScopeCommand;
+    private readonly RelayCommand _removeHourlyScopeCommand;
 
     private CancellationTokenSource? _loadCts;
     private IReadOnlyList<BillingDashboardRowVm> _allRows = [];
@@ -64,6 +66,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private BillingPreparationRequestRowVm? _selectedPreparation;
     private string _manualOverrideReason = string.Empty;
     private string _hourlyConfirmNote = string.Empty;
+    private IReadOnlyList<BillingHourlySubContractDraft> _hourlySubContracts = [];
+    private IReadOnlyList<BillingHourReportFact> _hourReports = [];
+    private int _componentLoadGeneration;
 
     public BillingDashboardViewModel(
         IBillingDashboardReadService service,
@@ -91,9 +96,14 @@ public sealed class BillingDashboardViewModel : ObservableObject
         ManualOverrideCommand = new AsyncRelayCommand(ApplyManualOverrideAsync, CanEditPreparation);
         ApprovePreparationCommand = new AsyncRelayCommand(ApprovePreparationAsync, CanApprovePreparation);
         ConfirmHourlyCommand = new AsyncRelayCommand(ConfirmHourlyAsync, CanConfirmHourly);
+        _addHourlyScopeCommand = new RelayCommand(_ => AddHourlyScope(), _ => CanEditPreparation());
+        _removeHourlyScopeCommand = new RelayCommand(
+            p => RemoveHourlyScope(p as BillingPreparationHoursScopeEditVm),
+            p => CanEditPreparation() && p is BillingPreparationHoursScopeEditVm);
         Rows = new ObservableCollection<BillingDashboardRowVm>();
         PreparationRows = new ObservableCollection<BillingPreparationRequestRowVm>();
         StageEdits = new ObservableCollection<BillingPreparationStageEditVm>();
+        HourlyScopeEdits = new ObservableCollection<BillingPreparationHoursScopeEditVm>();
         StateFilterOptions =
         [
             BillingDashboardStateFilterOption.All,
@@ -110,6 +120,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public ObservableCollection<BillingDashboardRowVm> Rows { get; }
     public ObservableCollection<BillingPreparationRequestRowVm> PreparationRows { get; }
     public ObservableCollection<BillingPreparationStageEditVm> StageEdits { get; }
+    public ObservableCollection<BillingPreparationHoursScopeEditVm> HourlyScopeEdits { get; }
     public IReadOnlyList<BillingDashboardStateFilterOption> StateFilterOptions { get; }
     public ICommand RefreshCommand => _refreshCommand;
     public ICommand ClearFiltersCommand { get; }
@@ -121,6 +132,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public ICommand ManualOverrideCommand { get; }
     public ICommand ApprovePreparationCommand { get; }
     public ICommand ConfirmHourlyCommand { get; }
+    public ICommand AddHourlyScopeCommand => _addHourlyScopeCommand;
+    public ICommand RemoveHourlyScopeCommand => _removeHourlyScopeCommand;
+    public string HourlyScopeCaption => BillingPreparationHoursScopeComposer.ManagerSelectedScopeCaption;
 
     public int SelectedWorkspaceTab
     {
@@ -140,14 +154,15 @@ public sealed class BillingDashboardViewModel : ObservableObject
             if (SetField(ref _selectedPreparation, value))
             {
                 ReloadStageEdits();
+                ReloadHourlyScopeEdits();
                 OnPropertyChanged(nameof(HasSelectedPreparation));
                 OnPropertyChanged(nameof(SelectedPreparationStatusText));
                 OnPropertyChanged(nameof(SelectedPreparationInstructions));
                 OnPropertyChanged(nameof(ShowWaitingForSnapshot));
                 OnPropertyChanged(nameof(CanConfirmHourlyVisible));
                 RaisePreparationCommands();
-                if (value is not null && value.Source.Stages.Count == 0)
-                    _ = LoadDraftStagesAsync();
+                if (value is not null)
+                    _ = LoadPreparationComponentsAsync();
             }
         }
     }
@@ -737,7 +752,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         ReceivedThisMonthText = BillingDashboardFormatters.EmDash;
     }
 
-    private async Task RefreshPreparationAsync()
+    internal async Task RefreshPreparationAsync()
     {
         if (_preparation is null)
             return;
@@ -750,6 +765,8 @@ public sealed class BillingDashboardViewModel : ObservableObject
         SelectedPreparation = selectedId is int id
             ? PreparationRows.FirstOrDefault(r => r.Id == id)
             : PreparationRows.Count > 0 ? PreparationRows[0] : null;
+        if (SelectedPreparation is not null)
+            await LoadPreparationComponentsAsync().ConfigureAwait(true);
         RaisePreparationCommands();
     }
 
@@ -762,42 +779,128 @@ public sealed class BillingDashboardViewModel : ObservableObject
             StageEdits.Add(new BillingPreparationStageEditVm(stage));
     }
 
-    private async Task LoadDraftStagesAsync()
+    private void ReloadHourlyScopeEdits()
+    {
+        foreach (var existing in HourlyScopeEdits)
+            existing.PropertyChanged -= OnHourlyScopePropertyChanged;
+        HourlyScopeEdits.Clear();
+        if (SelectedPreparation is null)
+            return;
+        foreach (var hours in SelectedPreparation.Source.Hours)
+            AttachHourlyScope(new BillingPreparationHoursScopeEditVm(hours));
+        BindHourlyCatalog();
+    }
+
+    private void AttachHourlyScope(BillingPreparationHoursScopeEditVm edit)
+    {
+        edit.PropertyChanged += OnHourlyScopePropertyChanged;
+        HourlyScopeEdits.Add(edit);
+        edit.BindCatalog(_hourlySubContracts, _hourReports);
+    }
+
+    private void BindHourlyCatalog()
+    {
+        foreach (var edit in HourlyScopeEdits)
+            edit.BindCatalog(_hourlySubContracts, _hourReports);
+    }
+
+    private void AddHourlyScope()
+    {
+        if (!CanEditPreparation())
+            return;
+        AttachHourlyScope(new BillingPreparationHoursScopeEditVm());
+        RaisePreparationCommands();
+        _ = RefreshHourlyOverlapAsync();
+    }
+
+    private void RemoveHourlyScope(BillingPreparationHoursScopeEditVm? edit)
+    {
+        if (edit is null || !CanEditPreparation())
+            return;
+        edit.PropertyChanged -= OnHourlyScopePropertyChanged;
+        HourlyScopeEdits.Remove(edit);
+        RaisePreparationCommands();
+        _ = RefreshHourlyOverlapAsync();
+    }
+
+    private void OnHourlyScopePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(BillingPreparationHoursScopeEditVm.Included)
+            or nameof(BillingPreparationHoursScopeEditVm.MasterPlanSubContractId)
+            or nameof(BillingPreparationHoursScopeEditVm.FromDate)
+            or nameof(BillingPreparationHoursScopeEditVm.ToDate)
+            or nameof(BillingPreparationHoursScopeEditVm.ReportCount))
+        {
+            RaisePreparationCommands();
+            _ = RefreshHourlyOverlapAsync();
+        }
+    }
+
+    internal async Task LoadPreparationComponentsAsync()
     {
         if (_preparation is null || SelectedPreparation is null)
             return;
+        var generation = ++_componentLoadGeneration;
         try
         {
             var load = await _preparation.LoadComponentsAsync(SelectedPreparation.Id).ConfigureAwait(true);
-            if (SelectedPreparation.Source.Stages.Count > 0)
+            if (generation != _componentLoadGeneration || SelectedPreparation is null)
                 return;
-            StageEdits.Clear();
-            var stamp = load.LatestBackupUtc ?? _timeProvider.GetUtcNow().UtcDateTime;
-            foreach (var draft in load.Stages)
+            _hourlySubContracts = load.HourlySubContracts;
+            _hourReports = load.HourReports;
+            BindHourlyCatalog();
+            if (SelectedPreparation.Source.Stages.Count == 0 && StageEdits.Count == 0)
             {
-                var observed = draft.Observed.Value;
-                var snapshot = new BillingPreparationStageLineSnapshot(
-                    draft.MasterPlanStageId,
-                    draft.MasterPlanSubContractId,
-                    draft.StageName,
-                    draft.SubContractName,
-                    draft.StageWeightWithinSubContract,
-                    observed,
-                    observed ?? 0m,
-                    0m,
-                    draft.Observed.HasOutliers,
-                    stamp,
-                    BillingConfirmationMode.None,
-                    null,
-                    null,
-                    null);
-                StageEdits.Add(new BillingPreparationStageEditVm(snapshot));
+                var stamp = load.LatestBackupUtc ?? _timeProvider.GetUtcNow().UtcDateTime;
+                foreach (var draft in load.Stages)
+                {
+                    var observed = draft.Observed.Value;
+                    var snapshot = new BillingPreparationStageLineSnapshot(
+                        draft.MasterPlanStageId,
+                        draft.MasterPlanSubContractId,
+                        draft.StageName,
+                        draft.SubContractName,
+                        draft.StageWeightWithinSubContract,
+                        observed,
+                        observed ?? 0m,
+                        0m,
+                        draft.Observed.HasOutliers,
+                        stamp,
+                        BillingConfirmationMode.None,
+                        null,
+                        null,
+                        null);
+                    StageEdits.Add(new BillingPreparationStageEditVm(snapshot));
+                }
             }
+
+            await RefreshHourlyOverlapAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
-            _logger?.Error("[Billing] load preparation stages failed", ex);
+            _logger?.Error("[Billing] load preparation components failed", ex);
         }
+    }
+
+    private async Task RefreshHourlyOverlapAsync()
+    {
+        if (_preparation is null || SelectedPreparation is null)
+            return;
+        var ids = HourlyScopeEdits
+            .Where(e => e.Included)
+            .SelectMany(e => e.ResolvedReports.Select(r => r.HoursReportId))
+            .Distinct()
+            .ToList();
+        IReadOnlyList<int> hits = [];
+        if (ids.Count > 0)
+        {
+            hits = await _preparation
+                .FindHourReportIdsInOtherRequestsAsync(ids, SelectedPreparation.Id)
+                .ConfigureAwait(true);
+        }
+
+        foreach (var edit in HourlyScopeEdits)
+            edit.SetOverlappingIds(hits);
     }
 
     private bool CanEditPreparation() =>
@@ -813,20 +916,35 @@ public sealed class BillingDashboardViewModel : ObservableObject
         && (SelectedPreparation.Source.ManualOverride
             || SelectedPreparation.Source.Stages.Count > 0
             || SelectedPreparation.Source.Hours.Count > 0
-            || StageEdits.Count > 0);
+            || StageEdits.Count > 0
+            || HourlyScopeEdits.Any(h => h.Included));
 
     private bool CanConfirmHourly() =>
         !IsBusy && _preparation is not null && CanConfirmHourlyVisible;
 
-    private async Task SavePreparationAsync()
+    internal async Task SavePreparationAsync()
     {
         if (_preparation is null || SelectedPreparation is null)
             return;
+        ErrorMessage = string.Empty;
         try
         {
             var stages = StageEdits.Select(s => s.ToSnapshot()).ToList();
+            var included = HourlyScopeEdits.Where(h => h.Included).ToList();
+            var reportIds = included
+                .SelectMany(h => h.ResolvedReports.Select(r => r.HoursReportId))
+                .Distinct()
+                .ToList();
+            var overlapping = reportIds.Count == 0
+                ? []
+                : await _preparation
+                    .FindHourReportIdsInOtherRequestsAsync(reportIds, SelectedPreparation.Id)
+                    .ConfigureAwait(true);
+            var stamp = SelectedPreparation.Source.SnapshotTimestampUtc
+                        ?? _timeProvider.GetUtcNow().UtcDateTime;
+            var hours = included.Select(h => h.ToSnapshot(stamp, overlapping)).ToList();
             var updated = await _preparation
-                .SaveSelectionAsync(SelectedPreparation.Id, stages, SelectedPreparation.Source.Hours)
+                .SaveSelectionAsync(SelectedPreparation.Id, stages, hours)
                 .ConfigureAwait(true);
             ReplacePreparation(updated);
         }
@@ -859,8 +977,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
             return;
         try
         {
-            if (StageEdits.Count > 0)
-                await SavePreparationAsync().ConfigureAwait(true);
+            await SavePreparationAsync().ConfigureAwait(true);
+            if (!string.IsNullOrEmpty(ErrorMessage) || SelectedPreparation is null)
+                return;
             var approved = await _preparation
                 .ApproveAndCreateTaskAsync(SelectedPreparation.Id)
                 .ConfigureAwait(true);
@@ -910,6 +1029,8 @@ public sealed class BillingDashboardViewModel : ObservableObject
         (ManualOverrideCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ApprovePreparationCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (ConfirmHourlyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        _addHourlyScopeCommand.RaiseCanExecuteChanged();
+        _removeHourlyScopeCommand.RaiseCanExecuteChanged();
     }
 
     private static string BuildDiagnostics(BillingDashboardResult result)

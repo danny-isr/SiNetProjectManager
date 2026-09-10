@@ -131,6 +131,27 @@ public sealed class BillingPreparationService(
                 throw new InvalidOperationException(validation.Error ?? "בחירת שלב לא תקינה.");
         }
 
+        if (hours.Count > 0)
+        {
+            var load = await _components.LoadAsync(request.MasterPlanProjectId, cancellationToken)
+                .ConfigureAwait(false);
+            var hourlyIds = load.HourlySubContracts
+                .Where(s => s.FeeTypeId == MasterPlanSnapshotFeeTypeIds.WorkingHours)
+                .Select(s => s.MasterPlanSubContractId)
+                .ToHashSet();
+            foreach (var hour in hours)
+            {
+                if (!hourlyIds.Contains(hour.MasterPlanSubContractId))
+                    throw new InvalidOperationException("יש לבחור הסכם משנה שעתי (FeeType=4) מה-snapshot שנטען.");
+                if (hour.ToDate.Date < hour.FromDate.Date)
+                    throw new InvalidOperationException("עד תאריך חייב להיות באותו יום או אחרי מתאריך.");
+                if (hour.Reports.Count == 0)
+                    throw new InvalidOperationException("לא ניתן לשמור היקף שעות ללא דיווחים תואמים בטווח שנבחר.");
+                if (hour.Reports.GroupBy(r => r.HoursReportId).Any(g => g.Count() > 1))
+                    throw new InvalidOperationException("אותו דיווח שעות לא יכול להופיע פעמיים באותו רכיב.");
+            }
+        }
+
         var hourIds = hours.SelectMany(h => h.Reports.Select(r => r.HoursReportId)).Distinct().ToList();
         var overlapping = hourIds.Count == 0
             ? []
@@ -321,6 +342,12 @@ public sealed class BillingPreparationService(
         var request = await RequireAsync(requestId, cancellationToken).ConfigureAwait(false);
         return await _components.LoadAsync(request.MasterPlanProjectId, cancellationToken).ConfigureAwait(false);
     }
+
+    public Task<IReadOnlyList<int>> FindHourReportIdsInOtherRequestsAsync(
+        IReadOnlyList<int> hourReportIds,
+        int? excludeRequestId,
+        CancellationToken cancellationToken = default) =>
+        _store.FindHourReportIdsInOtherRequestsAsync(hourReportIds, excludeRequestId, cancellationToken);
 
     private async Task<BillingPreparationRequestRecord> RequireAsync(int requestId, CancellationToken cancellationToken)
     {

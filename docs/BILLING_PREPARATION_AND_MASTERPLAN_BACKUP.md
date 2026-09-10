@@ -2,8 +2,8 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 09.09.2026 (final A0 StatusID / StepProgress scale; locked A1–A7 + intake decisions)  
-> **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice).  
+> **Updated:** 10.09.2026 (A4 WPF hourly-scope picker; locked A1–A7 + intake unchanged)  
+> **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
 
@@ -145,6 +145,8 @@ UI:
 **Decision 2 — no automatic stage amount in V1.** Stage amount remains **BLOCKED**. Task instructions are stage + cumulative %. Do not compute `ContractValue * Percentage`.
 
 **Decision 3 — hourly scope is manager-defined.** Never show «שעות לא מחויבות» as a MasterPlan fact. Show **available/reportable** hours for an explicit SubContract + date range; resolve to concrete `HoursReportId`s on approve. SiNet may warn «already in preparation request #X»; never «already billed in MasterPlan».
+
+**A4 WPF picker (10.09.2026):** Tab «חשבונות להכנה», section **«רכיבי שעות»**. Manager include/remove, `FeeType=4` SubContract from the loaded snapshot, inclusive FromDate/ToDate. Preview uses `BillingHourlyScopeResolver` (report count, normalized hours). Overlap warning vs other SiNet preparation requests only. `SavePreparationAsync` persists **both** `StageEdits` and composed hourly snapshots — never reuse `Source.Hours` unchanged. Caption: manager-selected scope; never «שעות לא מחויבות» / unbilled. Hourly still never auto-confirms; after the task, «אשר שבוצע ב-MasterPlan» remains required.
 
 **A7 confirmation:**
 

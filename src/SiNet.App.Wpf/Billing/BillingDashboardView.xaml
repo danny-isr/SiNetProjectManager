@@ -584,6 +584,70 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <TextBlock Text="רכיבי שעות"
+                                       Style="{StaticResource SectionHeaderStyle}"
+                                       Margin="0,8,0,8" />
+                            <TextBlock Text="{Binding HourlyScopeCaption}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"
+                                       AutomationProperties.AutomationId="BillingDashboard.HourlyScopeCaption" />
+                            <ItemsControl ItemsSource="{Binding HourlyScopeEdits}"
+                                          AutomationProperties.AutomationId="BillingDashboard.HourlyScopes">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{DynamicResource SiSecondaryBrush}"
+                                                BorderThickness="1"
+                                                Padding="8"
+                                                Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <Button DockPanel.Dock="Left"
+                                                            Content="הסר"
+                                                            Command="{Binding DataContext.RemoveHourlyScopeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Padding="8,2"
+                                                            Margin="0,0,8,0"
+                                                            Style="{DynamicResource SiSecondaryButtonStyle}" />
+                                                    <CheckBox Content="כלול בהכנה"
+                                                              IsChecked="{Binding Included, UpdateSourceTrigger=PropertyChanged}"
+                                                              VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                <TextBlock Text="הסכם משנה שעתי" Style="{StaticResource DetailLabelStyle}" />
+                                                <ComboBox ItemsSource="{Binding AvailableHourlySubContracts}"
+                                                          DisplayMemberPath="Name"
+                                                          SelectedValuePath="MasterPlanSubContractId"
+                                                          SelectedValue="{Binding MasterPlanSubContractId, UpdateSourceTrigger=PropertyChanged}"
+                                                          Margin="0,0,0,6" />
+                                                <TextBlock Text="{Binding SubContractName}" Margin="0,0,0,4" />
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                    <TextBlock Text="מתאריך" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <DatePicker SelectedDate="{Binding FromDate, UpdateSourceTrigger=PropertyChanged}" Width="120" />
+                                                    <TextBlock Text="עד תאריך" VerticalAlignment="Center" Margin="12,0,8,0" />
+                                                    <DatePicker SelectedDate="{Binding ToDate, UpdateSourceTrigger=PropertyChanged}" Width="120" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding DateRangeText, StringFormat=טווח שנבחר: {0}}" />
+                                                <TextBlock Text="{Binding ReportCountText, StringFormat=מספר דיווחים תואמים: {0}}" />
+                                                <TextBlock Text="{Binding TotalHoursText, StringFormat=סה״כ שעות מנורמלות: {0}}" />
+                                                <TextBlock Text="{Binding ValidationMessage}"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource SiDangerBrush}"
+                                                           Visibility="{Binding HasValidationMessage, Converter={StaticResource BoolToVis}}" />
+                                                <TextBlock Text="{Binding OverlapWarningText}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,4,0,0"
+                                                           Visibility="{Binding HasOverlapWarning, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="הוסף רכיב שעות"
+                                    Command="{Binding AddHourlyScopeCommand}"
+                                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                                    Padding="10,6"
+                                    Margin="0,0,0,8"
+                                    HorizontalAlignment="Right"
+                                    AutomationProperties.AutomationId="BillingDashboard.AddHourlyScope" />
                             <TextBox AcceptsReturn="True"
                                      Height="60"
                                      Margin="0,0,0,8"

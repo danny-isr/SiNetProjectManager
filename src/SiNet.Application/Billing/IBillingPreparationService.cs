@@ -127,4 +127,9 @@ public interface IBillingPreparationService
     Task<BillingPreparationSnapshotLoad> LoadComponentsAsync(
         int requestId,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<int>> FindHourReportIdsInOtherRequestsAsync(
+        IReadOnlyList<int> hourReportIds,
+        int? excludeRequestId,
+        CancellationToken cancellationToken = default);
 }
