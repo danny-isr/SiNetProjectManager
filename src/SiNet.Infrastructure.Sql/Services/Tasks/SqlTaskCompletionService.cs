@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
+using SiNet.Application.Billing;
 using SiNet.Application.Diagnostics; // TEMP WF-DEBUG
 using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
@@ -33,17 +34,20 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
     private readonly IWorkflowCommandService _workflowCommands;
     private readonly ITaskListChangeNotifier? _taskListNotifier;
     private readonly IProjectTypeContinuationStarter? _continuationStarter;
+    private readonly IBillingPreparationService? _billingPreparation;
 
     public SqlTaskCompletionService(
         IDbContextFactory<SiNetSQLDbContext> dbFactory,
         IWorkflowCommandService workflowCommands,
         ITaskListChangeNotifier? taskListNotifier = null,
-        IProjectTypeContinuationStarter? continuationStarter = null)
+        IProjectTypeContinuationStarter? continuationStarter = null,
+        IBillingPreparationService? billingPreparation = null)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _workflowCommands = workflowCommands ?? throw new ArgumentNullException(nameof(workflowCommands));
         _taskListNotifier = taskListNotifier;
         _continuationStarter = continuationStarter;
+        _billingPreparation = billingPreparation;
     }
 
     public async ValueTask<TaskCompletionResultDto> CompleteAsync(CompleteTaskCommand command, CancellationToken ct)
@@ -347,6 +351,8 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                         taskResultCode, task.ProjectId, command.UserId, ct)
                     .ConfigureAwait(false);
 
+                await TryNotifyPrepareBillCompletedAsync(taskType.Code, command.TaskId, taskClosed, ct)
+                    .ConfigureAwait(false);
                 NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance: stageAdvanceResult is not null);
                 return success with
                 {
@@ -384,6 +390,8 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                         taskResultCode, task.ProjectId, command.UserId, ct)
                     .ConfigureAwait(false);
 
+                await TryNotifyPrepareBillCompletedAsync(taskType.Code, command.TaskId, taskClosed, ct)
+                    .ConfigureAwait(false);
                 NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance: false);
                 return success with
                 {
@@ -403,6 +411,8 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                 taskResultCode, task.ProjectId, command.UserId, ct)
             .ConfigureAwait(false);
 
+        await TryNotifyPrepareBillCompletedAsync(taskType.Code, command.TaskId, taskClosed, ct)
+            .ConfigureAwait(false);
         NotifyUiTaskListChanged(command.TaskId, taskClosed, willAutoAdvance);
         return success with
         {
@@ -472,6 +482,22 @@ public sealed class SqlTaskCompletionService : ITaskCompletionService
                 projectId,
                 ex);
         }
+    }
+
+    private async Task TryNotifyPrepareBillCompletedAsync(
+        string taskTypeCode,
+        int taskId,
+        bool taskClosed,
+        CancellationToken cancellationToken)
+    {
+        if (!taskClosed || _billingPreparation is null)
+            return;
+        if (!string.Equals(taskTypeCode, TaskTypeCodes.PrepareBill, StringComparison.Ordinal))
+            return;
+
+        await _billingPreparation
+            .OnPrepareBillTaskCompletedByTaskIdAsync(taskId, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

@@ -8,6 +8,7 @@ using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Identity;
+using SiNet.Application.MasterPlanBackup;
 using SiNet.Application.Projects;
 using SiNet.Application.Tasks;
 using SiNet.Application.WorkSurfaces;
@@ -36,6 +37,7 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
     private readonly IEmailInboxQueryService? _inboxQuery;
     private readonly IAccResolvedDocsUrlLauncher? _accLauncher;
     private readonly IEmailGmailModifyService? _gmailModify;
+    private readonly IMasterPlanBackupIntakeService? _backupIntake;
     private EmailExternalDownloadHandler? _externalDownloadHandler;
 
     private EmailListRow? _selectedEmail;
@@ -72,7 +74,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         IShellContentHost? shellContentHost = null,
         IEmailInboxQueryService? inboxQuery = null,
         IAccResolvedDocsUrlLauncher? accLauncher = null,
-        IEmailGmailModifyService? gmailModify = null)
+        IEmailGmailModifyService? gmailModify = null,
+        IMasterPlanBackupIntakeService? backupIntake = null)
     {
         ArgumentNullException.ThrowIfNull(emailList);
         ArgumentNullException.ThrowIfNull(emailGateway);
@@ -95,13 +98,15 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         _inboxQuery = inboxQuery;
         _accLauncher = accLauncher;
         _gmailModify = gmailModify;
+        _backupIntake = backupIntake;
 
         AttachmentStrip = new EmailAttachmentStripViewModel(OpenExternalDownloadLink);
         ActionBar = new EmailActionBarViewModel(
             FileSelectedEmailAsync,
             MoveSelectedEmailToProjectAsync,
             OpenSelectedEmailInGmail,
-            MarkSelectedEmailAsFyiAsync);
+            MarkSelectedEmailAsFyiAsync,
+            AcceptMasterPlanBackupAsync);
         Workflow = new EmailWorkflowActionsPaneViewModel(ExecuteSelectedWorkflowActionAsync);
         Viewer = new EmailViewerPaneViewModel(OpenBodyLink);
 
@@ -420,6 +425,54 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         OpenInSystemBrowser(url);
+    }
+
+    private async Task AcceptMasterPlanBackupAsync()
+    {
+        if (_backupIntake is null)
+        {
+            SetStatus("קליטת גיבוי MasterPlan אינה זמינה.");
+            return;
+        }
+
+        if (_selectedEmail is not null
+            && _externalDownloadHandler?.IsAvailable == true
+            && EmailExternalDownloadLinkDetector.HasExternalDownloadLink(_selectedEmailBody))
+        {
+            _externalDownloadHandler.OpenFirstDownloadLink(
+                _selectedEmailBody,
+                _selectedEmail,
+                EmailExternalDownloadPurpose.MasterPlanBackup);
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "בחירת גיבוי MasterPlan",
+            Filter = "Backup (*.bak)|*.bak",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            var login = _currentUser?.UserId is int id ? $"משתמש #{id}" : Environment.UserName;
+            var result = await _backupIntake
+                .AcceptAsync(
+                    dialog.FileName,
+                    MasterPlanBackupIntakeSource.Manual,
+                    login,
+                    _selectedEmail?.Id)
+                .ConfigureAwait(true);
+            SetStatus(result.Duplicate
+                ? "הגיבוי כבר נמצא בתור Incoming"
+                : "הגיבוי הועתק לתור Incoming");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"קליטת גיבוי נכשלה: {ex.Message}");
+        }
     }
 
     private void OpenInSystemBrowser(string url)
@@ -986,7 +1039,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             canOpenInGmail: hasSelection && !string.IsNullOrWhiteSpace(_selectedEmail?.Id),
             canMarkAsFyi: hasSelection
                           && isFiled
-                          && _emailList.CanMarkAsFyi(_selectedEmail));
+                          && _emailList.CanMarkAsFyi(_selectedEmail),
+            canMasterPlanBackup: hasSelection && _backupIntake is not null);
     }
 
     private void OpenSelectedEmailInGmail()

@@ -56,6 +56,12 @@
                       Margin="0,0,8,0"
                       FontSize="{DynamicResource SiTextSmallFontSize}"
                       ToolTip="לא בשימוש לפתיחת גוף — המייל מסומן כנקרא רק בסיום טיפול (אישי / לא רלוונטי / לידיעה / Workflow). נשמר להרצה הנוכחית בלבד." />
+            <Button Content="גיבוי MasterPlan"
+                    Command="{Binding MasterPlanBackupCommand}"
+                    Padding="8,2"
+                    Margin="0,0,4,0"
+                    FontSize="{DynamicResource SiTextSmallFontSize}"
+                    ToolTip="העתק .bak לתור Incoming (לא RESTORE ולא ACC). Jumbo רגיל נשאר העלאה ל-ACC." />
             <Button Content="פתח ב-Gmail"
                     Command="{Binding OpenInGmailCommand}"
                     Padding="8,2"

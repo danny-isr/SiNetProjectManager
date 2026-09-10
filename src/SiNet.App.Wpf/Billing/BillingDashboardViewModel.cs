@@ -28,6 +28,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private readonly IBillingReviewDecisionService? _reviewDecisions;
     private readonly IAuthorizationQueryService? _authorization;
     private readonly IBillingReviewPrompts? _prompts;
+    private readonly IBillingPreparationService? _preparation;
     private readonly AsyncRelayCommand _refreshCommand;
     private readonly AsyncRelayCommand _prepareBillCommand;
     private readonly AsyncRelayCommand _notNowCommand;
@@ -59,6 +60,10 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private string _warningBannerText = string.Empty;
     private string _diagnosticsSummary = string.Empty;
     private int _serviceCallCount;
+    private int _selectedWorkspaceTab;
+    private BillingPreparationRequestRowVm? _selectedPreparation;
+    private string _manualOverrideReason = string.Empty;
+    private string _hourlyConfirmNote = string.Empty;
 
     public BillingDashboardViewModel(
         IBillingDashboardReadService service,
@@ -66,7 +71,8 @@ public sealed class BillingDashboardViewModel : ObservableObject
         IAppLogger? logger = null,
         IBillingReviewDecisionService? reviewDecisions = null,
         IAuthorizationQueryService? authorization = null,
-        IBillingReviewPrompts? prompts = null)
+        IBillingReviewPrompts? prompts = null,
+        IBillingPreparationService? preparation = null)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -74,12 +80,20 @@ public sealed class BillingDashboardViewModel : ObservableObject
         _reviewDecisions = reviewDecisions;
         _authorization = authorization;
         _prompts = prompts;
+        _preparation = preparation;
         _refreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
         _prepareBillCommand = new AsyncRelayCommand(PrepareBillAsync, CanWriteNewDecision);
         _notNowCommand = new AsyncRelayCommand(NotNowAsync, CanWriteNewDecision);
         _clearDecisionCommand = new AsyncRelayCommand(ClearDecisionAsync, CanClearDecision);
         ClearFiltersCommand = new RelayCommand(_ => ClearFilters());
+        RefreshPreparationCommand = new AsyncRelayCommand(RefreshPreparationAsync, () => !IsBusy && _preparation is not null);
+        SavePreparationCommand = new AsyncRelayCommand(SavePreparationAsync, CanEditPreparation);
+        ManualOverrideCommand = new AsyncRelayCommand(ApplyManualOverrideAsync, CanEditPreparation);
+        ApprovePreparationCommand = new AsyncRelayCommand(ApprovePreparationAsync, CanApprovePreparation);
+        ConfirmHourlyCommand = new AsyncRelayCommand(ConfirmHourlyAsync, CanConfirmHourly);
         Rows = new ObservableCollection<BillingDashboardRowVm>();
+        PreparationRows = new ObservableCollection<BillingPreparationRequestRowVm>();
+        StageEdits = new ObservableCollection<BillingPreparationStageEditVm>();
         StateFilterOptions =
         [
             BillingDashboardStateFilterOption.All,
@@ -94,12 +108,76 @@ public sealed class BillingDashboardViewModel : ObservableObject
     }
 
     public ObservableCollection<BillingDashboardRowVm> Rows { get; }
+    public ObservableCollection<BillingPreparationRequestRowVm> PreparationRows { get; }
+    public ObservableCollection<BillingPreparationStageEditVm> StageEdits { get; }
     public IReadOnlyList<BillingDashboardStateFilterOption> StateFilterOptions { get; }
     public ICommand RefreshCommand => _refreshCommand;
     public ICommand ClearFiltersCommand { get; }
     public ICommand PrepareBillCommand => _prepareBillCommand;
     public ICommand NotNowCommand => _notNowCommand;
     public ICommand ClearDecisionCommand => _clearDecisionCommand;
+    public ICommand RefreshPreparationCommand { get; }
+    public ICommand SavePreparationCommand { get; }
+    public ICommand ManualOverrideCommand { get; }
+    public ICommand ApprovePreparationCommand { get; }
+    public ICommand ConfirmHourlyCommand { get; }
+
+    public int SelectedWorkspaceTab
+    {
+        get => _selectedWorkspaceTab;
+        set
+        {
+            if (SetField(ref _selectedWorkspaceTab, value) && value == 1)
+                _ = RefreshPreparationAsync();
+        }
+    }
+
+    public BillingPreparationRequestRowVm? SelectedPreparation
+    {
+        get => _selectedPreparation;
+        set
+        {
+            if (SetField(ref _selectedPreparation, value))
+            {
+                ReloadStageEdits();
+                OnPropertyChanged(nameof(HasSelectedPreparation));
+                OnPropertyChanged(nameof(SelectedPreparationStatusText));
+                OnPropertyChanged(nameof(SelectedPreparationInstructions));
+                OnPropertyChanged(nameof(ShowWaitingForSnapshot));
+                OnPropertyChanged(nameof(CanConfirmHourlyVisible));
+                RaisePreparationCommands();
+                if (value is not null && value.Source.Stages.Count == 0)
+                    _ = LoadDraftStagesAsync();
+            }
+        }
+    }
+
+    public bool HasSelectedPreparation => SelectedPreparation is not null;
+    public string SelectedPreparationStatusText =>
+        SelectedPreparation is null
+            ? string.Empty
+            : SelectedPreparation.Status.ToHebrew();
+    public bool ShowWaitingForSnapshot =>
+        SelectedPreparation?.Status == BillingPreparationStatus.WaitingForSnapshot;
+    public bool CanConfirmHourlyVisible =>
+        SelectedPreparation?.Status == BillingPreparationStatus.AwaitingMasterPlanConfirmation
+        && SelectedPreparation.Source.Hours.Count > 0;
+    public string SelectedPreparationInstructions =>
+        SelectedPreparation is null
+            ? string.Empty
+            : BillingPreparationTaskInstructions.Build(SelectedPreparation.Source);
+
+    public string ManualOverrideReason
+    {
+        get => _manualOverrideReason;
+        set => SetField(ref _manualOverrideReason, value);
+    }
+
+    public string HourlyConfirmNote
+    {
+        get => _hourlyConfirmNote;
+        set => SetField(ref _hourlyConfirmNote, value);
+    }
 
     public string Title => "מרכז חיובים";
     public string ReceivedThisMonthLabel => BillingDashboardFormatters.ReceivedThisMonthLabel;
@@ -490,6 +568,26 @@ public sealed class BillingDashboardViewModel : ObservableObject
             BillingLocalDecisionType.PrepareBill,
             reason: null,
             reviewAgain: null).ConfigureAwait(true);
+
+        if (_preparation is null)
+            return;
+
+        try
+        {
+            await _preparation.EnsureFromPrepareBillAsync(
+                    row.ProjectId,
+                    row.ProjectNumber,
+                    row.ProjectName,
+                    row.CustomerName)
+                .ConfigureAwait(true);
+            SelectedWorkspaceTab = 1;
+            await RefreshPreparationAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("[Billing] ensure preparation request failed", ex);
+            ErrorMessage = ex.Message;
+        }
     }
 
     public async Task NotNowAsync()
@@ -637,6 +735,181 @@ public sealed class BillingDashboardViewModel : ObservableObject
         BillInPreparationCountText = BillingDashboardFormatters.EmDash;
         CoveredCountText = BillingDashboardFormatters.EmDash;
         ReceivedThisMonthText = BillingDashboardFormatters.EmDash;
+    }
+
+    private async Task RefreshPreparationAsync()
+    {
+        if (_preparation is null)
+            return;
+
+        var selectedId = SelectedPreparation?.Id;
+        var rows = await _preparation.ListForPreparationTabAsync().ConfigureAwait(true);
+        PreparationRows.Clear();
+        foreach (var row in rows)
+            PreparationRows.Add(new BillingPreparationRequestRowVm(row));
+        SelectedPreparation = selectedId is int id
+            ? PreparationRows.FirstOrDefault(r => r.Id == id)
+            : PreparationRows.Count > 0 ? PreparationRows[0] : null;
+        RaisePreparationCommands();
+    }
+
+    private void ReloadStageEdits()
+    {
+        StageEdits.Clear();
+        if (SelectedPreparation is null)
+            return;
+        foreach (var stage in SelectedPreparation.Source.Stages)
+            StageEdits.Add(new BillingPreparationStageEditVm(stage));
+    }
+
+    private async Task LoadDraftStagesAsync()
+    {
+        if (_preparation is null || SelectedPreparation is null)
+            return;
+        try
+        {
+            var load = await _preparation.LoadComponentsAsync(SelectedPreparation.Id).ConfigureAwait(true);
+            if (SelectedPreparation.Source.Stages.Count > 0)
+                return;
+            StageEdits.Clear();
+            var stamp = load.LatestBackupUtc ?? _timeProvider.GetUtcNow().UtcDateTime;
+            foreach (var draft in load.Stages)
+            {
+                var observed = draft.Observed.Value;
+                var snapshot = new BillingPreparationStageLineSnapshot(
+                    draft.MasterPlanStageId,
+                    draft.MasterPlanSubContractId,
+                    draft.StageName,
+                    draft.SubContractName,
+                    draft.StageWeightWithinSubContract,
+                    observed,
+                    observed ?? 0m,
+                    0m,
+                    draft.Observed.HasOutliers,
+                    stamp,
+                    BillingConfirmationMode.None,
+                    null,
+                    null,
+                    null);
+                StageEdits.Add(new BillingPreparationStageEditVm(snapshot));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("[Billing] load preparation stages failed", ex);
+        }
+    }
+
+    private bool CanEditPreparation() =>
+        !IsBusy
+        && _preparation is not null
+        && SelectedPreparation is { Status: BillingPreparationStatus.WaitingForSelection
+            or BillingPreparationStatus.WaitingForSnapshot
+            or BillingPreparationStatus.ReadyForApproval };
+
+    private bool CanApprovePreparation() =>
+        CanEditPreparation()
+        && SelectedPreparation is not null
+        && (SelectedPreparation.Source.ManualOverride
+            || SelectedPreparation.Source.Stages.Count > 0
+            || SelectedPreparation.Source.Hours.Count > 0
+            || StageEdits.Count > 0);
+
+    private bool CanConfirmHourly() =>
+        !IsBusy && _preparation is not null && CanConfirmHourlyVisible;
+
+    private async Task SavePreparationAsync()
+    {
+        if (_preparation is null || SelectedPreparation is null)
+            return;
+        try
+        {
+            var stages = StageEdits.Select(s => s.ToSnapshot()).ToList();
+            var updated = await _preparation
+                .SaveSelectionAsync(SelectedPreparation.Id, stages, SelectedPreparation.Source.Hours)
+                .ConfigureAwait(true);
+            ReplacePreparation(updated);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private async Task ApplyManualOverrideAsync()
+    {
+        if (_preparation is null || SelectedPreparation is null)
+            return;
+        try
+        {
+            var updated = await _preparation
+                .ApplyManualOverrideAsync(SelectedPreparation.Id, ManualOverrideReason)
+                .ConfigureAwait(true);
+            ReplacePreparation(updated);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private async Task ApprovePreparationAsync()
+    {
+        if (_preparation is null || SelectedPreparation is null)
+            return;
+        try
+        {
+            if (StageEdits.Count > 0)
+                await SavePreparationAsync().ConfigureAwait(true);
+            var approved = await _preparation
+                .ApproveAndCreateTaskAsync(SelectedPreparation.Id)
+                .ConfigureAwait(true);
+            ReplacePreparation(approved.Request);
+            StatusMessage = $"נפתחה משימת הכנת חשבון #{approved.TaskId}";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private async Task ConfirmHourlyAsync()
+    {
+        if (_preparation is null || SelectedPreparation is null)
+            return;
+        try
+        {
+            var updated = await _preparation
+                .ConfirmHourlyManuallyAsync(SelectedPreparation.Id, HourlyConfirmNote)
+                .ConfigureAwait(true);
+            ReplacePreparation(updated);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private void ReplacePreparation(BillingPreparationRequestRecord updated)
+    {
+        var vm = new BillingPreparationRequestRowVm(updated);
+        var existing = PreparationRows.FirstOrDefault(r => r.Id == updated.Id);
+        var index = existing is null ? -1 : PreparationRows.IndexOf(existing);
+        if (index >= 0)
+            PreparationRows[index] = vm;
+        else
+            PreparationRows.Insert(0, vm);
+        SelectedPreparation = vm;
+        RaisePreparationCommands();
+    }
+
+    private void RaisePreparationCommands()
+    {
+        (RefreshPreparationCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (SavePreparationCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ManualOverrideCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ApprovePreparationCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        (ConfirmHourlyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private static string BuildDiagnostics(BillingDashboardResult result)

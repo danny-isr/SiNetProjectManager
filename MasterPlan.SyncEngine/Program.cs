@@ -720,6 +720,48 @@ else if (args.Contains("--load-from-dump"))
         Environment.Exit(1);
     }
 }
+else if (args.Contains("--process-backup-inbox"))
+{
+    var stagingOptions = MonthlyBackupStagingOptions.FromConfiguration(configuration);
+    Console.WriteLine();
+    Console.WriteLine("╔══════════════════════════════════════════════════════════════════╗");
+    Console.WriteLine("║       MASTERPLAN BACKUP INBOX — PROCESS ONE .bak                 ║");
+    Console.WriteLine("╚══════════════════════════════════════════════════════════════════╝");
+    Console.WriteLine($"[CONFIG] Client root: {stagingOptions.ClientStagingPath}");
+    Console.WriteLine($"[CONFIG] Server root: {stagingOptions.ServerStagingPath}");
+    Console.WriteLine("[CONFIG] Allow older bak: false (intake never overrides the date gate)");
+    Console.WriteLine();
+
+    var hoursLookbackDays = HoursSyncOptions.FromConfiguration(configuration).LookbackDays;
+    var sqlAccessOptions = MonthlySqlAccessOptions.FromConfiguration(configuration);
+    var monthlyService = new MonthlyBackupRestoreService(
+        sourceConnectionString,
+        replicaConnectionString,
+        masterConnectionString,
+        monthlyServiceLogger,
+        hoursLookbackDays,
+        sqlAccessOptions);
+
+    try
+    {
+        Log.Warning("MasterPlan.SyncEngine DB update started — mode {Mode}.", "process-backup-inbox");
+        var exit = await BackupInboxProcessor.ProcessOneAsync(
+            stagingOptions,
+            monthlyService,
+            siDataConnectionString,
+            monthlyServiceLogger);
+        Log.Warning("MasterPlan.SyncEngine backup inbox finished — exit {Exit}.", exit);
+        Environment.Exit(exit);
+    }
+    catch (Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"[FATAL] Backup inbox processing failed: {ex.Message}");
+        Console.ResetColor();
+        Log.Error(ex, "Backup inbox processing failed");
+        Environment.Exit(1);
+    }
+}
 else
 {
     // Show usage
@@ -735,6 +777,8 @@ else
     Console.WriteLine("    --backup, -b <path>  Path to the MasterPlan .bak file");
     Console.WriteLine("    --allow-older-backup Allow bak when BackupFinishDate <= last MonthlyRestore");
     Console.WriteLine("                        (default off; HEADERONLY must still succeed)");
+    Console.WriteLine("  --process-backup-inbox  Claim one Incoming .bak (ignore *.partial), restore if newer,");
+    Console.WriteLine("                        never --allow-older-backup, never N:\\, never WPF RESTORE");
     Console.WriteLine();
     Console.WriteLine("    Steps performed:");
     Console.WriteLine("      0. [GATE]    HEADERONLY BackupFinishDate > Sync_State.MonthlyRestore");

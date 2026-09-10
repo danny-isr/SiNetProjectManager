@@ -198,6 +198,11 @@ public partial class SiNetSQLDbContext : DbContext
     public virtual DbSet<ProjectTypeDiscipline> ProjectTypeDisciplines { get; set; }
 
     public virtual DbSet<BillingReviewDecision> BillingReviewDecisions { get; set; }
+    public virtual DbSet<BillingPreparationRequest> BillingPreparationRequests { get; set; }
+    public virtual DbSet<BillingPreparationStageLine> BillingPreparationStageLines { get; set; }
+    public virtual DbSet<BillingPreparationHoursLine> BillingPreparationHoursLines { get; set; }
+    public virtual DbSet<BillingPreparationHoursReport> BillingPreparationHoursReports { get; set; }
+    public virtual DbSet<MasterPlanBackupIntake> MasterPlanBackupIntakes { get; set; }
 
     /// <summary>
     /// Design-time only fallback for EF migrations (Add-Migration, Update-Database).

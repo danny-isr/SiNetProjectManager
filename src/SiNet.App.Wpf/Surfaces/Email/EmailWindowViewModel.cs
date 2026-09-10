@@ -15,6 +15,7 @@ using SiNet.Application.Email.Acc;
 using SiNet.Application.Email.Detail;
 using AccBrowserHost = SiNet.Application.Email.Acc.IEmailExternalDownloadBrowserHost;
 using SiNet.Application.Identity;
+using SiNet.Application.MasterPlanBackup;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Projects;
 using SiNet.Application.Settings;
@@ -143,7 +144,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             TryGetService<IGmailMailboxLabelAuditService>(services),
             TryGetService<IUserMailViewPreferencesService>(services),
             TryGetService<MailboxReloadOrchestrator>(services),
-            TryGetService<IGmailMailboxChangeDetector>(services));
+            TryGetService<IGmailMailboxChangeDetector>(services),
+            TryGetService<IMasterPlanBackupIntakeService>(services));
     }
 
     private static T? TryGetService<T>(IServiceProvider services) where T : class
@@ -199,7 +201,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         IGmailMailboxLabelAuditService? labelAudit = null,
         IUserMailViewPreferencesService? mailViewPrefs = null,
         MailboxReloadOrchestrator? reloadOrchestrator = null,
-        IGmailMailboxChangeDetector? historyDetector = null)
+        IGmailMailboxChangeDetector? historyDetector = null,
+        IMasterPlanBackupIntakeService? backupIntake = null)
     {
         ArgumentNullException.ThrowIfNull(projectQuery);
         ArgumentNullException.ThrowIfNull(filterOptions);
@@ -255,7 +258,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             shellContentHost,
             emailInboxQuery,
             accResolvedDocsUrlLauncher,
-            gmailModify);
+            gmailModify,
+            backupIntake);
 
         _externalDownloadHandler = externalDownloadCoordinator is not null && externalDownloadBrowserHost is not null
             ? new EmailExternalDownloadHandler(

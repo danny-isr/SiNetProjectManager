@@ -1,3 +1,5 @@
+using SiNet.Application.MasterPlanBackup;
+
 namespace SiNet.Application.Email.Acc;
 
 public sealed record EmailExternalDownloadCommand(
@@ -8,4 +10,5 @@ public sealed record EmailExternalDownloadCommand(
     string? EmailSubject,
     string? EmailFrom,
     DateTime? EmailDate,
-    string ActingUserLogin);
+    string ActingUserLogin,
+    EmailExternalDownloadPurpose Purpose = EmailExternalDownloadPurpose.ProjectAttachment);

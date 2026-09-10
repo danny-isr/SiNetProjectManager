@@ -819,7 +819,8 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
                 _services.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>(),
                 session,
                 authorization: null,
-                prompts: new WpfBillingReviewPrompts());
+                prompts: new WpfBillingReviewPrompts(),
+                preparation: null);
             var window = new BillingDashboardWindow(viewModel);
             ShowWindow(window);
         }

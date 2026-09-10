@@ -1,5 +1,6 @@
 using SiNet.App.Wpf.Surfaces.Email.Detail;
 using SiNet.Application.Email.Acc;
+using SiNet.Application.MasterPlanBackup;
 
 
 
@@ -95,7 +96,10 @@ internal sealed class EmailExternalDownloadHandler
 
 
 
-    public void OpenDownloadLink(string url, EmailListRow row)
+    public void OpenDownloadLink(
+        string url,
+        EmailListRow row,
+        EmailExternalDownloadPurpose purpose = EmailExternalDownloadPurpose.ProjectAttachment)
     {
         if (_browserHost is null)
         {
@@ -110,12 +114,15 @@ internal sealed class EmailExternalDownloadHandler
             return;
         }
 
-        var context = BuildContext(row);
+        var context = BuildContext(row, purpose);
         _setStatusMessage($"פותח קישור הורדה… ({url})");
         _browserHost.OpenDownloadUrl(url, context);
     }
 
-    public void OpenFirstDownloadLink(string bodyText, EmailListRow row)
+    public void OpenFirstDownloadLink(
+        string bodyText,
+        EmailListRow row,
+        EmailExternalDownloadPurpose purpose = EmailExternalDownloadPurpose.ProjectAttachment)
     {
         var urls = EmailExternalDownloadLinkDetector.ExtractUrls(bodyText);
         if (urls.Count == 0)
@@ -124,7 +131,7 @@ internal sealed class EmailExternalDownloadHandler
             return;
         }
 
-        OpenDownloadLink(urls[0], row);
+        OpenDownloadLink(urls[0], row, purpose);
     }
 
 
@@ -219,7 +226,9 @@ internal sealed class EmailExternalDownloadHandler
 
         {
 
-            _setStatusMessage($"מעלה {args.FileName} ל-ACC Inbox…");
+            _setStatusMessage(args.Context.Purpose == EmailExternalDownloadPurpose.MasterPlanBackup
+                ? $"מעתיק {args.FileName} לתור גיבוי MasterPlan…"
+                : $"מעלה {args.FileName} ל-ACC Inbox…");
 
             var command = new EmailExternalDownloadCommand(
                 args.Context.GmailMessageId,
@@ -229,7 +238,8 @@ internal sealed class EmailExternalDownloadHandler
                 args.Context.Subject,
                 args.Context.From,
                 args.Context.ReceivedOn,
-                ResolveActingUserLogin());
+                ResolveActingUserLogin(),
+                args.Context.Purpose);
 
             var progress = new Progress<EmailExternalDownloadProgress>(p =>
             {
@@ -241,21 +251,34 @@ internal sealed class EmailExternalDownloadHandler
 
             if (result.Succeeded)
             {
-                _setStatusMessage($"הועלה {result.FileName ?? args.FileName} ל-ACC Inbox");
+                var ok = args.Context.Purpose == EmailExternalDownloadPurpose.MasterPlanBackup
+                    ? $"הגיבוי {result.FileName ?? args.FileName} התקבל לתור"
+                    : $"הועלה {result.FileName ?? args.FileName} ל-ACC Inbox";
+                _setStatusMessage(ok);
                 _browserHost?.ReportProgress(new EmailExternalDownloadProgress(
                     EmailExternalDownloadStage.Completed,
-                    $"הועלה {result.FileName ?? args.FileName} ל-ACC Inbox",
+                    ok,
                     Percent: 100,
                     FileName: result.FileName ?? args.FileName));
             }
             else
             {
-                var error = result.ErrorMessage ?? "העלאת הקובץ החיצוני ל-ACC נכשלה";
+                var error = result.ErrorMessage
+                            ?? (args.Context.Purpose == EmailExternalDownloadPurpose.MasterPlanBackup
+                                ? "קליטת גיבוי MasterPlan נכשלה"
+                                : "העלאת הקובץ החיצוני ל-ACC נכשלה");
                 _setStatusMessage(error);
                 _browserHost?.ReportProgress(new EmailExternalDownloadProgress(
                     EmailExternalDownloadStage.Failed,
                     error,
                     FileName: args.FileName));
+            }
+
+
+
+            if (args.Context.Purpose == EmailExternalDownloadPurpose.MasterPlanBackup)
+            {
+                return;
             }
 
 
@@ -304,7 +327,9 @@ internal sealed class EmailExternalDownloadHandler
 
 
 
-    private static EmailExternalDownloadContext BuildContext(EmailListRow row) =>
+    private static EmailExternalDownloadContext BuildContext(
+        EmailListRow row,
+        EmailExternalDownloadPurpose purpose = EmailExternalDownloadPurpose.ProjectAttachment) =>
 
         new(
 
@@ -316,7 +341,9 @@ internal sealed class EmailExternalDownloadHandler
 
             row.Sender,
 
-            row.ReceivedOn);
+            row.ReceivedOn,
+
+            purpose);
 
 
 

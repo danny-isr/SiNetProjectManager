@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Billing;
+using SiNet.Application.MasterPlanBackup;
 using SiNet.Infrastructure.Sql.Services.Billing;
 
 namespace SiNet.Infrastructure.Sql;
@@ -20,6 +21,14 @@ public static class BillingServiceCollectionExtensions
         services.AddTransient<IBillingReviewDecisionService>(sp => sp.GetRequiredService<SqlBillingReviewDecisionService>());
         services.AddTransient<IBillingReviewDecisionStore>(sp => sp.GetRequiredService<SqlBillingReviewDecisionService>());
         services.AddTransient<IBillingDashboardReadService, SqlBillingDashboardReadService>();
+        services.AddTransient<SqlBillingPreparationStore>();
+        services.AddTransient<IBillingPreparationStore>(sp => sp.GetRequiredService<SqlBillingPreparationStore>());
+        services.AddTransient<IBillingPreparationComponentSource, SqlBillingPreparationComponentSource>();
+        services.AddTransient<IBillingPreparationProjectMapper, SqlBillingPreparationProjectMapper>();
+        services.AddTransient<IBillingPreparationTaskPort, SqlBillingPreparationTaskPort>();
+        services.AddTransient<IBillingPreparationActor, SqlBillingPreparationActor>();
+        services.AddTransient<IBillingPreparationService, BillingPreparationService>();
+        services.AddTransient<IMasterPlanBackupIntakeService, SqlMasterPlanBackupIntakeService>();
         return services;
     }
 }

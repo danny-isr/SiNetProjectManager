@@ -286,6 +286,26 @@ public sealed class EmailAccPipelineTests
     }
 
     [Fact]
+    public void Jumbo_default_purpose_is_project_attachment_and_backup_routes_to_intake()
+    {
+        var command = ReadRepoFile("src/SiNet.Application/Email/Acc/EmailExternalDownloadCommand.cs");
+        var context = ReadRepoFile("src/SiNet.Application/Email/Acc/IEmailExternalDownloadBrowserHost.cs");
+        var coordinator = ReadRepoFile(
+            "src/SiNet.Infrastructure.Sql/Services/Email/Acc/EmailExternalDownloadCoordinator.cs");
+        var handler = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailExternalDownloadHandler.cs");
+        var bar = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/Detail/EmailActionBarView.xaml");
+
+        Assert.Contains("EmailExternalDownloadPurpose.ProjectAttachment", command, StringComparison.Ordinal);
+        Assert.Contains("EmailExternalDownloadPurpose.ProjectAttachment", context, StringComparison.Ordinal);
+        Assert.Contains("EmailExternalDownloadPurpose.MasterPlanBackup", coordinator, StringComparison.Ordinal);
+        Assert.Contains("IMasterPlanBackupIntakeService", coordinator, StringComparison.Ordinal);
+        Assert.Contains("AcceptAsync", coordinator, StringComparison.Ordinal);
+        Assert.Contains("args.Context.Purpose", handler, StringComparison.Ordinal);
+        Assert.Contains("גיבוי MasterPlan", bar, StringComparison.Ordinal);
+        Assert.DoesNotContain("N:\\\\", coordinator, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void AddSiNetEmailAccSql_registers_native_ingestion_executor()
     {
         var extensions = ReadRepoFile("src/SiNet.Infrastructure.Sql/EmailAccServiceCollectionExtensions.cs");

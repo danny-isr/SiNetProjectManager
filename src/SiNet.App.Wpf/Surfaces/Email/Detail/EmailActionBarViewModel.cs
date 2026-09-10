@@ -16,6 +16,7 @@ public sealed class EmailActionBarViewModel : ObservableObject
     private bool _showAssignedLayout;
     private bool _canOpenInGmail;
     private bool _canMarkAsFyi;
+    private bool _canMasterPlanBackup;
     private bool _markAsReadEnabled = DefaultMarkAsReadEnabled;
 
     /// <summary>
@@ -27,7 +28,8 @@ public sealed class EmailActionBarViewModel : ObservableObject
         Func<Task> fileEmailAsync,
         Func<Task> moveToProjectAsync,
         Action? openInGmail = null,
-        Func<Task>? markAsFyiAsync = null)
+        Func<Task>? markAsFyiAsync = null,
+        Func<Task>? masterPlanBackupAsync = null)
     {
         FileEmailCommand = new AsyncRelayCommand(fileEmailAsync, () => CanFileEmail);
         MoveToProjectCommand = new AsyncRelayCommand(moveToProjectAsync, () => CanMoveToProject);
@@ -35,6 +37,9 @@ public sealed class EmailActionBarViewModel : ObservableObject
         MarkAsFyiCommand = new AsyncRelayCommand(
             markAsFyiAsync ?? (() => Task.CompletedTask),
             () => CanMarkAsFyi);
+        MasterPlanBackupCommand = new AsyncRelayCommand(
+            masterPlanBackupAsync ?? (() => Task.CompletedTask),
+            () => CanMasterPlanBackup);
     }
 
     public string ActiveProjectDisplay
@@ -123,6 +128,18 @@ public sealed class EmailActionBarViewModel : ObservableObject
         }
     }
 
+    public bool CanMasterPlanBackup
+    {
+        get => _canMasterPlanBackup;
+        set
+        {
+            if (SetField(ref _canMasterPlanBackup, value))
+            {
+                (MasterPlanBackupCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
     /// <summary>
     /// Session-scoped leftover from DEV-004; not used for body-load mark-read (DEV-016).
     /// Resets to <see cref="DefaultMarkAsReadEnabled"/> on every app launch.
@@ -169,12 +186,19 @@ public sealed class EmailActionBarViewModel : ObservableObject
     public ICommand MoveToProjectCommand { get; }
     public ICommand OpenInGmailCommand { get; }
     public ICommand MarkAsFyiCommand { get; }
+    public ICommand MasterPlanBackupCommand { get; }
 
-    public void RefreshCommandStates(bool canFile, bool canMove, bool canOpenInGmail = false, bool canMarkAsFyi = false)
+    public void RefreshCommandStates(
+        bool canFile,
+        bool canMove,
+        bool canOpenInGmail = false,
+        bool canMarkAsFyi = false,
+        bool canMasterPlanBackup = false)
     {
         CanFileEmail = canFile;
         CanMoveToProject = canMove;
         CanOpenInGmail = canOpenInGmail;
         CanMarkAsFyi = canMarkAsFyi;
+        CanMasterPlanBackup = canMasterPlanBackup;
     }
 }

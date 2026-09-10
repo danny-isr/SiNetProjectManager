@@ -1,3 +1,5 @@
+using SiNet.Application.MasterPlanBackup;
+
 namespace SiNet.Application.Email.Acc;
 
 /// <summary>
@@ -17,7 +19,8 @@ public sealed record EmailExternalDownloadContext(
     string? InternetMessageId,
     string Subject,
     string From,
-    DateTime? ReceivedOn);
+    DateTime? ReceivedOn,
+    EmailExternalDownloadPurpose Purpose = EmailExternalDownloadPurpose.ProjectAttachment);
 
 public sealed record EmailExternalDownloadCompletedEventArgs(
     string LocalFilePath,

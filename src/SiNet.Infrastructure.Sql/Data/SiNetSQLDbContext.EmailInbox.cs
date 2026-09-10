@@ -136,5 +136,10 @@ public partial class SiNetSQLDbContext
         modelBuilder.ApplyConfiguration((IEntityTypeConfiguration<ProjectAssignmentEvent>)planningTaxonomy);
 
         modelBuilder.ApplyConfiguration(new BillingReviewDecisionConfiguration());
+        modelBuilder.ApplyConfiguration(new BillingPreparationRequestConfiguration());
+        modelBuilder.ApplyConfiguration(new BillingPreparationStageLineConfiguration());
+        modelBuilder.ApplyConfiguration(new BillingPreparationHoursLineConfiguration());
+        modelBuilder.ApplyConfiguration(new BillingPreparationHoursReportConfiguration());
+        modelBuilder.ApplyConfiguration(new MasterPlanBackupIntakeConfiguration());
     }
 }

@@ -204,7 +204,10 @@
                         Margin="0,0,0,4" />
             </WrapPanel>
 
-            <!-- Fill remaining: blocking panel OR candidates. Do not leave an empty grid hole. -->
+            <!-- Fill remaining: blocking panel OR tabbed candidates / preparation. -->
+            <TabControl SelectedIndex="{Binding SelectedWorkspaceTab}"
+                        Margin="0,0,0,0">
+            <TabItem Header="מועמדים לחיוב">
             <Grid>
             <!-- Blocked freshness panel: not an empty-candidate zero-state -->
             <Border Margin="0,0,0,0"
@@ -514,6 +517,116 @@
                 </ScrollViewer>
             </Grid>
             </Grid>
+            </TabItem>
+            <TabItem Header="חשבונות להכנה"
+                     AutomationProperties.AutomationId="BillingDashboard.PreparationTab">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="280" />
+                        <ColumnDefinition Width="380" MinWidth="280" />
+                    </Grid.ColumnDefinitions>
+                    <DockPanel Grid.Column="0" Margin="0,0,10,0">
+                        <Button DockPanel.Dock="Top"
+                                Content="רענון בקשות הכנה"
+                                Command="{Binding RefreshPreparationCommand}"
+                                Margin="0,0,0,8"
+                                Padding="12,6"
+                                Style="{DynamicResource SiSecondaryButtonStyle}" />
+                        <DataGrid ItemsSource="{Binding PreparationRows}"
+                                  SelectedItem="{Binding SelectedPreparation}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  SelectionMode="Single"
+                                  SelectionUnit="FullRow"
+                                  HeadersVisibility="Column"
+                                  AutomationProperties.AutomationId="BillingDashboard.PreparationList">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="מספר" Binding="{Binding ProjectNumber}" Width="80" />
+                                <DataGridTextColumn Header="פרויקט" Binding="{Binding ProjectName}" Width="*" />
+                                <DataGridTextColumn Header="מצב" Binding="{Binding StatusText}" Width="140" />
+                                <DataGridTextColumn Header="משימה" Binding="{Binding TaskIdText}" Width="70" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="בקשת הכנה"
+                                       Style="{StaticResource SectionHeaderStyle}" />
+                            <TextBlock Text="{Binding SelectedPreparationStatusText}"
+                                       Style="{StaticResource DetailValueStyle}" />
+                            <TextBlock Text="ממתין לנתוני MasterPlan מהגיבוי החודשי."
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"
+                                       Visibility="{Binding ShowWaitingForSnapshot, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock Text="שלבים — יעד מצטבר (%)"
+                                       Style="{StaticResource SectionHeaderStyle}" />
+                            <ItemsControl ItemsSource="{Binding StageEdits}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{DynamicResource SiSecondaryBrush}"
+                                                BorderThickness="1"
+                                                Padding="8"
+                                                Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding StageName}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding SubContractName}" />
+                                                <TextBlock Text="{Binding WeightText, StringFormat=משקל השלב בהסכם המשנה: {0}}" />
+                                                <TextBlock Text="{Binding ObservedText, StringFormat=מצב שנצפה בחשבונות MasterPlan: {0}}" />
+                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                    <TextBlock Text="אחרי החשבון הנוכחי:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox Width="70" Text="{Binding TargetPercent, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBlock Text="%" VerticalAlignment="Center" Margin="4,0,0,0" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding DeltaText, StringFormat=תוספת בחשבון הזה: {0}}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBox AcceptsReturn="True"
+                                     Height="60"
+                                     Margin="0,0,0,8"
+                                     Text="{Binding ManualOverrideReason, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="סיבה לטיפול ידני ללא בקרת שלבים" />
+                            <WrapPanel>
+                                <Button Content="שמור בחירה"
+                                        Command="{Binding SavePreparationCommand}"
+                                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                                        Padding="10,6"
+                                        Margin="0,0,8,8" />
+                                <Button Content="אשר טיפול ידני ללא בקרת שלבים"
+                                        Command="{Binding ManualOverrideCommand}"
+                                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                                        Padding="10,6"
+                                        Margin="0,0,8,8" />
+                                <Button Content="אשר והעבר להכנת חשבון"
+                                        Command="{Binding ApprovePreparationCommand}"
+                                        Style="{DynamicResource SiPrimaryButtonStyle}"
+                                        Padding="10,6"
+                                        Margin="0,0,8,8"
+                                        AutomationProperties.AutomationId="BillingDashboard.ApprovePreparation" />
+                            </WrapPanel>
+                            <StackPanel Visibility="{Binding CanConfirmHourlyVisible, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="אישור שעות אחרי MasterPlan"
+                                           Style="{StaticResource SectionHeaderStyle}" />
+                                <TextBox Text="{Binding HourlyConfirmNote, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,8" />
+                                <Button Content="אשר שבוצע ב-MasterPlan"
+                                        Command="{Binding ConfirmHourlyCommand}"
+                                        Style="{DynamicResource SiPrimaryButtonStyle}"
+                                        Padding="10,6"
+                                        HorizontalAlignment="Left" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding SelectedPreparationInstructions}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,12,0,0"
+                                       FontFamily="Consolas" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+            </TabControl>
         </DockPanel>
 
         <Border Background="#80FFFFFF"
