@@ -105,7 +105,7 @@
                            FontWeight="SemiBold" />
             </Border>
 
-            <!-- Recoverable / fatal error -->
+            <!-- Recoverable / fatal dashboard error -->
             <Border DockPanel.Dock="Top"
                     Margin="0,0,0,10"
                     Padding="12,10"
@@ -114,6 +114,20 @@
                     BorderThickness="1"
                     Visibility="{Binding ShowErrorBanner, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="{Binding ErrorMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SiDangerBrush}" />
+            </Border>
+
+            <!-- Command / preparation operation error (grid stays visible) -->
+            <Border DockPanel.Dock="Top"
+                    Margin="0,0,0,10"
+                    Padding="12,10"
+                    Background="{DynamicResource SiDangerSurfaceBrush}"
+                    BorderBrush="{DynamicResource SiDangerBrush}"
+                    BorderThickness="1"
+                    Visibility="{Binding ShowOperationErrorBanner, Converter={StaticResource BoolToVis}}"
+                    AutomationProperties.AutomationId="BillingDashboard.OperationError">
+                <TextBlock Text="{Binding OperationErrorMessage}"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource SiDangerBrush}" />
             </Border>
@@ -476,6 +490,14 @@
                                     <TextBlock Text="{Binding Selected.LocalDecisionActorText}" Style="{StaticResource DetailValueStyle}" />
                                     <TextBlock Text="הערה" Style="{StaticResource DetailLabelStyle}" />
                                     <TextBlock Text="{Binding Selected.LocalDecisionReasonText}" Style="{StaticResource DetailValueStyle}" />
+                                    <Button Content="המשך להכנת חשבון"
+                                            Command="{Binding ContinuePrepareBillCommand}"
+                                            Style="{DynamicResource SiPrimaryButtonStyle}"
+                                            Padding="12,6"
+                                            Margin="0,8,0,4"
+                                            HorizontalAlignment="Left"
+                                            Visibility="{Binding ShowContinuePrepareBillButton, Converter={StaticResource BoolToVis}}"
+                                            AutomationProperties.AutomationId="BillingDashboard.ContinuePrepareBill" />
                                 </StackPanel>
 
                                 <StackPanel Visibility="{Binding HasActiveNotNow, Converter={StaticResource BoolToVis}}">

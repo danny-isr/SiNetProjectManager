@@ -64,12 +64,17 @@ public sealed class SqlBillingPreparationComponentSource(
         int projectId,
         CancellationToken cancellationToken)
     {
+        // MasterPlan Contacts has FirstName/LastName, not Name. Company customers use
+        // Companies.Name; person customers fall back to CONCAT(FirstName, LastName).
         const string sql =
             """
             SELECT TOP (1)
               p.ProjectNum,
               p.Name,
-              COALESCE(comp.Name, c.Name) AS CustomerName
+              COALESCE(
+                NULLIF(LTRIM(RTRIM(comp.Name)), ''),
+                NULLIF(LTRIM(RTRIM(CONCAT(c.FirstName, ' ', c.LastName))), '')
+              ) AS CustomerName
             FROM dbo.Projects p
             LEFT JOIN dbo.Contacts c ON c.ID = p.CustomerID
             LEFT JOIN dbo.Companies comp ON comp.ID = c.CompanyID
@@ -209,14 +214,17 @@ public sealed class SqlBillingPreparationComponentSource(
             return [];
 
         var hasEmployees = await TableExistsAsync(conn, "Employees", cancellationToken).ConfigureAwait(false);
+        // MasterPlan Employees has FirstName/LastName, not Name (SqlMasterPlanEmployeeLookupService).
         var employeeJoin = hasEmployees
             ? "LEFT JOIN dbo.Employees e ON e.ID = hr.EmployeeID"
-            : "LEFT JOIN (SELECT CAST(NULL AS int) AS ID, CAST(NULL AS nvarchar(200)) AS Name) e ON 1 = 0";
+            : "LEFT JOIN (SELECT CAST(NULL AS int) AS ID, CAST(NULL AS nvarchar(200)) AS FirstName, CAST(NULL AS nvarchar(200)) AS LastName) e ON 1 = 0";
 
         var sql =
             $"""
             SELECT hr.ID, hr.ProjectID, hr.SubContractID, hr.SubContractStepID, hr.DateTime,
-                   hr.EmployeeID, e.Name, hr.Hours, hr.Description
+                   hr.EmployeeID,
+                   LTRIM(RTRIM(CONCAT(e.FirstName, ' ', e.LastName))),
+                   hr.Hours, hr.Description
             FROM dbo.HoursReports hr
             INNER JOIN dbo.SubContracts sc ON sc.ID = hr.SubContractID
             {employeeJoin}

@@ -83,7 +83,7 @@ public static class NewSystemWpfServiceCollectionExtensions
                 sp.GetService<IBillingReviewDecisionService>(),
                 sp.GetService<IAuthorizationQueryService>(),
                 sp.GetService<IBillingReviewPrompts>(),
-                sp.GetService<IBillingPreparationService>()));
+                sp.GetRequiredService<IBillingPreparationService>()));
         services.AddTransient<BillingDashboardWindow>();
         services.AddSiNetAutodeskStatusWpf();
         services.AddSiNetProjectContext();

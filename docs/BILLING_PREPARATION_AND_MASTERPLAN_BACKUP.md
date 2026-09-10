@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 10.09.2026 (A4 WPF hourly-scope picker; locked A1–A7 + intake unchanged)  
+> **Updated:** 10.09.2026 (A1 recovery: company-or-person customer name; Continue Prepare Bill when decision exists without a request; operation-error banner)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -147,6 +147,21 @@ UI:
 **Decision 3 — hourly scope is manager-defined.** Never show «שעות לא מחויבות» as a MasterPlan fact. Show **available/reportable** hours for an explicit SubContract + date range; resolve to concrete `HoursReportId`s on approve. SiNet may warn «already in preparation request #X»; never «already billed in MasterPlan».
 
 **A4 WPF picker (10.09.2026):** Tab «חשבונות להכנה», section **«רכיבי שעות»**. Manager include/remove, `FeeType=4` SubContract from the loaded snapshot, inclusive FromDate/ToDate. Preview uses `BillingHourlyScopeResolver` (report count, normalized hours). Overlap warning vs other SiNet preparation requests only. `SavePreparationAsync` persists **both** `StageEdits` and composed hourly snapshots — never reuse `Source.Hours` unchanged. Caption: manager-selected scope; never «שעות לא מחויבות» / unbilled. Hourly still never auto-confirms; after the task, «אשר שבוצע ב-MasterPlan» remains required.
+
+**A1 snapshot header / hour-report names (10.09.2026, proven on DEV `Db_Mp_SiEng`):** `dbo.Contacts` and `dbo.Employees` have `FirstName` / `LastName`, **not** `Name`. Customer name is company **or** person:
+
+```sql
+COALESCE(
+    NULLIF(LTRIM(RTRIM(comp.Name)), ''),
+    NULLIF(LTRIM(RTRIM(CONCAT(c.FirstName, ' ', c.LastName))), '')
+)
+```
+
+Join remains `Projects.CustomerID` → `Contacts` → `Companies`. Do not use `Contacts.Name`. Hour-report employee display name is `CONCAT(FirstName, ' ', LastName)`. `SqlBillingPreparationComponentSource.LoadAsync` must not reference `Contacts.Name` or `Employees.Name`.
+
+**A1 UI / composition / recovery:** Production Billing Center (`AddSiNetNewSystemWpf`) requires `IBillingPreparationService` (`GetRequiredService`). The Healthy visual fixture may still pass `preparation: null`. Dashboard Refresh **reads** active preparation requests to detect a gap; it must **not** call `EnsureFromPrepareBillAsync`.
+
+Valid failure state: active `BillingReviewDecision = PrepareBill` and no `BillingPreparationRequest`. The operator must **not** clear the decision. When `HasActivePrepareBill` and no active request for that `MasterPlanProjectId`, show **«המשך להכנת חשבון»**. That action does not write another decision; it calls existing `EnsureFromPrepareBillAsync` (idempotent). Command failures use a dedicated operation-error banner (`לא ניתן היה לפתוח בקשת הכנת חשבון: …`) without switching `UiState` to Fatal/Recoverable (candidate grid stays). Retry is allowed; once a request exists the recovery action is hidden.
 
 **A7 confirmation:**
 

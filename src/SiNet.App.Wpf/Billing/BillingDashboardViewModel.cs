@@ -31,6 +31,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private readonly IBillingPreparationService? _preparation;
     private readonly AsyncRelayCommand _refreshCommand;
     private readonly AsyncRelayCommand _prepareBillCommand;
+    private readonly AsyncRelayCommand _continuePrepareBillCommand;
     private readonly AsyncRelayCommand _notNowCommand;
     private readonly AsyncRelayCommand _clearDecisionCommand;
     private readonly RelayCommand _addHourlyScopeCommand;
@@ -49,6 +50,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private BillingDashboardRowVm? _selected;
     private string _statusMessage = string.Empty;
     private string _errorMessage = string.Empty;
+    private string _operationErrorMessage = string.Empty;
     private string _asOfDateText = BillingDashboardFormatters.EmDash;
     private DateTime _asOfDate = DateTime.Today;
     private string _freshnessStatusText = BillingDashboardFormatters.EmDash;
@@ -69,6 +71,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private IReadOnlyList<BillingHourlySubContractDraft> _hourlySubContracts = [];
     private IReadOnlyList<BillingHourReportFact> _hourReports = [];
     private int _componentLoadGeneration;
+    private HashSet<int> _activePreparationProjectIds = [];
 
     public BillingDashboardViewModel(
         IBillingDashboardReadService service,
@@ -88,6 +91,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         _preparation = preparation;
         _refreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
         _prepareBillCommand = new AsyncRelayCommand(PrepareBillAsync, CanWriteNewDecision);
+        _continuePrepareBillCommand = new AsyncRelayCommand(ContinuePrepareBillAsync, CanContinuePrepareBill);
         _notNowCommand = new AsyncRelayCommand(NotNowAsync, CanWriteNewDecision);
         _clearDecisionCommand = new AsyncRelayCommand(ClearDecisionAsync, CanClearDecision);
         ClearFiltersCommand = new RelayCommand(_ => ClearFilters());
@@ -125,6 +129,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public ICommand RefreshCommand => _refreshCommand;
     public ICommand ClearFiltersCommand { get; }
     public ICommand PrepareBillCommand => _prepareBillCommand;
+    public ICommand ContinuePrepareBillCommand => _continuePrepareBillCommand;
     public ICommand NotNowCommand => _notNowCommand;
     public ICommand ClearDecisionCommand => _clearDecisionCommand;
     public ICommand RefreshPreparationCommand { get; }
@@ -210,6 +215,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowWarningBanner));
             OnPropertyChanged(nameof(ShowBlockedPanel));
             OnPropertyChanged(nameof(ShowErrorBanner));
+            OnPropertyChanged(nameof(ShowOperationErrorBanner));
             OnPropertyChanged(nameof(ShowCandidatesArea));
             OnPropertyChanged(nameof(ShowOperationalChrome));
             OnPropertyChanged(nameof(ShowHeaderStatusMessage));
@@ -218,6 +224,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             OnPropertyChanged(nameof(EmptyListMessage));
             OnPropertyChanged(nameof(ShowDecisionWriteButtons));
             OnPropertyChanged(nameof(ShowClearDecisionButton));
+            OnPropertyChanged(nameof(ShowContinuePrepareBillButton));
             RaiseDecisionCommands();
         }
     }
@@ -242,11 +249,14 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public bool ShowBlockedPanel => UiState == BillingDashboardUiState.FreshnessBlocked;
     public bool ShowErrorBanner =>
         UiState is BillingDashboardUiState.RecoverableError or BillingDashboardUiState.FatalError;
+    public bool ShowOperationErrorBanner => !string.IsNullOrWhiteSpace(OperationErrorMessage);
+
+    internal bool HasPreparationService => _preparation is not null;
     public bool ShowCandidatesArea =>
         UiState == BillingDashboardUiState.Loaded && _lastResult is { CandidatesBlocked: false };
     public bool ShowOperationalChrome => ShowCandidatesArea;
     public bool ShowHeaderStatusMessage =>
-        !ShowBlockedPanel && !ShowErrorBanner && !string.IsNullOrWhiteSpace(StatusMessage);
+        !ShowBlockedPanel && !ShowErrorBanner && !ShowOperationErrorBanner && !string.IsNullOrWhiteSpace(StatusMessage);
     public bool ShowEmptyFilterState => ShowCandidatesArea && Rows.Count == 0 && _allRows.Count > 0;
     public bool ShowEmptyServiceState => ShowCandidatesArea && _allRows.Count == 0;
     public string EmptyListMessage => _allRows.Count == 0
@@ -310,6 +320,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             OnPropertyChanged(nameof(HasActiveNotNow));
             OnPropertyChanged(nameof(ShowDecisionWriteButtons));
             OnPropertyChanged(nameof(ShowClearDecisionButton));
+            OnPropertyChanged(nameof(ShowContinuePrepareBillButton));
             RaiseDecisionCommands();
         }
     }
@@ -324,6 +335,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
                 return;
             OnPropertyChanged(nameof(ShowDecisionWriteButtons));
             OnPropertyChanged(nameof(ShowClearDecisionButton));
+            OnPropertyChanged(nameof(ShowContinuePrepareBillButton));
             RaiseDecisionCommands();
         }
     }
@@ -335,6 +347,14 @@ public sealed class BillingDashboardViewModel : ObservableObject
         CanWriteBillingDecisions && HasSelection && !HasActiveLocalDecision && ShowCandidatesArea;
     public bool ShowClearDecisionButton =>
         CanWriteBillingDecisions && HasSelection && HasActiveLocalDecision && ShowCandidatesArea;
+    public bool ShowContinuePrepareBillButton =>
+        CanWriteBillingDecisions
+        && HasActivePrepareBill
+        && _preparation is not null
+        && !HasActivePreparationRequestForSelected
+        && ShowCandidatesArea;
+    private bool HasActivePreparationRequestForSelected =>
+        Selected is not null && _activePreparationProjectIds.Contains(Selected.ProjectId);
     public string StatusMessage
     {
         get => _statusMessage;
@@ -348,7 +368,24 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public string ErrorMessage
     {
         get => _errorMessage;
-        private set => SetField(ref _errorMessage, value);
+        private set
+        {
+            if (SetField(ref _errorMessage, value))
+                OnPropertyChanged(nameof(ShowErrorBanner));
+        }
+    }
+
+    public string OperationErrorMessage
+    {
+        get => _operationErrorMessage;
+        private set
+        {
+            if (SetField(ref _operationErrorMessage, value))
+            {
+                OnPropertyChanged(nameof(ShowOperationErrorBanner));
+                OnPropertyChanged(nameof(ShowHeaderStatusMessage));
+            }
+        }
     }
 
     public string AsOfDateText
@@ -429,6 +466,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         IsBusy = true;
         UiState = BillingDashboardUiState.Loading;
         ErrorMessage = string.Empty;
+        OperationErrorMessage = string.Empty;
         StatusMessage = "טוען מועמדים לחיוב…";
         try
         {
@@ -442,6 +480,8 @@ public sealed class BillingDashboardViewModel : ObservableObject
                     ct)
                 .ConfigureAwait(true);
             ApplyResult(result);
+            if (!result.CandidatesBlocked)
+                await LoadActivePreparationIndexAsync(ct).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -565,6 +605,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         OnPropertyChanged(nameof(HasActiveNotNow));
         OnPropertyChanged(nameof(ShowDecisionWriteButtons));
         OnPropertyChanged(nameof(ShowClearDecisionButton));
+        OnPropertyChanged(nameof(ShowContinuePrepareBillButton));
         RaiseDecisionCommands();
     }
 
@@ -584,25 +625,20 @@ public sealed class BillingDashboardViewModel : ObservableObject
             reason: null,
             reviewAgain: null).ConfigureAwait(true);
 
-        if (_preparation is null)
+        row = Selected;
+        if (row is null || _preparation is null)
             return;
 
-        try
-        {
-            await _preparation.EnsureFromPrepareBillAsync(
-                    row.ProjectId,
-                    row.ProjectNumber,
-                    row.ProjectName,
-                    row.CustomerName)
-                .ConfigureAwait(true);
-            SelectedWorkspaceTab = 1;
-            await RefreshPreparationAsync().ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            _logger?.Error("[Billing] ensure preparation request failed", ex);
-            ErrorMessage = ex.Message;
-        }
+        await EnsurePreparationAndShowAsync(row).ConfigureAwait(true);
+    }
+
+    public async Task ContinuePrepareBillAsync()
+    {
+        var row = Selected;
+        if (row is null || !CanContinuePrepareBill())
+            return;
+
+        await EnsurePreparationAndShowAsync(row).ConfigureAwait(true);
     }
 
     public async Task NotNowAsync()
@@ -625,7 +661,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(reason))
         {
-            ErrorMessage = "חובה לציין סיבה להשהיה.";
+            OperationErrorMessage = "חובה לציין סיבה להשהיה.";
             return;
         }
 
@@ -652,12 +688,12 @@ public sealed class BillingDashboardViewModel : ObservableObject
         }
         catch (UnauthorizedAccessException ex)
         {
-            ErrorMessage = ex.Message;
+            OperationErrorMessage = ex.Message;
         }
         catch (Exception ex)
         {
             _logger?.Error("[Billing] clear local decision failed", ex);
-            ErrorMessage = ex.Message;
+            OperationErrorMessage = ex.Message;
         }
     }
 
@@ -688,12 +724,12 @@ public sealed class BillingDashboardViewModel : ObservableObject
         }
         catch (UnauthorizedAccessException ex)
         {
-            ErrorMessage = ex.Message;
+            OperationErrorMessage = ex.Message;
         }
         catch (Exception ex)
         {
             _logger?.Error("[Billing] save local decision failed", ex);
-            ErrorMessage = ex.Message;
+            OperationErrorMessage = ex.Message;
         }
     }
 
@@ -722,11 +758,69 @@ public sealed class BillingDashboardViewModel : ObservableObject
         && HasActiveLocalDecision
         && ShowCandidatesArea;
 
+    private bool CanContinuePrepareBill() =>
+        !IsBusy
+        && CanWriteBillingDecisions
+        && HasActivePrepareBill
+        && _preparation is not null
+        && !HasActivePreparationRequestForSelected
+        && ShowCandidatesArea;
+
     private void RaiseDecisionCommands()
     {
         _prepareBillCommand.RaiseCanExecuteChanged();
+        _continuePrepareBillCommand.RaiseCanExecuteChanged();
         _notNowCommand.RaiseCanExecuteChanged();
         _clearDecisionCommand.RaiseCanExecuteChanged();
+    }
+
+    private async Task EnsurePreparationAndShowAsync(BillingDashboardRowVm row)
+    {
+        if (_preparation is null)
+            return;
+
+        try
+        {
+            OperationErrorMessage = string.Empty;
+            await _preparation.EnsureFromPrepareBillAsync(
+                    row.ProjectId,
+                    row.ProjectNumber,
+                    row.ProjectName,
+                    row.CustomerName)
+                .ConfigureAwait(true);
+            await LoadActivePreparationIndexAsync().ConfigureAwait(true);
+            SelectedWorkspaceTab = 1;
+            await RefreshPreparationAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("[Billing] ensure preparation request failed", ex);
+            OperationErrorMessage = "לא ניתן היה לפתוח בקשת הכנת חשבון: " + ex.Message;
+        }
+    }
+
+    private async Task LoadActivePreparationIndexAsync(CancellationToken cancellationToken = default)
+    {
+        if (_preparation is null)
+        {
+            _activePreparationProjectIds = [];
+            OnPropertyChanged(nameof(ShowContinuePrepareBillButton));
+            _continuePrepareBillCommand.RaiseCanExecuteChanged();
+            return;
+        }
+
+        try
+        {
+            var rows = await _preparation.ListForPreparationTabAsync(cancellationToken).ConfigureAwait(true);
+            _activePreparationProjectIds = rows.Select(r => r.MasterPlanProjectId).ToHashSet();
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("[Billing] list preparation requests failed", ex);
+        }
+
+        OnPropertyChanged(nameof(ShowContinuePrepareBillButton));
+        _continuePrepareBillCommand.RaiseCanExecuteChanged();
     }
 
     private static string ProjectLabel(BillingDashboardRowVm row) =>
@@ -926,7 +1020,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     {
         if (_preparation is null || SelectedPreparation is null)
             return;
-        ErrorMessage = string.Empty;
+        OperationErrorMessage = string.Empty;
         try
         {
             var stages = StageEdits.Select(s => s.ToSnapshot()).ToList();
@@ -950,7 +1044,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            OperationErrorMessage = ex.Message;
         }
     }
 
@@ -967,7 +1061,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            OperationErrorMessage = ex.Message;
         }
     }
 
@@ -978,7 +1072,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         try
         {
             await SavePreparationAsync().ConfigureAwait(true);
-            if (!string.IsNullOrEmpty(ErrorMessage) || SelectedPreparation is null)
+            if (!string.IsNullOrEmpty(OperationErrorMessage) || SelectedPreparation is null)
                 return;
             var approved = await _preparation
                 .ApproveAndCreateTaskAsync(SelectedPreparation.Id)
@@ -988,7 +1082,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            OperationErrorMessage = ex.Message;
         }
     }
 
@@ -1005,7 +1099,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            OperationErrorMessage = ex.Message;
         }
     }
 

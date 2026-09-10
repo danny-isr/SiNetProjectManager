@@ -80,6 +80,27 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("IBillingReviewDecisionStore", billing, StringComparison.Ordinal);
         Assert.Contains("SqlBillingReviewDecisionService", billing, StringComparison.Ordinal);
         Assert.Contains("AddSiNetBillingSql", users, StringComparison.Ordinal);
+        Assert.Contains("IBillingPreparationService", billing, StringComparison.Ordinal);
+        Assert.Contains("BillingPreparationService", billing, StringComparison.Ordinal);
+        Assert.Contains("SqlBillingPreparationComponentSource", billing, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Preparation_component_source_uses_masterplan_name_columns()
+    {
+        var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Billing/SqlBillingPreparationComponentSource.cs");
+
+        Assert.Contains("CONCAT(c.FirstName, ' ', c.LastName)", source, StringComparison.Ordinal);
+        Assert.Contains("NULLIF(LTRIM(RTRIM(comp.Name)), '')", source, StringComparison.Ordinal);
+        Assert.Contains("LEFT JOIN dbo.Companies comp ON comp.ID = c.CompanyID", source, StringComparison.Ordinal);
+        Assert.Contains("CONCAT(e.FirstName, ' ', e.LastName)", source, StringComparison.Ordinal);
+        Assert.Contains("e.FirstName", source, StringComparison.Ordinal);
+        Assert.Contains("e.LastName", source, StringComparison.Ordinal);
+        Assert.Contains("MasterPlanDatabase", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("COALESCE(comp.Name, c.Name)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("c.Name AS CustomerName", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("e.Name", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("comp.Name AS CustomerName", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -131,6 +152,7 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("BillingDashboardWindow", di, StringComparison.Ordinal);
         Assert.Contains("IBillingReviewPrompts", di, StringComparison.Ordinal);
         Assert.Contains("IBillingReviewDecisionService", di, StringComparison.Ordinal);
+        Assert.Contains("GetRequiredService<IBillingPreparationService>()", di, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -142,7 +164,10 @@ public sealed class BillingReplicaSourceGuardTests
         var write = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Billing/SqlBillingReviewDecisionService.cs");
 
         Assert.Contains("IBillingDashboardReadService", vm, StringComparison.Ordinal);
-        Assert.Contains("IBillingReviewDecisionService", vm, StringComparison.Ordinal);
+        Assert.Contains("ContinuePrepareBillAsync", vm, StringComparison.Ordinal);
+        Assert.Contains("EnsureFromPrepareBillAsync", vm, StringComparison.Ordinal);
+        Assert.Contains("OperationErrorMessage", vm, StringComparison.Ordinal);
+        Assert.Contains("ListForPreparationTabAsync", vm, StringComparison.Ordinal);
         Assert.Contains("new BillingDashboardRequest(ActiveOnly: ActiveOnly)", vm, StringComparison.Ordinal);
         Assert.DoesNotContain("SqlConnection", vm, StringComparison.Ordinal);
         Assert.DoesNotContain("ProjectsExtraData", vm, StringComparison.Ordinal);
@@ -158,6 +183,9 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("למה הפרויקט מופיע כאן", view, StringComparison.Ordinal);
         Assert.Contains("החלטת ניהול", view, StringComparison.Ordinal);
         Assert.Contains("להכין חשבון", view, StringComparison.Ordinal);
+        Assert.Contains("המשך להכנת חשבון", view, StringComparison.Ordinal);
+        Assert.Contains("ShowContinuePrepareBillButton", view, StringComparison.Ordinal);
+        Assert.Contains("ShowOperationErrorBanner", view, StringComparison.Ordinal);
         Assert.Contains("לא עכשיו", view, StringComparison.Ordinal);
         Assert.Contains("בטל החלטה", view, StringComparison.Ordinal);
         Assert.DoesNotContain("Header=\"פעולות\"", view, StringComparison.Ordinal);
@@ -194,6 +222,7 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.DoesNotContain("RequireReplica", fixture, StringComparison.Ordinal);
         Assert.DoesNotContain("AddSingleton<IBillingDashboardReadService", di, StringComparison.Ordinal);
         Assert.Contains("GetRequiredService<IBillingDashboardReadService>()", di, StringComparison.Ordinal);
+        Assert.Contains("GetRequiredService<IBillingPreparationService>()", di, StringComparison.Ordinal);
         Assert.Contains("SqlBillingDashboardReadService", billingSql, StringComparison.Ordinal);
     }
 

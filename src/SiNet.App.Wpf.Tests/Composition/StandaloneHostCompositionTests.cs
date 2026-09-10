@@ -71,6 +71,13 @@ public sealed class StandaloneHostCompositionTests
             Assert.NotNull(sp.GetRequiredService<IMasterPlanR03ReportService>());
             Assert.NotNull(sp.GetRequiredService<IAccInboxBootstrapLocalExecutor>());
 
+            Assert.IsType<SiNet.Application.Billing.BillingPreparationService>(
+                sp.GetRequiredService<SiNet.Application.Billing.IBillingPreparationService>());
+            Assert.NotNull(sp.GetRequiredService<SiNet.Application.Billing.IBillingDashboardReadService>());
+            Assert.NotNull(sp.GetRequiredService<SiNet.Application.Billing.IBillingReviewDecisionService>());
+            var billingVm = sp.GetRequiredService<SiNet.App.Wpf.Billing.BillingDashboardViewModel>();
+            Assert.True(billingVm.HasPreparationService);
+
             // Startup path: App.xaml.cs restores the Gmail session before the shell opens,
             // so a missing logging/secrets registration here is a startup crash, not a lazy failure.
             Assert.NotNull(sp.GetRequiredService<IAppLogger>());

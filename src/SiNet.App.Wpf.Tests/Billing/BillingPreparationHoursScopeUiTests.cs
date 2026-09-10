@@ -1,3 +1,4 @@
+using System.IO;
 using SiNet.App.Wpf.Billing;
 using SiNet.Application.Billing;
 using Xunit;
@@ -119,6 +120,7 @@ public sealed class BillingPreparationHoursScopeUiTests
 
         await vm.SavePreparationAsync();
         Assert.Equal(string.Empty, vm.ErrorMessage);
+        Assert.Equal(string.Empty, vm.OperationErrorMessage);
         var saved = await _store.GetByIdAsync(1);
         var hours = Assert.Single(saved!.Hours);
         Assert.Equal(100, hours.MasterPlanSubContractId);
@@ -199,7 +201,7 @@ public sealed class BillingPreparationHoursScopeUiTests
         edit.ToDate = new DateTime(2026, 8, 1);
         await vm.SavePreparationAsync();
 
-        Assert.False(string.IsNullOrEmpty(vm.ErrorMessage));
+        Assert.False(string.IsNullOrEmpty(vm.OperationErrorMessage));
         var saved = await _store.GetByIdAsync(1);
         Assert.Empty(saved!.Hours);
     }
@@ -218,7 +220,7 @@ public sealed class BillingPreparationHoursScopeUiTests
         edit.ToDate = new DateTime(2026, 1, 31);
         await vm.SavePreparationAsync();
 
-        Assert.Contains("ללא דיווחים תואמים", vm.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("ללא דיווחים תואמים", vm.OperationErrorMessage, StringComparison.Ordinal);
         var saved = await _store.GetByIdAsync(1);
         Assert.Empty(saved!.Hours);
     }
@@ -277,9 +279,8 @@ public sealed class BillingPreparationHoursScopeUiTests
         var vm = CreateVm();
         Assert.False(BillingPreparationHoursScopeComposer.ContainsForbiddenUnbilledClaim(vm.HourlyScopeCaption));
         Assert.Contains("נבחר במפורש", vm.HourlyScopeCaption, StringComparison.Ordinal);
-        var xaml = System.IO.File.ReadAllText(
-            System.IO.Path.Combine(
-                AppContext.BaseDirectory, "..", "..", "..", "..", "SiNet.App.Wpf", "Billing", "BillingDashboardView.xaml"));
+        var xaml = File.ReadAllText(
+            Path.Combine(FindRepoRoot(), "src", "SiNet.App.Wpf", "Billing", "BillingDashboardView.xaml"));
         Assert.Contains("רכיבי שעות", xaml, StringComparison.Ordinal);
         Assert.False(BillingPreparationHoursScopeComposer.ContainsForbiddenUnbilledClaim(xaml));
     }
@@ -337,5 +338,22 @@ public sealed class BillingPreparationHoursScopeUiTests
                 ReplicaConnectionDiagnostics.Empty,
                 BillingReplicaFreshnessStatus.Healthy,
                 CandidatesBlocked: false));
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "SiNet.sln"))
+                || File.Exists(Path.Combine(dir.FullName, "AGENTS.md")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Repo root not found.");
     }
 }

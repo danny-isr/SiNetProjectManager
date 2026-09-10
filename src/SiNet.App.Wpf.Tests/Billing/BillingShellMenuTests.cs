@@ -67,6 +67,7 @@ public sealed class BillingShellMenuTests
         var vm = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingDashboardViewModel.cs");
         var factory = ReadRepoFile("src/SiNet.App.Wpf/Shell/NewShellFactory.cs");
         Assert.Contains("PrepareBillAsync", vm, StringComparison.Ordinal);
+        Assert.Contains("ContinuePrepareBillAsync", vm, StringComparison.Ordinal);
         Assert.Contains("NotNowAsync", vm, StringComparison.Ordinal);
         Assert.Contains("IBillingReviewDecisionService", vm, StringComparison.Ordinal);
         Assert.Contains("ReviewAgainDate", vm, StringComparison.Ordinal);

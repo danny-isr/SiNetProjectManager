@@ -360,6 +360,136 @@ public sealed class BillingDashboardViewModelTests
     }
 
     [Fact]
+    public async Task PrepareBill_creates_decision_and_one_preparation_request()
+    {
+        var source = Candidate(5905, "5905", "גשר", "לקוח", BillingCandidateState.ReviewNow, "שעות",
+            hours30: 18m, hoursSinceLastBill: 22m);
+        var write = new RecordingWrite();
+        var prep = new InMemoryPreparation();
+        var vm = CreateDecisionVm(source, write, prep);
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        await vm.PrepareBillAsync().ConfigureAwait(true);
+
+        var saved = Assert.Single(write.Saves);
+        Assert.Equal(BillingLocalDecisionType.PrepareBill, saved.DecisionType);
+        var request = Assert.Single(prep.Requests);
+        Assert.Equal(5905, request.MasterPlanProjectId);
+        Assert.Equal(1, prep.EnsureCalls);
+        Assert.Equal(1, vm.SelectedWorkspaceTab);
+        Assert.False(vm.ShowContinuePrepareBillButton);
+        Assert.False(vm.ShowOperationErrorBanner);
+        Assert.True(vm.ShowCandidatesArea);
+    }
+
+    [Fact]
+    public async Task PrepareBill_preparation_failure_keeps_decision_and_shows_operation_error()
+    {
+        var source = Candidate(5905, "5905", "גשר", "לקוח", BillingCandidateState.ReviewNow, "שעות",
+            hours30: 18m, hoursSinceLastBill: 22m);
+        var write = new RecordingWrite();
+        var prep = new InMemoryPreparation { ThrowOnEnsure = true };
+        var vm = CreateDecisionVm(source, write, prep);
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        await vm.PrepareBillAsync().ConfigureAwait(true);
+
+        var saved = Assert.Single(write.Saves);
+        Assert.Equal(BillingLocalDecisionType.PrepareBill, saved.DecisionType);
+        Assert.Empty(prep.Requests);
+        Assert.Equal(0, vm.SelectedWorkspaceTab);
+        Assert.True(vm.HasActivePrepareBill);
+        Assert.True(vm.ShowContinuePrepareBillButton);
+        Assert.True(vm.ShowOperationErrorBanner);
+        Assert.False(vm.ShowErrorBanner);
+        Assert.True(vm.ShowCandidatesArea);
+        Assert.Contains("Invalid column name 'Name'", vm.OperationErrorMessage, StringComparison.Ordinal);
+        Assert.StartsWith("לא ניתן היה לפתוח בקשת הכנת חשבון:", vm.OperationErrorMessage, StringComparison.Ordinal);
+        Assert.Equal(BillingDashboardUiState.Loaded, vm.UiState);
+    }
+
+    [Fact]
+    public async Task Continue_prepare_bill_creates_exactly_one_request_without_another_decision()
+    {
+        var source = Candidate(5905, "5905", "גשר", "לקוח", BillingCandidateState.ReviewNow, "שעות")
+            with { LocalDecision = ActivePrepare() };
+        var write = new RecordingWrite();
+        var prep = new InMemoryPreparation();
+        var vm = CreateDecisionVm(source, write, prep);
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        Assert.True(vm.ShowContinuePrepareBillButton);
+        await vm.ContinuePrepareBillAsync().ConfigureAwait(true);
+
+        Assert.Empty(write.Saves);
+        Assert.Single(prep.Requests);
+        Assert.Equal(1, prep.EnsureCalls);
+        Assert.Equal(1, vm.SelectedWorkspaceTab);
+        Assert.False(vm.ShowContinuePrepareBillButton);
+        Assert.False(vm.ShowOperationErrorBanner);
+    }
+
+    [Fact]
+    public async Task Continue_prepare_bill_twice_still_has_exactly_one_request()
+    {
+        var source = Candidate(5905, "5905", "גשר", "לקוח", BillingCandidateState.ReviewNow, "שעות")
+            with { LocalDecision = ActivePrepare() };
+        var write = new RecordingWrite();
+        var prep = new InMemoryPreparation();
+        var vm = CreateDecisionVm(source, write, prep);
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        await vm.ContinuePrepareBillAsync().ConfigureAwait(true);
+        await vm.ContinuePrepareBillAsync().ConfigureAwait(true);
+
+        Assert.Single(prep.Requests);
+        Assert.Equal(1, prep.EnsureCalls);
+    }
+
+    [Fact]
+    public async Task Active_prepare_bill_with_existing_request_does_not_duplicate()
+    {
+        var source = Candidate(5905, "5905", "גשר", "לקוח", BillingCandidateState.ReviewNow, "שעות")
+            with { LocalDecision = ActivePrepare() };
+        var write = new RecordingWrite();
+        var prep = new InMemoryPreparation();
+        prep.Requests.Add(Request(5905, 9));
+        var vm = CreateDecisionVm(source, write, prep);
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        Assert.False(vm.ShowContinuePrepareBillButton);
+        await vm.ContinuePrepareBillAsync().ConfigureAwait(true);
+
+        Assert.Empty(write.Saves);
+        Assert.Equal(0, prep.EnsureCalls);
+        Assert.Single(prep.Requests);
+    }
+
+    [Fact]
+    public async Task PrepareBill_preparation_failure_stays_on_candidates_and_shows_error_banner()
+    {
+        var source = Candidate(5905, "5905", "גשר", "לקוח", BillingCandidateState.ReviewNow, "שעות",
+            hours30: 18m, hoursSinceLastBill: 22m);
+        var write = new RecordingWrite();
+        var prep = new InMemoryPreparation { ThrowOnEnsure = true };
+        var vm = CreateDecisionVm(source, write, prep);
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        await vm.PrepareBillAsync().ConfigureAwait(true);
+
+        Assert.True(vm.ShowOperationErrorBanner);
+        Assert.True(vm.ShowCandidatesArea);
+        Assert.Empty(prep.Requests);
+    }
+
+    [Fact]
+    public void Healthy_fixture_constructor_may_omit_preparation_service()
+    {
+        var vm = new BillingDashboardViewModel(BillingDashboardHealthyVisualFixture.CreateService());
+        Assert.False(vm.HasPreparationService);
+    }
+
+    [Fact]
     public async Task Employee_cannot_write_from_the_view_model()
     {
         var fake = new FakeBillingDashboardReadService(HealthyResult());
@@ -542,6 +672,51 @@ public sealed class BillingDashboardViewModelTests
         string reason) =>
         Candidate(id, number, name, "לקוח", state, reason, hours30, hoursSinceLastBill, null, null, null, null, null, null);
 
+    private BillingDashboardViewModel CreateDecisionVm(
+        BillingCandidateRow source,
+        RecordingWrite write,
+        IBillingPreparationService preparation)
+    {
+        var inner = new FakeBillingDashboardReadService(
+            Result(
+                BillingReplicaFreshnessStatus.Healthy,
+                blocked: false,
+                new BillingDashboardSummary(1, 0, null, 0m, LastSync, SnapshotDate, 0, 0, 0),
+                source));
+        return new BillingDashboardViewModel(
+            new OverlayingReadService(inner, write),
+            new FrozenLocalClock(new DateTime(2026, 9, 7)),
+            reviewDecisions: write,
+            authorization: new StubAuth(true),
+            prompts: new FakePrompts(),
+            preparation: preparation);
+    }
+
+    private static BillingPreparationRequestRecord Request(int masterPlanProjectId, int id) =>
+        new(
+            id,
+            masterPlanProjectId,
+            12,
+            "5905",
+            "גשר",
+            "לקוח",
+            BillingPreparationStatus.WaitingForSelection,
+            new DateTime(2026, 9, 7, 10, 0, 0, DateTimeKind.Utc),
+            7,
+            "manager",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            [],
+            []);
+
     private static BillingLocalDecisionOverlay ActiveNotNow(DateTime reviewAgain, string reason) =>
         new(
             BillingLocalDecisionType.NotNow,
@@ -616,6 +791,187 @@ public sealed class BillingDashboardViewModelTests
             Cleared.Add(projectId);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class OverlayingReadService(
+        FakeBillingDashboardReadService inner,
+        RecordingWrite write) : IBillingDashboardReadService
+    {
+        public async Task<BillingDashboardResult> GetAsync(
+            BillingDashboardRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await inner.GetAsync(request, cancellationToken).ConfigureAwait(false);
+            var rows = result.Candidates.Select(ApplySavedDecision).ToArray();
+            return result with { Candidates = rows };
+        }
+
+        private BillingCandidateRow ApplySavedDecision(BillingCandidateRow candidate)
+        {
+            if (candidate.LocalDecision is { Effect: BillingLocalDecisionEffect.Active })
+                return candidate;
+            var saved = write.Saves.LastOrDefault(s => s.ProjectId == candidate.ProjectId);
+            return saved?.DecisionType == BillingLocalDecisionType.PrepareBill
+                ? candidate with { LocalDecision = ActivePrepare() }
+                : candidate;
+        }
+    }
+
+    private sealed class InMemoryPreparation : IBillingPreparationService
+    {
+        public List<BillingPreparationRequestRecord> Requests { get; } = [];
+        public int EnsureCalls { get; private set; }
+        public bool ThrowOnEnsure { get; set; }
+
+        public Task<BillingPreparationEnsureResult> EnsureFromPrepareBillAsync(
+            int masterPlanProjectId,
+            string? projectNumber,
+            string? projectName,
+            string? customerName,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureCalls++;
+            if (ThrowOnEnsure)
+                throw new InvalidOperationException("Invalid column name 'Name'.");
+
+            var existing = Requests.FirstOrDefault(r => r.MasterPlanProjectId == masterPlanProjectId);
+            if (existing is not null)
+                return Task.FromResult(new BillingPreparationEnsureResult(existing, Created: false));
+
+            var created = Request(masterPlanProjectId, Requests.Count + 1);
+            Requests.Add(created);
+            return Task.FromResult(new BillingPreparationEnsureResult(created, Created: true));
+        }
+
+        public Task<IReadOnlyList<BillingPreparationRequestRecord>> ListForPreparationTabAsync(
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<BillingPreparationRequestRecord>>(Requests);
+
+        public Task<BillingPreparationRequestRecord> RefreshFromSnapshotAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> SaveSelectionAsync(
+            int requestId,
+            IReadOnlyList<BillingPreparationStageLineSnapshot> stages,
+            IReadOnlyList<BillingPreparationHoursLineSnapshot> hours,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> ApplyManualOverrideAsync(
+            int requestId,
+            string reason,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationApproveResult> ApproveAndCreateTaskAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> OnPrepareBillTaskCompletedAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> ConfirmHourlyManuallyAsync(
+            int requestId,
+            string? note,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> ReevaluateStageConfirmationAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task OnPrepareBillTaskCompletedByTaskIdAsync(
+            int taskId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationSnapshotLoad> LoadComponentsAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new BillingPreparationSnapshotLoad(false, null, null, null, null, [], [], []));
+
+        public Task<IReadOnlyList<int>> FindHourReportIdsInOtherRequestsAsync(
+            IReadOnlyList<int> hourReportIds,
+            int? excludeRequestId,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<int>>([]);
+    }
+
+    private sealed class ThrowingPreparation : IBillingPreparationService
+    {
+        public Task<BillingPreparationEnsureResult> EnsureFromPrepareBillAsync(
+            int masterPlanProjectId,
+            string? projectNumber,
+            string? projectName,
+            string? customerName,
+            CancellationToken cancellationToken = default)
+            => Task.FromException<BillingPreparationEnsureResult>(
+                new InvalidOperationException("Invalid column name 'Name'."));
+
+        public Task<IReadOnlyList<BillingPreparationRequestRecord>> ListForPreparationTabAsync(
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<BillingPreparationRequestRecord>>([]);
+
+        public Task<BillingPreparationRequestRecord> RefreshFromSnapshotAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> SaveSelectionAsync(
+            int requestId,
+            IReadOnlyList<BillingPreparationStageLineSnapshot> stages,
+            IReadOnlyList<BillingPreparationHoursLineSnapshot> hours,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> ApplyManualOverrideAsync(
+            int requestId,
+            string reason,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationApproveResult> ApproveAndCreateTaskAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> OnPrepareBillTaskCompletedAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> ConfirmHourlyManuallyAsync(
+            int requestId,
+            string? note,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationRequestRecord> ReevaluateStageConfirmationAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task OnPrepareBillTaskCompletedByTaskIdAsync(
+            int taskId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<BillingPreparationSnapshotLoad> LoadComponentsAsync(
+            int requestId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<int>> FindHourReportIdsInOtherRequestsAsync(
+            IReadOnlyList<int> hourReportIds,
+            int? excludeRequestId,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<int>>([]);
     }
 
     private sealed class FakeBillingDashboardReadService(BillingDashboardResult result) : IBillingDashboardReadService
