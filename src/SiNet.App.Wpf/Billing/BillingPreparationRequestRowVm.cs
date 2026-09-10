@@ -1,3 +1,4 @@
+using System.Globalization;
 using SiNet.Application.Billing;
 using SiNet.App.Wpf.Inspection;
 
@@ -27,22 +28,8 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
     private decimal _additionPercent;
 
     public BillingPreparationStageEditVm(BillingPreparationStageLineSnapshot source)
+        : this(source, catalog: null, feeTypeId: 0)
     {
-        ArgumentNullException.ThrowIfNull(source);
-        MasterPlanStageId = source.MasterPlanStageId;
-        MasterPlanSubContractId = source.MasterPlanSubContractId;
-        StageName = source.StageName;
-        SubContractName = source.SubContractName;
-        StageWeightWithinSubContract = source.StageWeightWithinSubContract;
-        ObservedCumulativeProgress = source.ObservedCumulativeProgress;
-        HasDataQualityFlag = source.HasDataQualityFlag;
-        SnapshotTimestampUtc = source.SnapshotTimestampUtc;
-        ConfirmationMode = source.ConfirmationMode;
-        ConfirmedAtUtc = source.ConfirmedAtUtc;
-        ConfirmedByUserId = source.ConfirmedByUserId;
-        ConfirmationNote = source.ConfirmationNote;
-        FeeTypeId = 0;
-        _additionPercent = source.RequestedDelta * 100m;
     }
 
     public static BillingPreparationStageEditVm FromCatalog(
@@ -67,19 +54,53 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
                 null,
                 null,
                 null),
+            draft,
             draft.FeeTypeId);
     }
 
-    private BillingPreparationStageEditVm(BillingPreparationStageLineSnapshot source, int feeTypeId)
-        : this(source)
+    public BillingPreparationStageEditVm(
+        BillingPreparationStageLineSnapshot source,
+        BillingPreparationStageDraft? catalog)
+        : this(source, catalog, catalog?.FeeTypeId ?? 0)
     {
+    }
+
+    private BillingPreparationStageEditVm(
+        BillingPreparationStageLineSnapshot source,
+        BillingPreparationStageDraft? catalog,
+        int feeTypeId)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        MasterPlanStageId = source.MasterPlanStageId;
+        MasterPlanSubContractId = source.MasterPlanSubContractId;
+        StageName = source.StageName;
+        SubContractName = source.SubContractName;
+        StageWeightWithinSubContract = source.StageWeightWithinSubContract;
+        ObservedCumulativeProgress = source.ObservedCumulativeProgress;
+        HasDataQualityFlag = source.HasDataQualityFlag;
+        SnapshotTimestampUtc = source.SnapshotTimestampUtc;
+        ConfirmationMode = source.ConfirmationMode;
+        ConfirmedAtUtc = source.ConfirmedAtUtc;
+        ConfirmedByUserId = source.ConfirmedByUserId;
+        ConfirmationNote = source.ConfirmationNote;
         FeeTypeId = feeTypeId;
+        MasterPlanContractId = catalog?.MasterPlanContractId ?? 0;
+        ContractName = catalog?.ContractName;
+        ContractNumber = catalog?.ContractNumber;
+        SubContractNumber = catalog?.SubContractNumber;
+        OrderNum = catalog?.OrderNum ?? 0;
+        _additionPercent = source.RequestedDelta * 100m;
     }
 
     public int MasterPlanStageId { get; }
     public int MasterPlanSubContractId { get; }
+    public int MasterPlanContractId { get; }
     public string StageName { get; }
     public string SubContractName { get; }
+    public string? SubContractNumber { get; }
+    public string? ContractName { get; }
+    public string? ContractNumber { get; }
+    public int OrderNum { get; }
     public decimal StageWeightWithinSubContract { get; }
     public decimal? ObservedCumulativeProgress { get; }
     public bool HasDataQualityFlag { get; }
@@ -89,6 +110,8 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
     public int? ConfirmedByUserId { get; }
     public string? ConfirmationNote { get; }
     public int FeeTypeId { get; }
+    public string AdditionAutomationId =>
+        "BillingDashboard.StageAddition." + MasterPlanStageId.ToString(CultureInfo.InvariantCulture);
 
     public decimal AdditionPercent
     {
@@ -101,6 +124,7 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
     }
 
     public decimal ObservedPercent => (ObservedCumulativeProgress ?? 0m) * 100m;
+    public decimal WeightPercent => StageWeightWithinSubContract * 100m;
     public decimal AfterBillPercent => ObservedPercent + AdditionPercent;
     public decimal TargetPercent => AfterBillPercent;
     public decimal RemainingPercent => 100m - AfterBillPercent;
@@ -108,14 +132,63 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
     public bool HasPositiveAddition => AdditionPercent > 0m;
     public decimal RelativeSharePercent => StageWeightWithinSubContract * AdditionPercent;
     public bool ShowRelativeShare => AdditionPercent > 0m && StageWeightWithinSubContract > 0m;
+    public decimal ObservedContributionPercent =>
+        BillingStageContributionCalculator.SubContractContributionPercent(
+            StageWeightWithinSubContract, ObservedCumulativeProgress ?? 0m);
+    public decimal AdditionContributionPercent =>
+        BillingStageContributionCalculator.SubContractContributionPercent(
+            StageWeightWithinSubContract, RequestedDelta);
+    public decimal AfterContributionPercent =>
+        BillingStageContributionCalculator.SubContractContributionPercent(
+            StageWeightWithinSubContract, (ObservedCumulativeProgress ?? 0m) + RequestedDelta);
+    public decimal RemainingContributionPercent =>
+        BillingStageContributionCalculator.SubContractContributionPercent(
+            StageWeightWithinSubContract, Math.Max(0m, 1m - ((ObservedCumulativeProgress ?? 0m) + RequestedDelta)));
+    public decimal MaxAdditionPercent => BillingStageProgressMessages.MaxAdditionPercent(ObservedPercent);
+    public string MaxAdditionHintText => BillingStageProgressMessages.FormatMaxAdditionHint(ObservedPercent);
+    public bool IsAfterBillValid => !HasAdditionValidation;
 
-    public string WeightText => "משקל השלב בהסכם המשנה: " + FormatPercent(StageWeightWithinSubContract * 100m);
-    public string ObservedText =>
-        "חויב/נצפה עד כה ב-MasterPlan: " + FormatPercent(ObservedPercent);
-    public string AfterBillText => "לאחר החשבון: " + FormatPercent(AfterBillPercent);
-    public string RemainingText => "נותר בשלב לאחר החשבון: " + FormatPercent(RemainingPercent);
+    public decimal ObservedBarShare => ObservedPercent;
+    public decimal AdditionBarShare => IsAfterBillValid ? Math.Max(0m, AdditionPercent) : 0m;
+    public decimal RemainingBarShare
+    {
+        get
+        {
+            var remaining = IsAfterBillValid ? Math.Max(0m, RemainingPercent) : Math.Max(0m, 100m - ObservedPercent);
+            if (ObservedBarShare <= 0m && AdditionBarShare <= 0m && remaining <= 0m)
+                return 100m;
+            return remaining;
+        }
+    }
+
+    public string WeightText => "משקל השלב בתת החוזה: " + FormatPercent(WeightPercent);
+    public string ObservedText => "כבר חויב: " + FormatPercent(ObservedPercent) + " מהשלב";
+    public string ObservedStageText => FormatPercent(ObservedPercent) + " מהשלב";
+    public string ObservedContributionText => FormatPercent(ObservedContributionPercent) + " מתת החוזה";
+    public string AdditionStageText => FormatPercent(AdditionPercent) + " מהשלב";
+    public string AdditionContributionText => FormatPercent(AdditionContributionPercent) + " מתת החוזה";
+    public string AfterBillText =>
+        IsAfterBillValid
+            ? "לאחר החשבון: " + FormatPercent(AfterBillPercent)
+            : "לאחר החשבון: לא תקין";
+    public string AfterStageText =>
+        IsAfterBillValid ? FormatPercent(AfterBillPercent) + " מהשלב" : "לא תקין";
+    public string AfterContributionText =>
+        IsAfterBillValid
+            ? FormatPercent(AfterContributionPercent) + " מתת החוזה"
+            : "לא תקין";
+    public string RemainingText =>
+        IsAfterBillValid
+            ? "נותר: " + FormatPercent(RemainingPercent)
+            : "נותר: לא תקין";
+    public string RemainingStageText =>
+        IsAfterBillValid ? FormatPercent(RemainingPercent) + " מהשלב" : "לא תקין";
+    public string RemainingContributionText =>
+        IsAfterBillValid
+            ? FormatPercent(RemainingContributionPercent) + " מתת החוזה"
+            : "לא תקין";
     public string RelativeShareText =>
-        "חלק יחסי נוסף בהסכם המשנה: " + FormatPercent(RelativeSharePercent);
+        "תרומת התוספת לתת החוזה: " + FormatPercent(RelativeSharePercent);
 
     public string? AdditionValidationMessage
     {
@@ -125,8 +198,7 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
                 ObservedCumulativeProgress,
                 HasDataQualityFlag,
                 HasDataQualityFlag ? [ObservedCumulativeProgress ?? -1] : []);
-            var validation = BillingStageProgressCalculator.ValidateAddition(observed, RequestedDelta);
-            return validation.IsValid ? null : validation.Error;
+            return BillingStageProgressMessages.FormatAdditionError(observed, RequestedDelta);
         }
     }
 
@@ -169,12 +241,32 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
         OnPropertyChanged(nameof(HasPositiveAddition));
         OnPropertyChanged(nameof(RelativeSharePercent));
         OnPropertyChanged(nameof(ShowRelativeShare));
+        OnPropertyChanged(nameof(ObservedContributionPercent));
+        OnPropertyChanged(nameof(AdditionContributionPercent));
+        OnPropertyChanged(nameof(AfterContributionPercent));
+        OnPropertyChanged(nameof(RemainingContributionPercent));
+        OnPropertyChanged(nameof(MaxAdditionPercent));
+        OnPropertyChanged(nameof(MaxAdditionHintText));
+        OnPropertyChanged(nameof(IsAfterBillValid));
+        OnPropertyChanged(nameof(ObservedBarShare));
+        OnPropertyChanged(nameof(AdditionBarShare));
+        OnPropertyChanged(nameof(RemainingBarShare));
+        OnPropertyChanged(nameof(ObservedText));
+        OnPropertyChanged(nameof(ObservedStageText));
+        OnPropertyChanged(nameof(ObservedContributionText));
+        OnPropertyChanged(nameof(AdditionStageText));
+        OnPropertyChanged(nameof(AdditionContributionText));
         OnPropertyChanged(nameof(AfterBillText));
+        OnPropertyChanged(nameof(AfterStageText));
+        OnPropertyChanged(nameof(AfterContributionText));
         OnPropertyChanged(nameof(RemainingText));
+        OnPropertyChanged(nameof(RemainingStageText));
+        OnPropertyChanged(nameof(RemainingContributionText));
         OnPropertyChanged(nameof(RelativeShareText));
         OnPropertyChanged(nameof(AdditionValidationMessage));
         OnPropertyChanged(nameof(HasAdditionValidation));
     }
 
-    private static string FormatPercent(decimal percent) => percent.ToString("0.##") + "%";
+    private static string FormatPercent(decimal percent) =>
+        BillingStageProgressMessages.FormatPercent(percent);
 }

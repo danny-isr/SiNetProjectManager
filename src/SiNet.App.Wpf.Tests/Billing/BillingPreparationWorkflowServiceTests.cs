@@ -227,7 +227,9 @@ public sealed class BillingPreparationWorkflowServiceTests
         Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
         Assert.Contains("להוסיף בחשבון הזה: 25%", _tasks.LastBody, StringComparison.Ordinal);
         Assert.Contains("לאחר החשבון: 50%", _tasks.LastBody, StringComparison.Ordinal);
-        Assert.Contains("מצב ב-MasterPlan בזמן האישור: 25%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("חויב בזמן האישור: 25%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("תת חוזה: כבישים", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("משקל השלב בתת החוזה: 20%", _tasks.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("להגיש עד 50% מצטבר", _tasks.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("לא מחויבות", _tasks.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("already billed", _tasks.LastBody, StringComparison.OrdinalIgnoreCase);

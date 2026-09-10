@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 10.09.2026 (manager-facing stage field is **addition in this bill**; hourly scope is multi-select FeeType=4 SubContracts with the same date range; A1 recovery unchanged)  
+> **Updated:** 11.09.2026 (payment stages grouped by SubContract; Billing Preparation color language is product-fixed; manager-facing validation stays in percentages)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -132,20 +132,70 @@ Persisted meaning is unchanged:
 
 UI is 0–100%. Persistence remains 0–1. The manager-facing editable field is **«תוספת בחשבון הזה»**. «לאחר החשבון» is calculated and not editable.
 
+### Hierarchy (MasterPlan)
+
 ```text
-פיקוח על הביצוע
-הסכם משנה: תכנון ...
-משקל השלב בהסכם המשנה: 25%
-חויב/נצפה עד כה ב-MasterPlan: 10%
-תוספת בחשבון הזה:            [20] %
-לאחר החשבון:                 30%
-נותר בשלב לאחר החשבון:       70%
-חלק יחסי נוסף בהסכם המשנה:   5%
+Project
+  -> Contract
+     -> SubContract
+        -> SubContractStep   ← payment stage
 ```
 
-Example: Observed=0.10, addition 20% → RequestedDelta=0.20, Target=0.30.
+The editor **must not** flatten stages into one ungrouped list. Primary grouping is **SubContract → payment stages**. Expand/collapse per SubContract; groups with a positive current addition stay open; others may start collapsed when the list is large. «הרחב הכל» / «כווץ הכל» are provided.
 
-Validation: addition ≥ 0; target ≤ 100%; max addition = 100% − observed. Unknown observed without data-quality error starts at 0%. Outliers are never treated as 0%.
+**Contract container:** show `Contract → SubContract → stages` only when the project has **more than one meaningful Contract**. Project 2754 (DEV inspect): `Projects.ProjectNum=2754` → `Projects.ID=6962`, **one** `Contracts` row (`ID=7940`, `ContractNum=1`). Therefore the manager UI is **SubContract → stages** (no redundant Contract wrapper).
+
+Useful identity columns (proven, do not guess):
+
+| Table | Identity |
+| --- | --- |
+| `Contracts` | `ID`, `ProjectID`, `ContractNum`, `Name` |
+| `SubContracts` | `ID`, `ContractID`, `SubContractNum`, `Name`, `FeeTypeID` |
+| `SubContractSteps` | `ID`, `SubContractID`, `Name`, `Percentage`, `OrderNum` |
+
+`SubContractSteps.Percentage` is the **weight of that payment stage within its SubContract**. Snapshot-wide scale is **0–1** (no stored values > 1). Display as `× 100` with the label **«משקל השלב בתת החוזה»**. Do not call it project % or contract %.
+
+Completed 100% stages stay **hidden from the editable list** but **still count** in the SubContract weighted summary (`כבר חויב`). Data-quality / non-positive-weight rows never enter those totals silently; if they exist, show **«סיכום תת החוזה חלקי — קיימים שלבים עם בעיית איכות נתונים»**. If valid stage weights do not sum to ~100% (tolerance 0.02 on the 0–1 scale), show **«משקלי שלבי התשלום בתת החוזה מסתכמים ב-X% ולא ב-100%»**. Do not normalize.
+
+### Color language (product-fixed theme resources)
+
+| Resource | Meaning | Typical color |
+| --- | --- | --- |
+| `BillingObservedBrush` | כבר חויב / מצב קיים ב-MasterPlan | green |
+| `BillingAdditionBrush` | תוספת בחשבון הזה | blue |
+| `BillingRemainingBrush` | נותר לאחר החשבון | red |
+| `BillingStageWeightBrush` | משקל השלב בתת החוזה | purple / neutral accent |
+
+«לאחר החשבון» is a calculated total: strong/neutral text, not a fifth semantic color. Color is **never** the only indicator — always label + numeric value. A legend sits above the stage area.
+
+Each stage has a compact segmented bar for **100% of that stage** (green observed / blue addition / red remaining). The bar is **not** the SubContract weight.
+
+### Compact stage card
+
+```text
+פיקוח על הביצוע
+משקל השלב בתת החוזה: 25%
+כבר חויב:
+10% מהשלב
+2.5% מתת החוזה
+תוספת בחשבון הזה:
+[ 20 ] % מהשלב
+5% מתת החוזה
+לאחר החשבון:
+30% מהשלב
+7.5% מתת החוזה
+נותר:
+70% מהשלב
+17.5% מתת החוזה
+```
+
+Weighted SubContract contribution = `StageWeight × stageProgress` (display percent). Derived only; not persisted.
+
+Max addition = `100% − observed`. Hint: «ניתן להוסיף עד 10%». If the manager types more than remaining, do **not** clamp; show e.g. «לא ניתן להוסיף 20% — נותרו רק 10% בשלב זה.» Never show `0..1`, `יעד מצטבר`, or `TargetCumulativeProgress` in the manager UI. Invalid input blocks Save; «לאחר החשבון» shows an invalid state rather than 110%.
+
+AutomationIds are unique by id: `BillingDashboard.StageAddition.<StageId>`, `BillingDashboard.SubContract.<SubContractId>`, `BillingDashboard.HourlySubContract.<SubContractId>`.
+
+Frozen PrepareBill task instructions use the same SubContract hierarchy, skip zero-addition stages, and keep hours grouped separately.
 
 The normal «שלבים» editor lists only stages that can receive an addition. Excluded from the editable list:
 
@@ -397,11 +447,11 @@ UI example mapping:
 
 ```text
 תכנון מפורט
-משקל השלב בהסכם המשנה: 20%          ← StageWeightWithinSubContract × 100
-חויב/נצפה עד כה ב-MasterPlan: 40%  ← ObservedCumulativeProgress × 100
-תוספת בחשבון הזה:            [30] %  ← RequestedDelta (editable)
-לאחר החשבון:                 70%     ← TargetCumulativeProgress (calculated)
-נותר בשלב לאחר החשבון:       30%
+משקל השלב בתת החוזה: 20%          ← StageWeightWithinSubContract × 100 (NOT project %)
+כבר חויב: 40% מהשלב / 8% מתת החוזה
+תוספת בחשבון הזה: [30] % מהשלב   ← RequestedDelta (editable)
+לאחר החשבון: 70% מהשלב
+נותר: 30% מהשלב
 ```
 
 Validation: addition ≥ 0; `observed ≤ target ≤ 1`. Inconsistent rows: flag, no silent math.

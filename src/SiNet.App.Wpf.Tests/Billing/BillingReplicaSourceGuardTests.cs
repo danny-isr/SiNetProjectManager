@@ -91,6 +91,9 @@ public sealed class BillingReplicaSourceGuardTests
         var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Billing/SqlBillingPreparationComponentSource.cs");
 
         Assert.Contains("sc.FeeTypeID", source, StringComparison.Ordinal);
+        Assert.Contains("c.ContractNum", source, StringComparison.Ordinal);
+        Assert.Contains("sc.SubContractNum", source, StringComparison.Ordinal);
+        Assert.Contains("st.OrderNum", source, StringComparison.Ordinal);
         Assert.Contains("CONCAT(c.FirstName, ' ', c.LastName)", source, StringComparison.Ordinal);
         Assert.Contains("NULLIF(LTRIM(RTRIM(comp.Name)), '')", source, StringComparison.Ordinal);
         Assert.Contains("LEFT JOIN dbo.Companies comp ON comp.ID = c.CompanyID", source, StringComparison.Ordinal);
@@ -163,6 +166,10 @@ public sealed class BillingReplicaSourceGuardTests
         var view = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingDashboardView.xaml");
         var formatters = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingDashboardFormatters.cs");
         var write = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Billing/SqlBillingReviewDecisionService.cs");
+        var groupVm = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingPreparationSubContractGroupVm.cs");
+        var stageVm = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingPreparationRequestRowVm.cs");
+        var hourlyChoice = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingHourlySubContractChoiceVm.cs");
+        var brushes = ReadRepoFile("src/SiNet.App.Wpf/Theme/BrushResources.xaml");
 
         Assert.Contains("IBillingDashboardReadService", vm, StringComparison.Ordinal);
         Assert.Contains("ContinuePrepareBillAsync", vm, StringComparison.Ordinal);
@@ -188,6 +195,22 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("תוספת בחשבון הזה", view, StringComparison.Ordinal);
         Assert.Contains("בחר הכל", view, StringComparison.Ordinal);
         Assert.Contains("נקה הכל", view, StringComparison.Ordinal);
+        Assert.Contains("בתת החוזה", view, StringComparison.Ordinal);
+        Assert.Contains("משקל השלב בתת החוזה", view, StringComparison.Ordinal);
+        Assert.Contains("תת חוזה: ", groupVm, StringComparison.Ordinal);
+        Assert.Contains("משקל השלב בתת החוזה: ", stageVm, StringComparison.Ordinal);
+        Assert.Contains("הרחב הכל", view, StringComparison.Ordinal);
+        Assert.Contains("כווץ הכל", view, StringComparison.Ordinal);
+        Assert.Contains("BillingObservedBrush", view, StringComparison.Ordinal);
+        Assert.Contains("BillingAdditionBrush", view, StringComparison.Ordinal);
+        Assert.Contains("BillingRemainingBrush", view, StringComparison.Ordinal);
+        Assert.Contains("BillingStageWeightBrush", view, StringComparison.Ordinal);
+        Assert.Contains("AdditionAutomationId", view, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"{Binding AutomationId}\"", view, StringComparison.Ordinal);
+        Assert.Contains("BillingDashboard.HourlySubContract.", hourlyChoice, StringComparison.Ordinal);
+        Assert.DoesNotContain("AutomationProperties.AutomationId=\"BillingDashboard.StageAddition\"", view, StringComparison.Ordinal);
+        Assert.DoesNotContain("יעד מצטבר", view, StringComparison.Ordinal);
+        Assert.DoesNotContain("0 ל-1", view, StringComparison.Ordinal);
         Assert.Contains("ShowContinuePrepareBillButton", view, StringComparison.Ordinal);
         Assert.Contains("ShowOperationErrorBanner", view, StringComparison.Ordinal);
         Assert.Contains("לא עכשיו", view, StringComparison.Ordinal);
@@ -208,7 +231,10 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.DoesNotContain("Header=\"עבודה אחרונה\"", view, StringComparison.Ordinal);
         Assert.Contains("ימי עבודה 30", view, StringComparison.Ordinal);
         Assert.Contains("סכום שכר טרחה נוכחי", view, StringComparison.Ordinal);
-        Assert.DoesNotContain("MP_Bills", write, StringComparison.Ordinal);
+        Assert.Contains("BillingObservedBrush", brushes, StringComparison.Ordinal);
+        Assert.Contains("BillingAdditionBrush", brushes, StringComparison.Ordinal);
+        Assert.Contains("BillingRemainingBrush", brushes, StringComparison.Ordinal);
+        Assert.Contains("BillingStageWeightBrush", brushes, StringComparison.Ordinal);
         Assert.DoesNotContain("RequireReplica", write, StringComparison.Ordinal);
         Assert.DoesNotContain("IReplicaBillingDataSource", write, StringComparison.Ordinal);
     }

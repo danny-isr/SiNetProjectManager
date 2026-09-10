@@ -60,7 +60,7 @@ public static class BillingPreparationStageEditorFilter
                 return new BillingPreparationStageEditorDecision(
                     false,
                     BillingPreparationStageExclusionKind.DataQuality,
-                    draft.StageName + " / " + draft.SubContractName + " — ערך התקדמות מחוץ ל-0..1.");
+                    draft.StageName + " / " + draft.SubContractName + " — ערך התקדמות חריג.");
             }
 
             if (value >= BillingStageProgressCalculator.ScaleMax)
@@ -77,4 +77,30 @@ public static class BillingPreparationStageEditorFilter
 
     public static bool IsEditable(BillingPreparationStageDraft draft) =>
         Classify(draft).IsEditable;
+
+    public static string FormatExpandedWarning(
+        BillingPreparationStageDraft draft,
+        BillingPreparationStageEditorDecision decision,
+        bool includeContract)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+        ArgumentNullException.ThrowIfNull(decision);
+
+        var reason = decision.Exclusion switch
+        {
+            BillingPreparationStageExclusionKind.DataQuality when draft.Observed.HasOutliers =>
+                "StepProgress חריג",
+            BillingPreparationStageExclusionKind.DataQuality => "ערך התקדמות חריג",
+            BillingPreparationStageExclusionKind.NonPositiveWeight => "משקל שלב אפסי או שלילי",
+            _ => decision.Reason ?? "לא זמין לחיוב אוטומטי"
+        };
+
+        var lines = new List<string> { "לא זמין לחיוב אוטומטי:" };
+        if (includeContract && !string.IsNullOrWhiteSpace(draft.ContractName))
+            lines.Add("חוזה: " + draft.ContractName);
+        lines.Add("תת חוזה: " + draft.SubContractName);
+        lines.Add("שלב: " + draft.StageName);
+        lines.Add("סיבה: " + reason);
+        return string.Join(Environment.NewLine, lines);
+    }
 }

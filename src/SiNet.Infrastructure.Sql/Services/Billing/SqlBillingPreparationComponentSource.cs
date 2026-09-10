@@ -123,19 +123,25 @@ public sealed class SqlBillingPreparationComponentSource(
               st.Percentage,
               sc.FeeTypeID,
               prog.StepProgress,
-              prog.StatusID
+              prog.StatusID,
+              c.ID,
+              c.Name,
+              c.ContractNum,
+              sc.SubContractNum,
+              st.OrderNum
             FROM dbo.SubContractSteps st
             INNER JOIN dbo.SubContracts sc ON sc.ID = st.SubContractID
             INNER JOIN dbo.Contracts c ON c.ID = sc.ContractID
             {progressJoin}
             WHERE c.ProjectID = @ProjectId
-            ORDER BY sc.ID, st.OrderNum, st.ID
+            ORDER BY c.ID, sc.ID, st.OrderNum, st.ID
             """;
 
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.Add("@ProjectId", SqlDbType.Int).Value = projectId;
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
 
+        var order = new List<int>();
         var buckets = new Dictionary<int, StageBucket>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -149,8 +155,14 @@ public sealed class SqlBillingPreparationComponentSource(
                     reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
                     ReadDecimal(reader, 4) ?? 0m,
                     reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
-                    []);
+                    [],
+                    reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
+                    reader.IsDBNull(9) ? null : reader.GetString(9),
+                    ReadOptionalText(reader, 10),
+                    ReadOptionalText(reader, 11),
+                    reader.IsDBNull(12) ? 0 : Convert.ToInt32(reader.GetValue(12)));
                 buckets[stageId] = bucket;
+                order.Add(stageId);
             }
 
             if (!reader.IsDBNull(6) && !reader.IsDBNull(7))
@@ -161,7 +173,8 @@ public sealed class SqlBillingPreparationComponentSource(
             }
         }
 
-        return buckets.Values
+        return order
+            .Select(id => buckets[id])
             .Select(b =>
             {
                 var observed = BillingStageProgressCalculator.Observe(b.Progress);
@@ -174,7 +187,12 @@ public sealed class SqlBillingPreparationComponentSource(
                     observed,
                     observed.Value,
                     Included: false,
-                    b.FeeTypeId);
+                    b.FeeTypeId,
+                    b.ContractId,
+                    b.ContractName,
+                    b.ContractNumber,
+                    b.SubContractNumber,
+                    b.OrderNum);
             })
             .ToList();
     }
@@ -310,6 +328,14 @@ public sealed class SqlBillingPreparationComponentSource(
         return Convert.ToDecimal(reader.GetValue(ordinal));
     }
 
+    private static string? ReadOptionalText(SqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+            return null;
+        var text = Convert.ToString(reader.GetValue(ordinal));
+        return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+    }
+
     private sealed record StageBucket(
         int StageId,
         int SubContractId,
@@ -317,5 +343,10 @@ public sealed class SqlBillingPreparationComponentSource(
         string SubContractName,
         decimal Weight,
         int FeeTypeId,
-        List<decimal> Progress);
+        List<decimal> Progress,
+        int ContractId,
+        string? ContractName,
+        string? ContractNumber,
+        string? SubContractNumber,
+        int OrderNum);
 }

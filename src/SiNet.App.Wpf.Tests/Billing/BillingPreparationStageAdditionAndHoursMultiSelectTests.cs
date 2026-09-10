@@ -115,6 +115,15 @@ public sealed class BillingPreparationStageAdditionUiTests
         Assert.Equal(30m, stage.AfterBillPercent);
         Assert.Equal(70m, stage.RemainingPercent);
         Assert.Equal(5m, stage.RelativeSharePercent);
+        Assert.Equal(2.5m, stage.ObservedContributionPercent);
+        Assert.Equal(5m, stage.AdditionContributionPercent);
+        Assert.Equal(7.5m, stage.AfterContributionPercent);
+        Assert.Equal(17.5m, stage.RemainingContributionPercent);
+        Assert.Contains("משקל השלב בתת החוזה: 25%", stage.WeightText, StringComparison.Ordinal);
+        Assert.DoesNotContain("10%", stage.WeightText, StringComparison.Ordinal);
+        var group = Assert.Single(vm.StageGroups);
+        Assert.Equal(10, group.SubContractId);
+        Assert.Contains("BillingDashboard.StageAddition.1", stage.AdditionAutomationId, StringComparison.Ordinal);
         await vm.SavePreparationAsync();
         var saved = Assert.Single((await _store.GetByIdAsync(1))!.Stages);
         Assert.Equal(0.10m, saved.ObservedCumulativeProgress);
@@ -188,6 +197,51 @@ public sealed class BillingPreparationStageAdditionUiTests
         Assert.Contains("חריג", vm.StageExclusionDetails, StringComparison.Ordinal);
         Assert.DoesNotContain("שעתי", vm.StageEdits.Select(s => s.StageName));
         Assert.DoesNotContain("הושלם", vm.StageEdits.Select(s => s.StageName));
+        var group = Assert.Single(vm.StageGroups);
+        Assert.Contains("הושלם", group.SummaryStages.Select(s => s.StageName));
+        Assert.Equal(27.5m, group.ObservedSummaryPercent);
+        Assert.True(group.ShowPartialSummaryWarning);
+        Assert.Contains("תת חוזה:", vm.StageExclusionDetails, StringComparison.Ordinal);
+        Assert.Contains("StepProgress חריג", vm.StageExclusionDetails, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Invalid_over_remaining_addition_uses_percent_wording_and_blocks_save()
+    {
+        _components.Load = Catalog(StageDraft(0.90m, 0.25m));
+        await _service.EnsureFromPrepareBillAsync(5905, "2608", "פרויקט", "לקוח");
+        var vm = CreateVm();
+        await vm.RefreshPreparationAsync();
+        var stage = Assert.Single(vm.StageEdits);
+        Assert.Contains("ניתן להוסיף עד 10%", stage.MaxAdditionHintText, StringComparison.Ordinal);
+        stage.AdditionPercent = 20m;
+        Assert.True(stage.HasAdditionValidation);
+        Assert.Contains("לא ניתן להוסיף 20%", stage.AdditionValidationMessage, StringComparison.Ordinal);
+        Assert.Contains("נותרו רק 10%", stage.AdditionValidationMessage, StringComparison.Ordinal);
+        Assert.False(BillingStageProgressMessages.IsUserFacingScaleLeak(stage.AdditionValidationMessage));
+        Assert.Contains("לא תקין", stage.AfterBillText, StringComparison.Ordinal);
+        Assert.DoesNotContain("110%", stage.AfterBillText, StringComparison.Ordinal);
+        await vm.SavePreparationAsync();
+        Assert.Contains("לא ניתן להוסיף 20%", vm.OperationErrorMessage, StringComparison.Ordinal);
+        Assert.Empty((await _store.GetByIdAsync(1))!.Stages);
+    }
+
+    [Fact]
+    public async Task Stage_addition_automation_ids_are_unique_by_stage_id()
+    {
+        _components.Load = Catalog(
+            StageDraft(0.10m, 0.25m, stageId: 11, name: "א", subId: 10),
+            StageDraft(0.10m, 0.25m, stageId: 22, name: "ב", subId: 20));
+        await _service.EnsureFromPrepareBillAsync(5905, "2608", "פרויקט", "לקוח");
+        var vm = CreateVm();
+        await vm.RefreshPreparationAsync();
+        Assert.Equal(2, vm.StageEdits.Count);
+        Assert.Equal("BillingDashboard.StageAddition.11", vm.StageEdits[0].AdditionAutomationId);
+        Assert.Equal("BillingDashboard.StageAddition.22", vm.StageEdits[1].AdditionAutomationId);
+        Assert.Equal(2, vm.StageGroups.Count);
+        Assert.Equal("BillingDashboard.SubContract.10", vm.StageGroups[0].GroupAutomationId);
+        Assert.Equal("BillingDashboard.SubContract.20", vm.StageGroups[1].GroupAutomationId);
+        Assert.NotEqual(vm.StageEdits[0].AdditionAutomationId, vm.StageEdits[1].AdditionAutomationId);
     }
 
     [Fact]
@@ -223,13 +277,14 @@ public sealed class BillingPreparationStageAdditionUiTests
         int stageId = 1,
         string name = "פיקוח על הביצוע",
         int feeTypeId = MasterPlanSnapshotFeeTypeIds.FixedPrice,
-        bool observeRaw = false)
+        bool observeRaw = false,
+        int subId = 10)
     {
         var observed = observeRaw
             ? BillingStageProgressCalculator.Observe([observedOrOutlier])
             : BillingStageProgressCalculator.Observe([observedOrOutlier]);
         return new BillingPreparationStageDraft(
-            stageId, 10, name, "תכנון", weight, observed, observed.Value, false, feeTypeId);
+            stageId, subId, name, "תכנון", weight, observed, observed.Value, false, feeTypeId);
     }
 
     private sealed class UnusedDashboardRead : IBillingDashboardReadService
@@ -431,6 +486,14 @@ public sealed class BillingPreparationHourlyMultiSelectUiTests
         Assert.Contains("• כבישים — 1 דיווחים, 4 שעות", body, StringComparison.Ordinal);
         Assert.Contains("2 הסכמי משנה", body, StringComparison.Ordinal);
         Assert.DoesNotContain("לא מחויבות", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hourly_checkbox_automation_id_includes_subcontract_id()
+    {
+        var choice = new BillingHourlySubContractChoiceVm(
+            new BillingHourlySubContractDraft(100, "תנועה", MasterPlanSnapshotFeeTypeIds.WorkingHours));
+        Assert.Equal("BillingDashboard.HourlySubContract.100", choice.AutomationId);
     }
 
     private BillingDashboardViewModel CreateVm() =>

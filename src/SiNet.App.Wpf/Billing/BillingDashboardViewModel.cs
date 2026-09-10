@@ -73,6 +73,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private IReadOnlyList<BillingPreparationStageDraft> _stageCatalog = [];
     private string _stageExclusionWarningHeader = string.Empty;
     private string _stageExclusionDetails = string.Empty;
+    private bool _showContractLevel;
     private int _componentLoadGeneration;
     private HashSet<int> _activePreparationProjectIds = [];
 
@@ -99,7 +100,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         _clearDecisionCommand = new AsyncRelayCommand(ClearDecisionAsync, CanClearDecision);
         ClearFiltersCommand = new RelayCommand(_ => ClearFilters());
         RefreshPreparationCommand = new AsyncRelayCommand(RefreshPreparationAsync, () => !IsBusy && _preparation is not null);
-        SavePreparationCommand = new AsyncRelayCommand(SavePreparationAsync, CanEditPreparation);
+        SavePreparationCommand = new AsyncRelayCommand(SavePreparationAsync, CanSavePreparation);
         ManualOverrideCommand = new AsyncRelayCommand(ApplyManualOverrideAsync, CanEditPreparation);
         ApprovePreparationCommand = new AsyncRelayCommand(ApprovePreparationAsync, CanApprovePreparation);
         ConfirmHourlyCommand = new AsyncRelayCommand(ConfirmHourlyAsync, CanConfirmHourly);
@@ -107,9 +108,13 @@ public sealed class BillingDashboardViewModel : ObservableObject
         _removeHourlyScopeCommand = new RelayCommand(
             p => RemoveHourlyScope(p as BillingPreparationHoursScopeEditVm),
             p => CanEditPreparation() && p is BillingPreparationHoursScopeEditVm);
+        ExpandAllStageGroupsCommand = new RelayCommand(_ => ExpandAllStageGroups());
+        CollapseAllStageGroupsCommand = new RelayCommand(_ => CollapseAllStageGroups());
         Rows = new ObservableCollection<BillingDashboardRowVm>();
         PreparationRows = new ObservableCollection<BillingPreparationRequestRowVm>();
         StageEdits = new ObservableCollection<BillingPreparationStageEditVm>();
+        StageGroups = new ObservableCollection<BillingPreparationSubContractGroupVm>();
+        StageContractGroups = new ObservableCollection<BillingPreparationContractGroupVm>();
         HourlyScopeEdits = new ObservableCollection<BillingPreparationHoursScopeEditVm>();
         StateFilterOptions =
         [
@@ -127,6 +132,8 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public ObservableCollection<BillingDashboardRowVm> Rows { get; }
     public ObservableCollection<BillingPreparationRequestRowVm> PreparationRows { get; }
     public ObservableCollection<BillingPreparationStageEditVm> StageEdits { get; }
+    public ObservableCollection<BillingPreparationSubContractGroupVm> StageGroups { get; }
+    public ObservableCollection<BillingPreparationContractGroupVm> StageContractGroups { get; }
     public ObservableCollection<BillingPreparationHoursScopeEditVm> HourlyScopeEdits { get; }
     public IReadOnlyList<BillingDashboardStateFilterOption> StateFilterOptions { get; }
     public ICommand RefreshCommand => _refreshCommand;
@@ -142,10 +149,15 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public ICommand ConfirmHourlyCommand { get; }
     public ICommand AddHourlyScopeCommand => _addHourlyScopeCommand;
     public ICommand RemoveHourlyScopeCommand => _removeHourlyScopeCommand;
+    public ICommand ExpandAllStageGroupsCommand { get; }
+    public ICommand CollapseAllStageGroupsCommand { get; }
     public string HourlyScopeCaption => BillingPreparationHoursScopeComposer.ManagerSelectedScopeCaption;
     public string StageExclusionWarningHeader => _stageExclusionWarningHeader;
     public string StageExclusionDetails => _stageExclusionDetails;
     public bool ShowStageExclusionWarning => !string.IsNullOrWhiteSpace(_stageExclusionWarningHeader);
+    public bool ShowContractLevel => _showContractLevel;
+    public bool ShowFlatSubContractGroups => !_showContractLevel;
+    public bool ShowStageLegend => StageGroups.Count > 0;
 
     public int SelectedWorkspaceTab
     {
@@ -880,50 +892,90 @@ public sealed class BillingDashboardViewModel : ObservableObject
         foreach (var existing in StageEdits)
             existing.PropertyChanged -= OnStageEditPropertyChanged;
         StageEdits.Clear();
+        StageGroups.Clear();
+        StageContractGroups.Clear();
         var saved = SelectedPreparation?.Source.Stages ?? [];
         var savedById = saved.ToDictionary(s => s.MasterPlanStageId);
         var stamp = SelectedPreparation?.Source.SnapshotTimestampUtc
                     ?? _timeProvider.GetUtcNow().UtcDateTime;
+        var groupDrafts = BillingSubContractStageGroupBuilder.Build(_stageCatalog);
+        _showContractLevel = BillingSubContractStageGroupBuilder.ShouldShowContractLevel(groupDrafts);
         var shown = new HashSet<int>();
-        if (_stageCatalog.Count > 0)
+        foreach (var draftGroup in groupDrafts)
         {
-            foreach (var draft in _stageCatalog)
+            var groupVm = new BillingPreparationSubContractGroupVm(draftGroup, _showContractLevel);
+            foreach (var stageDraft in draftGroup.EditableStages)
             {
-                var decision = BillingPreparationStageEditorFilter.Classify(draft);
-                if (savedById.TryGetValue(draft.MasterPlanStageId, out var line))
-                {
-                    AttachStage(new BillingPreparationStageEditVm(line));
-                    shown.Add(draft.MasterPlanStageId);
-                    continue;
-                }
-
-                if (!decision.IsEditable)
-                    continue;
-                AttachStage(BillingPreparationStageEditVm.FromCatalog(draft, stamp));
-                shown.Add(draft.MasterPlanStageId);
+                var edit = savedById.TryGetValue(stageDraft.MasterPlanStageId, out var line)
+                    ? new BillingPreparationStageEditVm(line, stageDraft)
+                    : BillingPreparationStageEditVm.FromCatalog(stageDraft, stamp);
+                AttachStage(edit);
+                groupVm.AddEditable(edit);
+                shown.Add(stageDraft.MasterPlanStageId);
             }
+
+            groupVm.IsExpanded = groupVm.HasPositiveAddition || groupDrafts.Count == 1;
+            groupVm.RefreshSummary();
+            StageGroups.Add(groupVm);
         }
 
         foreach (var line in saved)
         {
             if (shown.Contains(line.MasterPlanStageId))
                 continue;
-            AttachStage(new BillingPreparationStageEditVm(line));
+            var catalog = _stageCatalog.FirstOrDefault(s => s.MasterPlanStageId == line.MasterPlanStageId);
+            if (catalog is not null && !BillingPreparationStageEditorFilter.IsEditable(catalog))
+                continue;
+            var edit = catalog is null
+                ? new BillingPreparationStageEditVm(line)
+                : new BillingPreparationStageEditVm(line, catalog);
+            AttachStage(edit);
+            var group = StageGroups.FirstOrDefault(g => g.SubContractId == edit.MasterPlanSubContractId);
+            if (group is null)
+            {
+                group = BillingPreparationSubContractGroupVm.FromOrphan(edit, _showContractLevel);
+                StageGroups.Add(group);
+            }
+            else
+            {
+                group.AddEditable(edit);
+                group.RefreshSummary();
+            }
+
+            shown.Add(line.MasterPlanStageId);
+        }
+
+        StageContractGroups.Clear();
+        if (_showContractLevel)
+        {
+            foreach (var contract in StageGroups.GroupBy(g => g.ContractId))
+            {
+                var first = contract.First();
+                StageContractGroups.Add(new BillingPreparationContractGroupVm(
+                    first.ContractId,
+                    first.ContractName,
+                    first.ContractNumber,
+                    contract));
+            }
         }
 
         var warnings = _stageCatalog
-            .Select(BillingPreparationStageEditorFilter.Classify)
-            .Where(d => d.ShowInDataQualityWarning)
+            .Select(d => (Draft: d, Decision: BillingPreparationStageEditorFilter.Classify(d)))
+            .Where(x => x.Decision.ShowInDataQualityWarning)
             .ToList();
         _stageExclusionWarningHeader = warnings.Count == 0
             ? string.Empty
             : warnings.Count + " שלבים אינם זמינים לחיוב אוטומטי ודורשים בדיקה";
         _stageExclusionDetails = string.Join(
-            Environment.NewLine,
-            warnings.Select(d => d.Reason).Where(r => !string.IsNullOrWhiteSpace(r)));
+            Environment.NewLine + Environment.NewLine,
+            warnings.Select(x => BillingPreparationStageEditorFilter.FormatExpandedWarning(
+                x.Draft, x.Decision, _showContractLevel)));
         OnPropertyChanged(nameof(StageExclusionWarningHeader));
         OnPropertyChanged(nameof(StageExclusionDetails));
         OnPropertyChanged(nameof(ShowStageExclusionWarning));
+        OnPropertyChanged(nameof(ShowContractLevel));
+        OnPropertyChanged(nameof(ShowFlatSubContractGroups));
+        OnPropertyChanged(nameof(ShowStageLegend));
         RaisePreparationCommands();
     }
 
@@ -936,10 +988,29 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private void OnStageEditPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(BillingPreparationStageEditVm.AdditionPercent)
-            or nameof(BillingPreparationStageEditVm.HasPositiveAddition))
+            or nameof(BillingPreparationStageEditVm.HasPositiveAddition)
+            or nameof(BillingPreparationStageEditVm.HasAdditionValidation))
         {
+            if (sender is BillingPreparationStageEditVm stage)
+            {
+                var group = StageGroups.FirstOrDefault(g => g.SubContractId == stage.MasterPlanSubContractId);
+                group?.RefreshSummary();
+            }
+
             RaisePreparationCommands();
         }
+    }
+
+    private void ExpandAllStageGroups()
+    {
+        foreach (var group in StageGroups)
+            group.IsExpanded = true;
+    }
+
+    private void CollapseAllStageGroups()
+    {
+        foreach (var group in StageGroups)
+            group.IsExpanded = false;
     }
 
     private void ReloadHourlyScopeEdits()
@@ -1052,8 +1123,11 @@ public sealed class BillingDashboardViewModel : ObservableObject
             or BillingPreparationStatus.WaitingForSnapshot
             or BillingPreparationStatus.ReadyForApproval };
 
+    private bool CanSavePreparation() =>
+        CanEditPreparation() && !StageEdits.Any(s => s.HasAdditionValidation);
+
     private bool CanApprovePreparation() =>
-        CanEditPreparation()
+        CanSavePreparation()
         && SelectedPreparation is not null
         && (SelectedPreparation.Source.ManualOverride
             || StageEdits.Any(s => s.HasPositiveAddition)
@@ -1071,6 +1145,14 @@ public sealed class BillingDashboardViewModel : ObservableObject
         OperationErrorMessage = string.Empty;
         try
         {
+            var invalid = StageEdits.FirstOrDefault(s => s.HasAdditionValidation);
+            if (invalid is not null)
+            {
+                OperationErrorMessage = invalid.AdditionValidationMessage
+                    ?? "יש לתקן את אחוז התוספת לפני שמירה.";
+                return;
+            }
+
             var stages = StageEdits
                 .Where(s => s.HasPositiveAddition)
                 .Select(s => s.ToSnapshot())

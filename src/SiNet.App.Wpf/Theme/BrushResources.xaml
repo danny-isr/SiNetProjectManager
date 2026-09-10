@@ -22,4 +22,10 @@
     <SolidColorBrush x:Key="SiTreeTypeBrush" Color="#1565C0"/>
     <SolidColorBrush x:Key="SiTreeEmptyBrush" Color="#9CA3AF"/>
     <SolidColorBrush x:Key="SiTreeUserFolderBrush" Color="#7B1FA2"/>
+
+    <!-- Billing Preparation semantic colors (product-fixed; not overwritten by user appearance) -->
+    <SolidColorBrush x:Key="BillingObservedBrush" Color="#047857"/>
+    <SolidColorBrush x:Key="BillingAdditionBrush" Color="#1565C0"/>
+    <SolidColorBrush x:Key="BillingRemainingBrush" Color="#DC2626"/>
+    <SolidColorBrush x:Key="BillingStageWeightBrush" Color="#7B1FA2"/>
 </ResourceDictionary>

@@ -30,13 +30,28 @@ public static class BillingPreparationTaskInstructions
         if (stages.Count > 0)
         {
             sb.AppendLine("שלבים:");
-            foreach (var stage in stages)
+            foreach (var group in stages.GroupBy(s => s.MasterPlanSubContractId))
             {
-                sb.Append("• ").Append(stage.SubContractName).Append(" / ").AppendLine(stage.StageName);
-                sb.Append("  מצב ב-MasterPlan בזמן האישור: ");
-                sb.AppendLine(stage.ObservedCumulativeProgress is decimal o ? Percent(o) + "%" : "לא ידוע");
-                sb.Append("  להוסיף בחשבון הזה: ").Append(Percent(stage.RequestedDelta)).AppendLine("%");
-                sb.Append("  לאחר החשבון: ").Append(Percent(stage.TargetCumulativeProgress)).AppendLine("%");
+                var first = group.First();
+                sb.Append("תת חוזה: ").AppendLine(first.SubContractName);
+                foreach (var stage in group)
+                {
+                    sb.Append("• ").AppendLine(stage.StageName);
+                    sb.Append("  משקל השלב בתת החוזה: ")
+                        .Append(Percent(stage.StageWeightWithinSubContract))
+                        .AppendLine("%");
+                    sb.Append("  חויב בזמן האישור: ");
+                    sb.AppendLine(stage.ObservedCumulativeProgress is decimal o
+                        ? Percent(o) + "%"
+                        : "לא ידוע");
+                    sb.Append("  להוסיף בחשבון הזה: ").Append(Percent(stage.RequestedDelta)).AppendLine("%");
+                    sb.Append("  לאחר החשבון: ").Append(Percent(stage.TargetCumulativeProgress)).AppendLine("%");
+                    sb.Append("  תרומת התוספת לתת החוזה: ")
+                        .Append(BillingStageContributionCalculator
+                            .SubContractContributionPercent(stage.StageWeightWithinSubContract, stage.RequestedDelta)
+                            .ToString("0.##", CultureInfo.InvariantCulture))
+                        .AppendLine("%");
+                }
             }
 
             sb.AppendLine();

@@ -40,5 +40,8 @@ public sealed class BillingHourlySubContractChoiceVm : ObservableObject
         set => SetField(ref _totalHours, value);
     }
 
+    public string AutomationId =>
+        "BillingDashboard.HourlySubContract." + MasterPlanSubContractId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public event EventHandler? SelectionChanged;
 }
