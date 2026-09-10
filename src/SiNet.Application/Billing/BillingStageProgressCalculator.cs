@@ -102,4 +102,42 @@ public static class BillingStageProgressCalculator
 
         return new TargetValidation(true, current, target, target - current, null);
     }
+
+    /// <summary>
+    /// Manager-facing addition on the 0–1 scale. Target = observed-or-zero + addition.
+    /// Unknown observed without outliers starts at 0. Outliers are never treated as 0.
+    /// </summary>
+    public static TargetValidation ValidateAddition(
+        ObservedCumulativeProgress observed,
+        decimal addition)
+    {
+        ArgumentNullException.ThrowIfNull(observed);
+
+        if (observed.HasOutliers)
+        {
+            return new TargetValidation(
+                false,
+                observed.Value,
+                addition,
+                0m,
+                "ערכי StepProgress חריגים (מחוץ ל-0..1). אין לחשב יעד אוטומטית.")
+            {
+                HasDataQualityFlag = true
+            };
+        }
+
+        if (addition < ScaleMin)
+        {
+            return new TargetValidation(
+                false,
+                observed.Value,
+                observed.Value ?? ScaleMin,
+                addition,
+                "התוספת בחשבון הזה אינה יכולה להיות שלילית.");
+        }
+
+        var start = observed.Value ?? ScaleMin;
+        var target = start + addition;
+        return ValidateTarget(observed, target);
+    }
 }

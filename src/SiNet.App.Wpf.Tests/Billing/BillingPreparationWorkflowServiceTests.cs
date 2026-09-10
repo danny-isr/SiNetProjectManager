@@ -57,6 +57,60 @@ public sealed class BillingStageProgressCalculatorTests
     }
 
     [Fact]
+    public void Addition_20_on_observed_10_yields_target_30()
+    {
+        var observed = BillingStageProgressCalculator.Observe([0.10m]);
+        var validation = BillingStageProgressCalculator.ValidateAddition(observed, 0.20m);
+        Assert.True(validation.IsValid);
+        Assert.Equal(0.30m, validation.Target);
+        Assert.Equal(0.20m, validation.Delta);
+    }
+
+    [Fact]
+    public void Addition_90_on_observed_10_yields_target_100()
+    {
+        var observed = BillingStageProgressCalculator.Observe([0.10m]);
+        var validation = BillingStageProgressCalculator.ValidateAddition(observed, 0.90m);
+        Assert.True(validation.IsValid);
+        Assert.Equal(1.00m, validation.Target);
+    }
+
+    [Fact]
+    public void Addition_91_on_observed_10_is_rejected()
+    {
+        var observed = BillingStageProgressCalculator.Observe([0.10m]);
+        var validation = BillingStageProgressCalculator.ValidateAddition(observed, 0.91m);
+        Assert.False(validation.IsValid);
+    }
+
+    [Fact]
+    public void Negative_addition_is_rejected()
+    {
+        var observed = BillingStageProgressCalculator.Observe([0.10m]);
+        var validation = BillingStageProgressCalculator.ValidateAddition(observed, -0.01m);
+        Assert.False(validation.IsValid);
+    }
+
+    [Fact]
+    public void Unknown_observed_without_outliers_starts_at_zero()
+    {
+        var observed = BillingStageProgressCalculator.Observe([]);
+        var validation = BillingStageProgressCalculator.ValidateAddition(observed, 0.20m);
+        Assert.True(validation.IsValid);
+        Assert.Equal(0.20m, validation.Target);
+        Assert.Equal(0.20m, validation.Delta);
+    }
+
+    [Fact]
+    public void Outlier_observed_is_not_treated_as_zero_for_addition()
+    {
+        var observed = BillingStageProgressCalculator.Observe([1.06m]);
+        var validation = BillingStageProgressCalculator.ValidateAddition(observed, 0.20m);
+        Assert.False(validation.IsValid);
+        Assert.True(validation.HasDataQualityFlag);
+    }
+
+    [Fact]
     public void Outlier_row_does_not_silently_validate()
     {
         var observed = BillingStageProgressCalculator.Observe([1.06m]);
@@ -171,8 +225,10 @@ public sealed class BillingPreparationWorkflowServiceTests
         Assert.Equal(1, _tasks.CreateCalls);
         Assert.Equal(approved.TaskId, approved.Request.TaskId);
         Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
-        Assert.Contains("להגיש עד 50% מצטבר מהשלב", _tasks.LastBody, StringComparison.Ordinal);
-        Assert.Contains("מצב שנצפה בזמן האישור: 25%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("להוסיף בחשבון הזה: 25%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("לאחר החשבון: 50%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("מצב ב-MasterPlan בזמן האישור: 25%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("להגיש עד 50% מצטבר", _tasks.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("לא מחויבות", _tasks.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("already billed", _tasks.LastBody, StringComparison.OrdinalIgnoreCase);
     }

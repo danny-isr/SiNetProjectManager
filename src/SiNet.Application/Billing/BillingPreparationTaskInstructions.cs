@@ -26,18 +26,17 @@ public static class BillingPreparationTaskInstructions
             sb.AppendLine();
         }
 
-        if (request.Stages.Count > 0)
+        var stages = request.Stages.Where(s => s.RequestedDelta > 0m).ToList();
+        if (stages.Count > 0)
         {
             sb.AppendLine("שלבים:");
-            foreach (var stage in request.Stages)
+            foreach (var stage in stages)
             {
-                sb.Append("• ").Append(stage.SubContractName).Append(" / ").Append(stage.StageName);
-                sb.Append(" — להגיש עד ");
-                sb.Append(Percent(stage.TargetCumulativeProgress));
-                sb.AppendLine("% מצטבר מהשלב");
-                sb.Append("  מצב שנצפה בזמן האישור: ");
-                sb.Append(stage.ObservedCumulativeProgress is decimal o ? Percent(o) + "%" : "לא ידוע");
-                sb.AppendLine();
+                sb.Append("• ").Append(stage.SubContractName).Append(" / ").AppendLine(stage.StageName);
+                sb.Append("  מצב ב-MasterPlan בזמן האישור: ");
+                sb.AppendLine(stage.ObservedCumulativeProgress is decimal o ? Percent(o) + "%" : "לא ידוע");
+                sb.Append("  להוסיף בחשבון הזה: ").Append(Percent(stage.RequestedDelta)).AppendLine("%");
+                sb.Append("  לאחר החשבון: ").Append(Percent(stage.TargetCumulativeProgress)).AppendLine("%");
             }
 
             sb.AppendLine();
@@ -46,19 +45,30 @@ public static class BillingPreparationTaskInstructions
         if (request.Hours.Count > 0)
         {
             sb.AppendLine("שעות:");
-            foreach (var hours in request.Hours)
+            foreach (var group in BillingPreparationHoursScopeComposer.GroupCompatibleScopes(request.Hours))
             {
-                sb.Append("• הסכם משנה ").AppendLine(hours.SubContractName);
-                sb.Append("• תקופה ");
-                sb.Append(hours.FromDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
+                var first = group[0];
+                sb.Append("תקופה: ");
+                sb.Append(first.FromDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
                 sb.Append('–');
-                sb.AppendLine(hours.ToDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
-                sb.Append("• ").Append(hours.ReportCount).AppendLine(" דיווחים");
-                sb.Append("• ").Append(hours.TotalHours.ToString("0.##", CultureInfo.InvariantCulture));
-                sb.AppendLine(" שעות");
-            }
+                sb.AppendLine(first.ToDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
+                sb.AppendLine("הסכמי משנה:");
+                foreach (var hours in group)
+                {
+                    sb.Append("• ").Append(hours.SubContractName);
+                    sb.Append(" — ").Append(hours.ReportCount.ToString(CultureInfo.InvariantCulture));
+                    sb.Append(" דיווחים, ");
+                    sb.Append(hours.TotalHours.ToString("0.##", CultureInfo.InvariantCulture));
+                    sb.AppendLine(" שעות");
+                }
 
-            sb.AppendLine();
+                sb.AppendLine("סה\"כ:");
+                sb.Append(group.Count.ToString(CultureInfo.InvariantCulture)).AppendLine(" הסכמי משנה");
+                sb.Append(group.Sum(h => h.ReportCount).ToString(CultureInfo.InvariantCulture)).AppendLine(" דיווחים");
+                sb.Append(group.Sum(h => h.TotalHours).ToString("0.##", CultureInfo.InvariantCulture));
+                sb.AppendLine(" שעות");
+                sb.AppendLine();
+            }
         }
 
         sb.Append("מקור החלטה: Billing Preparation Request #").Append(request.Id).AppendLine();

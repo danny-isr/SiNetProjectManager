@@ -122,6 +122,8 @@ public sealed class BillingPreparationService(
 
         foreach (var stage in stages)
         {
+            if (stage.RequestedDelta <= 0m)
+                continue;
             var observed = new BillingStageProgressCalculator.ObservedCumulativeProgress(
                 stage.ObservedCumulativeProgress,
                 stage.HasDataQualityFlag,
@@ -130,6 +132,8 @@ public sealed class BillingPreparationService(
             if (!validation.IsValid)
                 throw new InvalidOperationException(validation.Error ?? "בחירת שלב לא תקינה.");
         }
+
+        var persistedStages = stages.Where(s => s.RequestedDelta > 0m).ToList();
 
         if (hours.Count > 0)
         {
@@ -152,10 +156,12 @@ public sealed class BillingPreparationService(
             }
         }
 
-        var hourIds = hours.SelectMany(h => h.Reports.Select(r => r.HoursReportId)).Distinct().ToList();
+        var hourIds = hours.SelectMany(h => h.Reports.Select(r => r.HoursReportId)).ToList();
+        if (hourIds.Count != hourIds.Distinct().Count())
+            throw new InvalidOperationException("אותו דיווח שעות לא יכול להופיע פעמיים באותה בקשת הכנה.");
         var overlapping = hourIds.Count == 0
             ? []
-            : await _store.FindHourReportIdsInOtherRequestsAsync(hourIds, request.Id, cancellationToken)
+            : await _store.FindHourReportIdsInOtherRequestsAsync(hourIds.Distinct().ToList(), request.Id, cancellationToken)
                 .ConfigureAwait(false);
         var overlapSet = overlapping.ToHashSet();
         var hoursWithWarnings = hours
@@ -166,11 +172,11 @@ public sealed class BillingPreparationService(
             })
             .ToList();
 
-        var status = BillingPreparationWorkflow.AfterSelection(stages, hoursWithWarnings, request.ManualOverride);
+        var status = BillingPreparationWorkflow.AfterSelection(persistedStages, hoursWithWarnings, request.ManualOverride);
         var updated = request with
         {
             Status = status,
-            Stages = stages,
+            Stages = persistedStages,
             Hours = hoursWithWarnings
         };
         return await _store.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);

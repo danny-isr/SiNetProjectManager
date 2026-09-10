@@ -8,7 +8,8 @@ public sealed record BillingPreparationStageDraft(
     decimal StageWeightWithinSubContract,
     BillingStageProgressCalculator.ObservedCumulativeProgress Observed,
     decimal? ObservedApprovedProgress,
-    bool Included);
+    bool Included,
+    int FeeTypeId = 0);
 
 public sealed record BillingPreparationHoursDraft(
     int MasterPlanSubContractId,

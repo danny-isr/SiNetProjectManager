@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 10.09.2026 (A1 recovery: company-or-person customer name; Continue Prepare Bill when decision exists without a request; operation-error banner)  
+> **Updated:** 10.09.2026 (manager-facing stage field is **addition in this bill**; hourly scope is multi-select FeeType=4 SubContracts with the same date range; A1 recovery unchanged)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -119,34 +119,54 @@ Do **not** SUM historical `StepProgress`.
 
 ## 2.2 Locked implementation decisions (accepted 09.09.2026)
 
-**Decision 1 — target cumulative progress (not “add X%” as the primary field).**
+**Decision 1 — manager enters the addition in this bill; backend stays cumulative.**
 
-Manager-facing fields:
+Persisted meaning is unchanged:
 
 | Concept | Meaning |
 | --- | --- |
-| `StageWeightWithinSubContract` | `SubContractSteps.Percentage` (0–1 of **this SubContract**, not the whole project/contract unless later proven) |
+| `StageWeightWithinSubContract` | `SubContractSteps.Percentage` (0–1 of **this SubContract**) |
 | `ObservedCumulativeProgress` | conceptually `MAX(StepProgress)` over statuses 2/3/4 |
-| `TargetCumulativeProgress` | manager input: cumulative progress **after this bill** |
-| `RequestedDelta` | `Target - Observed` (derived, not stored as SoT) |
+| `RequestedDelta` | amount being added **now** (0–1) |
+| `TargetCumulativeProgress` | `Observed + RequestedDelta` (calculated; A7 still compares newer StepProgress to this) |
 
-Validation: `0 ≤ observed ≤ 1`; `observed ≤ target ≤ 1`; `delta ≥ 0`. Label weight as משקל השלב **בהסכם המשנה**.
-
-UI:
+UI is 0–100%. Persistence remains 0–1. The manager-facing editable field is **«תוספת בחשבון הזה»**. «לאחר החשבון» is calculated and not editable.
 
 ```text
-תכנון מפורט
-משקל השלב בהסכם המשנה: 20%
-מצב שנצפה בחשבונות MasterPlan: 40%
-אחרי החשבון הנוכחי:              [70] %
-תוספת בחשבון הזה:                30%
+פיקוח על הביצוע
+הסכם משנה: תכנון ...
+משקל השלב בהסכם המשנה: 25%
+חויב/נצפה עד כה ב-MasterPlan: 10%
+תוספת בחשבון הזה:            [20] %
+לאחר החשבון:                 30%
+נותר בשלב לאחר החשבון:       70%
+חלק יחסי נוסף בהסכם המשנה:   5%
 ```
+
+Example: Observed=0.10, addition 20% → RequestedDelta=0.20, Target=0.30.
+
+Validation: addition ≥ 0; target ≤ 100%; max addition = 100% − observed. Unknown observed without data-quality error starts at 0%. Outliers are never treated as 0%.
+
+The normal «שלבים» editor lists only stages that can receive an addition. Excluded from the editable list:
+
+1. valid observed progress already 100%
+2. zero/negative effective stage weight
+3. hourly FeeType=4 SubContracts (hours editor only)
+4. invalid/outlier progress that cannot safely calculate a target
+
+Completed 100% stages are omitted (no clutter). Data-quality / non-positive-weight rows show a compact warning: «X שלבים אינם זמינים לחיוב אוטומטי ודורשים בדיקה». Do not invent extra FeeType exclusions.
+
+Save persists **only** stages with AdditionPercent > 0. Zero-delta rows are not stored. Approval still requires at least one positive stage addition, hourly scope, or manual override.
+
+Reload: Observed = persisted ObservedCumulativeProgress; Addition = persisted RequestedDelta; AfterBill = persisted TargetCumulativeProgress.
+
+A7 confirmation is unchanged: newer snapshot `StepProgress >= TargetCumulativeProgress`.
 
 **Decision 2 — no automatic stage amount in V1.** Stage amount remains **BLOCKED**. Task instructions are stage + cumulative %. Do not compute `ContractValue * Percentage`.
 
 **Decision 3 — hourly scope is manager-defined.** Never show «שעות לא מחויבות» as a MasterPlan fact. Show **available/reportable** hours for an explicit SubContract + date range; resolve to concrete `HoursReportId`s on approve. SiNet may warn «already in preparation request #X»; never «already billed in MasterPlan».
 
-**A4 WPF picker (10.09.2026):** Tab «חשבונות להכנה», section **«רכיבי שעות»**. Manager include/remove, `FeeType=4` SubContract from the loaded snapshot, inclusive FromDate/ToDate. Preview uses `BillingHourlyScopeResolver` (report count, normalized hours). Overlap warning vs other SiNet preparation requests only. `SavePreparationAsync` persists **both** `StageEdits` and composed hourly snapshots — never reuse `Source.Hours` unchanged. Caption: manager-selected scope; never «שעות לא מחויבות» / unbilled. Hourly still never auto-confirms; after the task, «אשר שבוצע ב-MasterPlan» remains required.
+**A4 WPF picker (10.09.2026, multi-select 10.09 evening):** Tab «חשבונות להכנה», section **«רכיבי שעות»**. One UI scope = inclusive FromDate/ToDate + **one or more** FeeType=4 SubContracts. Checkbox list, «בחר הכל» (all FeeType=4 for the project, not the filtered search), «נקה הכל», search (visibility only). Do not select all by default. Aggregate preview: selected count, matching report count, total normalized hours. Zero-report selected SubContracts block Save and are listed by name. Persistence is unchanged: one `BillingPreparationHoursLine` per SubContract; Save flattens the UI scope. Reload groups lines with identical dates and compatible confirmation state. Never «שעות לא מחויבות» / unbilled. Hourly still never auto-confirms.
 
 **A1 snapshot header / hour-report names (10.09.2026, proven on DEV `Db_Mp_SiEng`):** `dbo.Contacts` and `dbo.Employees` have `FirstName` / `LastName`, **not** `Name`. Customer name is company **or** person:
 
@@ -364,26 +384,27 @@ This snapshot: unused. A7 must not auto-complete hourly instructions from Replic
 
 ## 6. The three percentages (must stay distinct)
 
-Primary manager field is **target cumulative**, not “add X%”.
+Primary manager field is **addition in this bill**. Target cumulative is calculated verification only.
 
 | Concept | Source | Unit | Automation |
 | --- | --- | --- | --- |
 | `StageWeightWithinSubContract` | `SubContractSteps.Percentage` | 0–1 of **this SubContract** | PROVEN — do not label as whole-project/contract % |
 | `ObservedCumulativeProgress` | `MAX(BillLines.StepProgress)` for `StatusID IN (2,3,4)` | 0–1 of stage | PARTIAL — never SUM; ignore StatusID=1; flag values outside `[0,1]` |
-| `TargetCumulativeProgress` | Manager input: cumulative after this bill | 0–1 of stage | Not in MasterPlan |
-| `RequestedDelta` | `Target - Observed` | 0–1 of stage | Derived |
+| `RequestedDelta` | Manager input: addition in this bill | 0–1 of stage | Derived into Target |
+| `TargetCumulativeProgress` | `Observed + RequestedDelta` | 0–1 of stage | A7 auto-confirm still uses this |
 
 UI example mapping:
 
 ```text
 תכנון מפורט
 משקל השלב בהסכם המשנה: 20%          ← StageWeightWithinSubContract × 100
-מצב שנצפה בחשבונות MasterPlan: 40%  ← ObservedCumulativeProgress × 100
-אחרי החשבון הנוכחי:              [70] %  ← TargetCumulativeProgress
-תוספת בחשבון הזה:                30%     ← RequestedDelta
+חויב/נצפה עד כה ב-MasterPlan: 40%  ← ObservedCumulativeProgress × 100
+תוספת בחשבון הזה:            [30] %  ← RequestedDelta (editable)
+לאחר החשבון:                 70%     ← TargetCumulativeProgress (calculated)
+נותר בשלב לאחר החשבון:       30%
 ```
 
-Validation: `0 ≤ observed ≤ 1`; `observed ≤ target ≤ 1`; `delta ≥ 0`. Inconsistent rows: flag, no silent math.
+Validation: addition ≥ 0; `observed ≤ target ≤ 1`. Inconsistent rows: flag, no silent math.
 
 ---
 

@@ -90,6 +90,7 @@ public sealed class BillingReplicaSourceGuardTests
     {
         var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Billing/SqlBillingPreparationComponentSource.cs");
 
+        Assert.Contains("sc.FeeTypeID", source, StringComparison.Ordinal);
         Assert.Contains("CONCAT(c.FirstName, ' ', c.LastName)", source, StringComparison.Ordinal);
         Assert.Contains("NULLIF(LTRIM(RTRIM(comp.Name)), '')", source, StringComparison.Ordinal);
         Assert.Contains("LEFT JOIN dbo.Companies comp ON comp.ID = c.CompanyID", source, StringComparison.Ordinal);
@@ -184,6 +185,9 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("החלטת ניהול", view, StringComparison.Ordinal);
         Assert.Contains("להכין חשבון", view, StringComparison.Ordinal);
         Assert.Contains("המשך להכנת חשבון", view, StringComparison.Ordinal);
+        Assert.Contains("תוספת בחשבון הזה", view, StringComparison.Ordinal);
+        Assert.Contains("בחר הכל", view, StringComparison.Ordinal);
+        Assert.Contains("נקה הכל", view, StringComparison.Ordinal);
         Assert.Contains("ShowContinuePrepareBillButton", view, StringComparison.Ordinal);
         Assert.Contains("ShowOperationErrorBanner", view, StringComparison.Ordinal);
         Assert.Contains("לא עכשיו", view, StringComparison.Ordinal);

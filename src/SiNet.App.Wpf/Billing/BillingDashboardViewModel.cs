@@ -70,6 +70,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private string _hourlyConfirmNote = string.Empty;
     private IReadOnlyList<BillingHourlySubContractDraft> _hourlySubContracts = [];
     private IReadOnlyList<BillingHourReportFact> _hourReports = [];
+    private IReadOnlyList<BillingPreparationStageDraft> _stageCatalog = [];
+    private string _stageExclusionWarningHeader = string.Empty;
+    private string _stageExclusionDetails = string.Empty;
     private int _componentLoadGeneration;
     private HashSet<int> _activePreparationProjectIds = [];
 
@@ -140,6 +143,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public ICommand AddHourlyScopeCommand => _addHourlyScopeCommand;
     public ICommand RemoveHourlyScopeCommand => _removeHourlyScopeCommand;
     public string HourlyScopeCaption => BillingPreparationHoursScopeComposer.ManagerSelectedScopeCaption;
+    public string StageExclusionWarningHeader => _stageExclusionWarningHeader;
+    public string StageExclusionDetails => _stageExclusionDetails;
+    public bool ShowStageExclusionWarning => !string.IsNullOrWhiteSpace(_stageExclusionWarningHeader);
 
     public int SelectedWorkspaceTab
     {
@@ -866,11 +872,74 @@ public sealed class BillingDashboardViewModel : ObservableObject
 
     private void ReloadStageEdits()
     {
+        RebuildStageEdits();
+    }
+
+    private void RebuildStageEdits()
+    {
+        foreach (var existing in StageEdits)
+            existing.PropertyChanged -= OnStageEditPropertyChanged;
         StageEdits.Clear();
-        if (SelectedPreparation is null)
-            return;
-        foreach (var stage in SelectedPreparation.Source.Stages)
-            StageEdits.Add(new BillingPreparationStageEditVm(stage));
+        var saved = SelectedPreparation?.Source.Stages ?? [];
+        var savedById = saved.ToDictionary(s => s.MasterPlanStageId);
+        var stamp = SelectedPreparation?.Source.SnapshotTimestampUtc
+                    ?? _timeProvider.GetUtcNow().UtcDateTime;
+        var shown = new HashSet<int>();
+        if (_stageCatalog.Count > 0)
+        {
+            foreach (var draft in _stageCatalog)
+            {
+                var decision = BillingPreparationStageEditorFilter.Classify(draft);
+                if (savedById.TryGetValue(draft.MasterPlanStageId, out var line))
+                {
+                    AttachStage(new BillingPreparationStageEditVm(line));
+                    shown.Add(draft.MasterPlanStageId);
+                    continue;
+                }
+
+                if (!decision.IsEditable)
+                    continue;
+                AttachStage(BillingPreparationStageEditVm.FromCatalog(draft, stamp));
+                shown.Add(draft.MasterPlanStageId);
+            }
+        }
+
+        foreach (var line in saved)
+        {
+            if (shown.Contains(line.MasterPlanStageId))
+                continue;
+            AttachStage(new BillingPreparationStageEditVm(line));
+        }
+
+        var warnings = _stageCatalog
+            .Select(BillingPreparationStageEditorFilter.Classify)
+            .Where(d => d.ShowInDataQualityWarning)
+            .ToList();
+        _stageExclusionWarningHeader = warnings.Count == 0
+            ? string.Empty
+            : warnings.Count + " שלבים אינם זמינים לחיוב אוטומטי ודורשים בדיקה";
+        _stageExclusionDetails = string.Join(
+            Environment.NewLine,
+            warnings.Select(d => d.Reason).Where(r => !string.IsNullOrWhiteSpace(r)));
+        OnPropertyChanged(nameof(StageExclusionWarningHeader));
+        OnPropertyChanged(nameof(StageExclusionDetails));
+        OnPropertyChanged(nameof(ShowStageExclusionWarning));
+        RaisePreparationCommands();
+    }
+
+    private void AttachStage(BillingPreparationStageEditVm edit)
+    {
+        edit.PropertyChanged += OnStageEditPropertyChanged;
+        StageEdits.Add(edit);
+    }
+
+    private void OnStageEditPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(BillingPreparationStageEditVm.AdditionPercent)
+            or nameof(BillingPreparationStageEditVm.HasPositiveAddition))
+        {
+            RaisePreparationCommands();
+        }
     }
 
     private void ReloadHourlyScopeEdits()
@@ -880,8 +949,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
         HourlyScopeEdits.Clear();
         if (SelectedPreparation is null)
             return;
-        foreach (var hours in SelectedPreparation.Source.Hours)
-            AttachHourlyScope(new BillingPreparationHoursScopeEditVm(hours));
+        var groups = BillingPreparationHoursScopeComposer.GroupCompatibleScopes(SelectedPreparation.Source.Hours);
+        foreach (var group in groups)
+            AttachHourlyScope(BillingPreparationHoursScopeEditVm.FromSavedLines(group));
         BindHourlyCatalog();
     }
 
@@ -921,6 +991,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     {
         if (e.PropertyName is nameof(BillingPreparationHoursScopeEditVm.Included)
             or nameof(BillingPreparationHoursScopeEditVm.MasterPlanSubContractId)
+            or nameof(BillingPreparationHoursScopeEditVm.SelectedSubContractCount)
             or nameof(BillingPreparationHoursScopeEditVm.FromDate)
             or nameof(BillingPreparationHoursScopeEditVm.ToDate)
             or nameof(BillingPreparationHoursScopeEditVm.ReportCount))
@@ -942,32 +1013,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
                 return;
             _hourlySubContracts = load.HourlySubContracts;
             _hourReports = load.HourReports;
+            _stageCatalog = load.Stages;
+            RebuildStageEdits();
             BindHourlyCatalog();
-            if (SelectedPreparation.Source.Stages.Count == 0 && StageEdits.Count == 0)
-            {
-                var stamp = load.LatestBackupUtc ?? _timeProvider.GetUtcNow().UtcDateTime;
-                foreach (var draft in load.Stages)
-                {
-                    var observed = draft.Observed.Value;
-                    var snapshot = new BillingPreparationStageLineSnapshot(
-                        draft.MasterPlanStageId,
-                        draft.MasterPlanSubContractId,
-                        draft.StageName,
-                        draft.SubContractName,
-                        draft.StageWeightWithinSubContract,
-                        observed,
-                        observed ?? 0m,
-                        0m,
-                        draft.Observed.HasOutliers,
-                        stamp,
-                        BillingConfirmationMode.None,
-                        null,
-                        null,
-                        null);
-                    StageEdits.Add(new BillingPreparationStageEditVm(snapshot));
-                }
-            }
-
             await RefreshHourlyOverlapAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -1008,10 +1056,10 @@ public sealed class BillingDashboardViewModel : ObservableObject
         CanEditPreparation()
         && SelectedPreparation is not null
         && (SelectedPreparation.Source.ManualOverride
+            || StageEdits.Any(s => s.HasPositiveAddition)
+            || HourlyScopeEdits.Any(h => h.Included && h.SelectedSubContractCount > 0)
             || SelectedPreparation.Source.Stages.Count > 0
-            || SelectedPreparation.Source.Hours.Count > 0
-            || StageEdits.Count > 0
-            || HourlyScopeEdits.Any(h => h.Included));
+            || SelectedPreparation.Source.Hours.Count > 0);
 
     private bool CanConfirmHourly() =>
         !IsBusy && _preparation is not null && CanConfirmHourlyVisible;
@@ -1023,20 +1071,36 @@ public sealed class BillingDashboardViewModel : ObservableObject
         OperationErrorMessage = string.Empty;
         try
         {
-            var stages = StageEdits.Select(s => s.ToSnapshot()).ToList();
-            var included = HourlyScopeEdits.Where(h => h.Included).ToList();
+            var stages = StageEdits
+                .Where(s => s.HasPositiveAddition)
+                .Select(s => s.ToSnapshot())
+                .ToList();
+            var included = HourlyScopeEdits.Where(h => h.Included && h.SelectedSubContractCount > 0).ToList();
             var reportIds = included
                 .SelectMany(h => h.ResolvedReports.Select(r => r.HoursReportId))
-                .Distinct()
                 .ToList();
+            if (reportIds.Count != reportIds.Distinct().Count())
+            {
+                OperationErrorMessage = "אותו דיווח שעות לא יכול להופיע פעמיים באותה בקשת הכנה.";
+                return;
+            }
+
             var overlapping = reportIds.Count == 0
                 ? []
                 : await _preparation
-                    .FindHourReportIdsInOtherRequestsAsync(reportIds, SelectedPreparation.Id)
+                    .FindHourReportIdsInOtherRequestsAsync(reportIds.Distinct().ToList(), SelectedPreparation.Id)
                     .ConfigureAwait(true);
             var stamp = SelectedPreparation.Source.SnapshotTimestampUtc
                         ?? _timeProvider.GetUtcNow().UtcDateTime;
-            var hours = included.Select(h => h.ToSnapshot(stamp, overlapping)).ToList();
+            var hours = included
+                .SelectMany(h => h.ToSnapshots(stamp, overlapping))
+                .ToList();
+            if (hours.SelectMany(h => h.Reports.Select(r => r.HoursReportId)).Distinct().Count()
+                != hours.SelectMany(h => h.Reports.Select(r => r.HoursReportId)).Count())
+            {
+                OperationErrorMessage = "אותו דיווח שעות לא יכול להופיע פעמיים באותה בקשת הכנה.";
+                return;
+            }
             var updated = await _preparation
                 .SaveSelectionAsync(SelectedPreparation.Id, stages, hours)
                 .ConfigureAwait(true);

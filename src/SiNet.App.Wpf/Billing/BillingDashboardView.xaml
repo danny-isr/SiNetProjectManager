@@ -581,9 +581,18 @@
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,8"
                                        Visibility="{Binding ShowWaitingForSnapshot, Converter={StaticResource BoolToVis}}" />
-                            <TextBlock Text="שלבים — יעד מצטבר (%)"
+                            <TextBlock Text="שלבים — תוספת בחשבון הזה"
                                        Style="{StaticResource SectionHeaderStyle}" />
-                            <ItemsControl ItemsSource="{Binding StageEdits}">
+                            <Expander Margin="0,0,0,8"
+                                      Visibility="{Binding ShowStageExclusionWarning, Converter={StaticResource BoolToVis}}"
+                                      Header="{Binding StageExclusionWarningHeader}"
+                                      AutomationProperties.AutomationId="BillingDashboard.StageExclusionWarning">
+                                <TextBlock Text="{Binding StageExclusionDetails}"
+                                           TextWrapping="Wrap"
+                                           Margin="8,4,0,0" />
+                            </Expander>
+                            <ItemsControl ItemsSource="{Binding StageEdits}"
+                                          AutomationProperties.AutomationId="BillingDashboard.StageEdits">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border BorderBrush="{DynamicResource SiSecondaryBrush}"
@@ -592,15 +601,24 @@
                                                 Margin="0,0,0,8">
                                             <StackPanel>
                                                 <TextBlock Text="{Binding StageName}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding SubContractName}" />
-                                                <TextBlock Text="{Binding WeightText, StringFormat=משקל השלב בהסכם המשנה: {0}}" />
-                                                <TextBlock Text="{Binding ObservedText, StringFormat=מצב שנצפה בחשבונות MasterPlan: {0}}" />
+                                                <TextBlock Text="{Binding SubContractName, StringFormat=הסכם משנה: {0}}" />
+                                                <TextBlock Text="{Binding WeightText}" />
+                                                <TextBlock Text="{Binding ObservedText}" />
                                                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                    <TextBlock Text="אחרי החשבון הנוכחי:" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                                    <TextBox Width="70" Text="{Binding TargetPercent, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBlock Text="תוספת בחשבון הזה:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox Width="70"
+                                                             Text="{Binding AdditionPercent, UpdateSourceTrigger=PropertyChanged}"
+                                                             AutomationProperties.AutomationId="BillingDashboard.StageAddition" />
                                                     <TextBlock Text="%" VerticalAlignment="Center" Margin="4,0,0,0" />
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding DeltaText, StringFormat=תוספת בחשבון הזה: {0}}" />
+                                                <TextBlock Text="{Binding AfterBillText}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding RemainingText}" />
+                                                <TextBlock Text="{Binding RelativeShareText}"
+                                                           Visibility="{Binding ShowRelativeShare, Converter={StaticResource BoolToVis}}" />
+                                                <TextBlock Text="{Binding AdditionValidationMessage}"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource SiDangerBrush}"
+                                                           Visibility="{Binding HasAdditionValidation, Converter={StaticResource BoolToVis}}" />
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
@@ -634,12 +652,57 @@
                                                               IsChecked="{Binding Included, UpdateSourceTrigger=PropertyChanged}"
                                                               VerticalAlignment="Center" />
                                                 </DockPanel>
-                                                <TextBlock Text="הסכם משנה שעתי" Style="{StaticResource DetailLabelStyle}" />
-                                                <ComboBox ItemsSource="{Binding AvailableHourlySubContracts}"
-                                                          DisplayMemberPath="Name"
-                                                          SelectedValuePath="MasterPlanSubContractId"
-                                                          SelectedValue="{Binding MasterPlanSubContractId, UpdateSourceTrigger=PropertyChanged}"
-                                                          Margin="0,0,0,6" />
+                                                <TextBlock Text="הסכמי משנה שעתיים" Style="{StaticResource DetailLabelStyle}" />
+                                                <Grid>
+                                                <ToggleButton x:Name="HourlySelectorToggle"
+                                                              Content="{Binding SelectionSummaryText}"
+                                                              IsChecked="{Binding IsSelectorOpen, Mode=TwoWay}"
+                                                              HorizontalContentAlignment="Stretch"
+                                                              Padding="8,6"
+                                                              Margin="0,0,0,6"
+                                                              AutomationProperties.AutomationId="BillingDashboard.HourlySelectorToggle" />
+                                                <Popup IsOpen="{Binding IsSelectorOpen, Mode=TwoWay}"
+                                                       PlacementTarget="{Binding ElementName=HourlySelectorToggle}"
+                                                       Placement="Bottom"
+                                                       StaysOpen="False"
+                                                       AllowsTransparency="True">
+                                                    <Border Background="{DynamicResource SiBackgroundBrush}"
+                                                            BorderBrush="{DynamicResource SiBorderBrush}"
+                                                            BorderThickness="1"
+                                                            Padding="8"
+                                                            MinWidth="320">
+                                                        <StackPanel>
+                                                            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                                                     Margin="0,0,0,6"
+                                                                     AutomationProperties.AutomationId="BillingDashboard.HourlySearch" />
+                                                            <WrapPanel Margin="0,0,0,6">
+                                                                <Button Content="בחר הכל"
+                                                                        Command="{Binding SelectAllCommand}"
+                                                                        Padding="8,4"
+                                                                        Margin="0,0,8,0"
+                                                                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                                                                        AutomationProperties.AutomationId="BillingDashboard.HourlySelectAll" />
+                                                                <Button Content="נקה הכל"
+                                                                        Command="{Binding ClearAllCommand}"
+                                                                        Padding="8,4"
+                                                                        Style="{DynamicResource SiSecondaryButtonStyle}"
+                                                                        AutomationProperties.AutomationId="BillingDashboard.HourlyClearAll" />
+                                                            </WrapPanel>
+                                                            <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                                                                <ItemsControl ItemsSource="{Binding VisibleChoices}">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                                      Content="{Binding Name}"
+                                                                                      Margin="2,3" />
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </ScrollViewer>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Popup>
+                                                </Grid>
                                                 <TextBlock Text="{Binding SubContractName}" Margin="0,0,0,4" />
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                                     <TextBlock Text="מתאריך" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -647,9 +710,14 @@
                                                     <TextBlock Text="עד תאריך" VerticalAlignment="Center" Margin="12,0,8,0" />
                                                     <DatePicker SelectedDate="{Binding ToDate, UpdateSourceTrigger=PropertyChanged}" Width="120" />
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding DateRangeText, StringFormat=טווח שנבחר: {0}}" />
-                                                <TextBlock Text="{Binding ReportCountText, StringFormat=מספר דיווחים תואמים: {0}}" />
-                                                <TextBlock Text="{Binding TotalHoursText, StringFormat=סה״כ שעות מנורמלות: {0}}" />
+                                                <TextBlock Text="{Binding AggregatePreviewText}"
+                                                           TextWrapping="Wrap"
+                                                           AutomationProperties.AutomationId="BillingDashboard.HourlyPreview" />
+                                                <Expander Header="הסכמי המשנה שנבחרו"
+                                                          IsExpanded="{Binding ShowSelectedNames, Mode=TwoWay}"
+                                                          Margin="0,4,0,0">
+                                                    <TextBlock Text="{Binding SelectedNamesText}" TextWrapping="Wrap" />
+                                                </Expander>
                                                 <TextBlock Text="{Binding ValidationMessage}"
                                                            TextWrapping="Wrap"
                                                            Foreground="{DynamicResource SiDangerBrush}"

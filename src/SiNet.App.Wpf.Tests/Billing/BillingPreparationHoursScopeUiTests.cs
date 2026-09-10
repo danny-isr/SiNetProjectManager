@@ -137,7 +137,8 @@ public sealed class BillingPreparationHoursScopeUiTests
         var vm = CreateVm();
         await vm.RefreshPreparationAsync();
         var stage = Assert.Single(vm.StageEdits);
-        stage.TargetPercent = 70m;
+        stage.AdditionPercent = 30m;
+        Assert.Equal(70m, stage.AfterBillPercent);
         Assert.Empty(vm.HourlyScopeEdits);
 
         await vm.SavePreparationAsync();
@@ -173,7 +174,7 @@ public sealed class BillingPreparationHoursScopeUiTests
         await _service.EnsureFromPrepareBillAsync(5905, "2608", "פרויקט", "לקוח");
         var vm = CreateVm();
         await vm.RefreshPreparationAsync();
-        vm.StageEdits[0].TargetPercent = 70m;
+        vm.StageEdits[0].AdditionPercent = 30m;
         vm.AddHourlyScopeCommand.Execute(null);
         var edit = Assert.Single(vm.HourlyScopeEdits);
         edit.MasterPlanSubContractId = 100;
@@ -220,7 +221,7 @@ public sealed class BillingPreparationHoursScopeUiTests
         edit.ToDate = new DateTime(2026, 1, 31);
         await vm.SavePreparationAsync();
 
-        Assert.Contains("ללא דיווחים תואמים", vm.OperationErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("לא נמצאו דיווחי שעות", vm.OperationErrorMessage, StringComparison.Ordinal);
         var saved = await _store.GetByIdAsync(1);
         Assert.Empty(saved!.Hours);
     }

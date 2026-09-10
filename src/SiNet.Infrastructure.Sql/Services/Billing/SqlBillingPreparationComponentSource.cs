@@ -121,6 +121,7 @@ public sealed class SqlBillingPreparationComponentSource(
               st.Name,
               sc.Name,
               st.Percentage,
+              sc.FeeTypeID,
               prog.StepProgress,
               prog.StatusID
             FROM dbo.SubContractSteps st
@@ -147,15 +148,16 @@ public sealed class SqlBillingPreparationComponentSource(
                     reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
                     reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
                     ReadDecimal(reader, 4) ?? 0m,
+                    reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
                     []);
                 buckets[stageId] = bucket;
             }
 
-            if (!reader.IsDBNull(5) && !reader.IsDBNull(6))
+            if (!reader.IsDBNull(6) && !reader.IsDBNull(7))
             {
-                var statusId = reader.GetInt32(6);
+                var statusId = reader.GetInt32(7);
                 if (BillingAcceptedBillStatusIds.CountsAsSubmitted(statusId))
-                    bucket.Progress.Add(ReadDecimal(reader, 5) ?? 0m);
+                    bucket.Progress.Add(ReadDecimal(reader, 6) ?? 0m);
             }
         }
 
@@ -171,7 +173,8 @@ public sealed class SqlBillingPreparationComponentSource(
                     b.Weight,
                     observed,
                     observed.Value,
-                    Included: false);
+                    Included: false,
+                    b.FeeTypeId);
             })
             .ToList();
     }
@@ -313,5 +316,6 @@ public sealed class SqlBillingPreparationComponentSource(
         string StageName,
         string SubContractName,
         decimal Weight,
+        int FeeTypeId,
         List<decimal> Progress);
 }
