@@ -91,5 +91,7 @@ public sealed class BillingPreparationHoursReportConfiguration : IEntityTypeConf
         builder.Property(e => e.SubContractStepId).HasColumnName("SubContractStepID");
         builder.Property(e => e.Description).HasMaxLength(1000);
         builder.HasIndex(e => e.HoursReportId, "IX_BillingPreparationHoursReport_HoursReportID");
+        builder.HasIndex(e => new { e.HoursLineId, e.HoursReportId }, "UX_BillingPreparationHoursReport_Line_Report")
+            .IsUnique();
     }
 }

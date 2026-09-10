@@ -17,9 +17,9 @@ public sealed class MasterPlanBackupIntakeConfiguration : IEntityTypeConfigurati
         builder.Property(e => e.Sha256).HasMaxLength(64);
         builder.Property(e => e.ReceivedBy).IsRequired().HasMaxLength(200);
         builder.Property(e => e.ResultMessage).HasMaxLength(2000);
-        builder.HasIndex(e => e.Sha256, "IX_MasterPlanBackupIntake_Sha256");
-        builder.HasIndex(e => e.IncomingPath, "UX_MasterPlanBackupIntake_IncomingPath")
-            .IsUnique();
+        builder.HasIndex(e => e.Sha256, "UX_MasterPlanBackupIntake_Sha256")
+            .IsUnique()
+            .HasFilter("[Sha256] IS NOT NULL");
         builder.HasIndex(e => e.Status, "IX_MasterPlanBackupIntake_Status");
     }
 }
