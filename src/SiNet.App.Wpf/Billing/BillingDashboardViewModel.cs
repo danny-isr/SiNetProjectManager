@@ -1417,7 +1417,10 @@ public sealed class BillingDashboardViewModel : ObservableObject
             return;
         try
         {
-            await SavePreparationAsync().ConfigureAwait(true);
+            if (IsDirty)
+                await SavePreparationAsync().ConfigureAwait(true);
+            else
+                OperationErrorMessage = string.Empty;
             if (!string.IsNullOrEmpty(OperationErrorMessage) || SelectedPreparation is null)
                 return;
             if (_liveAmount.IsPartial && !SelectedPreparation.Source.ManualOverride)

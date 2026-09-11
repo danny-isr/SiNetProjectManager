@@ -19,6 +19,10 @@ public sealed class BillingPreparationRequestConfiguration : IEntityTypeConfigur
         builder.Property(e => e.CreatedByLogin).HasMaxLength(200);
         builder.Property(e => e.ApprovedByLogin).HasMaxLength(200);
         builder.Property(e => e.ManualOverrideReason).HasMaxLength(1000);
+        builder.Property(e => e.PricingStageTotal).HasColumnType("decimal(18,4)");
+        builder.Property(e => e.PricingHoursTotal).HasColumnType("decimal(18,4)");
+        builder.Property(e => e.PricingTotal).HasColumnType("decimal(18,4)");
+        builder.Property(e => e.PricingFormulaVersion).HasMaxLength(32);
         builder.HasIndex(e => e.MasterPlanProjectId, "IX_BillingPreparationRequest_MasterPlanProjectID");
         builder.HasIndex(e => e.TaskId, "IX_BillingPreparationRequest_TaskID");
         builder.HasIndex(e => e.Status, "IX_BillingPreparationRequest_Status");
@@ -49,6 +53,10 @@ public sealed class BillingPreparationStageLineConfiguration : IEntityTypeConfig
         builder.Property(e => e.ObservedCumulativeProgress).HasColumnType("decimal(18,6)");
         builder.Property(e => e.TargetCumulativeProgress).HasColumnType("decimal(18,6)");
         builder.Property(e => e.RequestedDelta).HasColumnType("decimal(18,6)");
+        builder.Property(e => e.PricingBaseAmount).HasColumnType("decimal(18,4)");
+        builder.Property(e => e.PricingDiscountFraction).HasColumnType("decimal(18,6)");
+        builder.Property(e => e.PricingCalculatedAmount).HasColumnType("decimal(18,4)");
+        builder.Property(e => e.PricingUnavailableReason).HasMaxLength(1000);
         builder.Property(e => e.ConfirmationNote).HasMaxLength(1000);
         builder.HasIndex(e => new { e.RequestId, e.MasterPlanStageId }, "UX_BillingPreparationStageLine_Request_Stage")
             .IsUnique();
@@ -66,6 +74,10 @@ public sealed class BillingPreparationHoursLineConfiguration : IEntityTypeConfig
         builder.Property(e => e.MasterPlanSubContractId).HasColumnName("MasterPlanSubContractID");
         builder.Property(e => e.SubContractName).IsRequired().HasMaxLength(400);
         builder.Property(e => e.TotalHours).HasColumnType("decimal(18,4)");
+        builder.Property(e => e.PricingHourlyRate).HasColumnType("decimal(18,4)");
+        builder.Property(e => e.PricingDiscountFraction).HasColumnType("decimal(18,6)");
+        builder.Property(e => e.PricingCalculatedAmount).HasColumnType("decimal(18,4)");
+        builder.Property(e => e.PricingUnavailableReason).HasMaxLength(1000);
         builder.Property(e => e.OverlappingHourReportIds).HasMaxLength(2000);
         builder.Property(e => e.ConfirmationNote).HasMaxLength(1000);
         builder.HasMany(e => e.Reports)

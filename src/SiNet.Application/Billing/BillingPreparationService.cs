@@ -173,12 +173,12 @@ public sealed class BillingPreparationService(
             .ToList();
 
         var status = BillingPreparationWorkflow.AfterSelection(persistedStages, hoursWithWarnings, request.ManualOverride);
-        var updated = request with
+        var updated = BillingPreparationPricingFreeze.Clear(request with
         {
             Status = status,
             Stages = persistedStages,
             Hours = hoursWithWarnings
-        };
+        });
         return await _store.UpdateAsync(updated, cancellationToken).ConfigureAwait(false);
     }
 
@@ -221,24 +221,35 @@ public sealed class BillingPreparationService(
         if (await _tasks.HasOpenPrepareBillTaskAsync(siNetProjectId, cancellationToken).ConfigureAwait(false))
             throw new InvalidOperationException("כבר קיימת משימת הכנת חשבון פתוחה לפרויקט.");
 
-        var who = await _actor.GetAsync(cancellationToken).ConfigureAwait(false);
         var now = _time.GetUtcNow().UtcDateTime;
-        var approved = request with
+        var frozen = request;
+        if (!BillingPreparationPricingFreeze.HasFreeze(request))
         {
-            Status = BillingPreparationStatus.TaskOpen,
-            ApprovedAtUtc = now,
-            ApprovedByUserId = who.UserId,
-            ApprovedByLogin = who.Login,
-            SnapshotTimestampUtc = request.SnapshotTimestampUtc ?? now
-        };
-        var title = $"הכנת חשבון — פרויקט {approved.ProjectNumber ?? approved.MasterPlanProjectId.ToString()}";
-        var catalog = await _components.LoadAsync(approved.MasterPlanProjectId, cancellationToken)
-            .ConfigureAwait(false);
+            var catalog = await _components.LoadAsync(request.MasterPlanProjectId, cancellationToken)
+                .ConfigureAwait(false);
+            frozen = BillingPreparationPricingFreeze.Capture(request, catalog, now);
+            frozen = await _store.UpdateAsync(frozen, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (frozen.PricingIsPartial == true && !frozen.ManualOverride)
+            throw new InvalidOperationException(BillingPreparationPricingFreeze.PartialApprovalBlockedMessage(frozen));
+
+        var who = await _actor.GetAsync(cancellationToken).ConfigureAwait(false);
+        var title = $"הכנת חשבון — פרויקט {frozen.ProjectNumber ?? frozen.MasterPlanProjectId.ToString()}";
         var body = BillingPreparationTaskInstructions.Build(
-            approved, catalog.Stages, catalog.HourlySubContracts);
+            frozen with { ApprovedByLogin = who.Login });
         var taskId = await _tasks.CreatePrepareBillTaskAsync(siNetProjectId, title, body, cancellationToken)
             .ConfigureAwait(false);
-        approved = approved with { TaskId = taskId };
+
+        var approved = frozen with
+        {
+            Status = BillingPreparationStatus.TaskOpen,
+            ApprovedAtUtc = _time.GetUtcNow().UtcDateTime,
+            ApprovedByUserId = who.UserId,
+            ApprovedByLogin = who.Login,
+            SnapshotTimestampUtc = frozen.SnapshotTimestampUtc ?? now,
+            TaskId = taskId
+        };
         approved = await _store.UpdateAsync(approved, cancellationToken).ConfigureAwait(false);
         return new BillingPreparationApproveResult(approved, taskId);
     }

@@ -480,7 +480,21 @@ Historical FeeType=4 `BillLines` on 4608: `WorkingHourPrice × WorkingHourCount`
 
 Preparation «סכום החשבון» uses **`Bills.Sum` semantics** (component total). Do not add VAT in the preview and do not label כולל/לפני מע"מ. Display whole shekels when the amount is whole; 2 decimals when agorot exist (historical Balances such as 9346.15).
 
-Approved task instructions include the monetary summary computed at approval from the frozen selection and the then-current catalog. Line-level amount columns would require a **new migration** (not created in this slice). Reloading an approved request after a later monthly restore may differ from the frozen task text.
+Approved task instructions use **persisted freeze evidence** captured at the approval attempt — not a later live catalog. Live preview in the tab remains UI-only and is not written on typing/Save. Formula version: `MP-BILLING-1`.
+
+Capture order on Approve:
+
+1. Request is `ReadyForApproval` with an already-saved selection.
+2. Load the current MasterPlan pricing catalog.
+3. Calculate line evidence for those **saved** lines (`FixedPrices.Sum × (1 − discount) × persisted Weight × Delta`; hours = persisted `TotalHours ×` unique rate `× (1 − discount)`).
+4. Persist nullable freeze columns on the request and lines **while status stays ReadyForApproval**.
+5. If `PricingIsPartial` and there is no `ManualOverride`, **block** before task creation. Unknown amounts stay `NULL` (never 0).
+6. Create the `PrepareBill` task from the **persisted freeze**.
+7. Only after task creation succeeds: set `TaskId`, `ApprovedAt`/`ApprovedBy`, `Status = TaskOpen`.
+
+If task creation fails: status stays ReadyForApproval, `TaskId`/`ApprovedAt` stay NULL, freeze remains for retry (retry must not recapture from a later catalog). If the manager Save-s a changed (or re-saved) selection before a task exists, **clear** the freeze; the next Approve captures a new one. A later monthly `.bak` restore must not change money already written into an approved task.
+
+Request #2 historical rows stay freeze-NULL after this migration (no backfill).
 
 ---
 
@@ -556,8 +570,8 @@ Mixed fee examples (not the September four): 3884, 4097, 4189, 3458.
 - Hourly component as first-class row with **explicit** manager scope (no auto unbilled list presented as truth).
 - `WaitingForSnapshot` when `SubContracts` / `SubContractSteps` missing for the project in the latest restore.
 - Audited manual override.
-- Live bill amount preview (`Bills.Sum` semantics) from proven FeeType=3 / unique-rate FeeType=4 formulas. Unknown pricing is listed, never treated as ₪0.
-- Approve → one `PrepareBill` task with frozen instruction snapshot (stages use **target cumulative** wording). Monetary summary is computed at approval from the frozen selection and the then-current catalog (not persisted as new line columns).
+- Live bill amount preview (`Bills.Sum` semantics) from proven FeeType=3 / unique-rate FeeType=4 formulas. Unknown pricing is listed, never treated as ₪0. Preview is not persisted.
+- Approve captures freeze evidence (`MP-BILLING-1`) for the saved selection, persists it, then creates one `PrepareBill` task whose **money comes from that freeze**. A later `.bak` cannot change the approved amount. Partial pricing is blocked unless `ManualOverride` is already set; the task then says «סכום מחושב חלקית» and does not invent a full total.
 - Task complete → `AwaitingMasterPlanConfirmation`.
 - Stage auto-`Completed` only from a **newer** monthly snapshot proving `StepProgress >= target` for the approved `StepID`.
 - Hourly `Completed` only via explicit manager «אשר שבוצע ב-MasterPlan» (Manual).
@@ -620,13 +634,14 @@ Existing admin monthly restore UI remains operator tooling (may still expose `--
 
 ## 12. Operator follow-up (DEV, after this code slice)
 
-EF migrations are **not** created or applied by the agent. Scaffold **one** migration only from the repo root. Do **not** edit the generated `.cs`, `.Designer.cs`, or `SiNetSQLDbContextModelSnapshot.cs`. Do **not** `database update` until the generated files and SQL have been inspected.
+The freeze-evidence migration source is created in-repo and **must not be applied** until reviewed:
 
 ```
-dotnet ef migrations add AddBillingPreparationAndMasterPlanBackupIntake --context SiNetSQLDbContext --project src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj --startup-project SiNetProjectManagerV2\SiNetProjectManagerV2.csproj
+dotnet ef migrations add FreezeBillingPreparationPricingEvidence --context SiNetSQLDbContext --project src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj --startup-project src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
+dotnet ef migrations has-pending-model-changes --context SiNetSQLDbContext --project src\SiNet.Infrastructure.Sql\SiNet.Infrastructure.Sql.csproj --startup-project src\SiNet.App.Wpf\SiNet.App.Wpf.csproj
 ```
 
-Then apply only on DEV SQL when ready. Do **not** `Update-Database` against production.
+Do **not** `database update` / `Update-Database` in this slice. Request #2 must remain freeze-NULL until a future real Approve. Do **not** `Update-Database` against production.
 
 DEV inbox processor (do **not** change PROD Scheduled Tasks from this workstation):
 

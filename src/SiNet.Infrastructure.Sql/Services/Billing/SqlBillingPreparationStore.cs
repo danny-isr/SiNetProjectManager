@@ -122,6 +122,13 @@ public sealed class SqlBillingPreparationStore(IDbContextFactory<SiNetSQLDbConte
         existing.ManualOverrideReason = request.ManualOverrideReason;
         existing.ManualOverrideAtUtc = request.ManualOverrideAtUtc;
         existing.ManualOverrideByUserId = request.ManualOverrideByUserId;
+        existing.PricingStageTotal = request.PricingStageTotal;
+        existing.PricingHoursTotal = request.PricingHoursTotal;
+        existing.PricingTotal = request.PricingTotal;
+        existing.PricingIsPartial = request.PricingIsPartial;
+        existing.PricingFrozenAtUtc = request.PricingFrozenAtUtc;
+        existing.PricingSourceSnapshotUtc = request.PricingSourceSnapshotUtc;
+        existing.PricingFormulaVersion = request.PricingFormulaVersion;
 
         db.BillingPreparationHoursReports.RemoveRange(existing.Hours.SelectMany(h => h.Reports));
         db.BillingPreparationHoursLines.RemoveRange(existing.Hours);
@@ -189,7 +196,14 @@ public sealed class SqlBillingPreparationStore(IDbContextFactory<SiNetSQLDbConte
             ManualOverride = request.ManualOverride,
             ManualOverrideReason = request.ManualOverrideReason,
             ManualOverrideAtUtc = request.ManualOverrideAtUtc,
-            ManualOverrideByUserId = request.ManualOverrideByUserId
+            ManualOverrideByUserId = request.ManualOverrideByUserId,
+            PricingStageTotal = request.PricingStageTotal,
+            PricingHoursTotal = request.PricingHoursTotal,
+            PricingTotal = request.PricingTotal,
+            PricingIsPartial = request.PricingIsPartial,
+            PricingFrozenAtUtc = request.PricingFrozenAtUtc,
+            PricingSourceSnapshotUtc = request.PricingSourceSnapshotUtc,
+            PricingFormulaVersion = request.PricingFormulaVersion
         };
         foreach (var stage in request.Stages)
             entity.Stages.Add(ToStage(0, stage));
@@ -215,7 +229,11 @@ public sealed class SqlBillingPreparationStore(IDbContextFactory<SiNetSQLDbConte
             ConfirmationMode = (int)stage.ConfirmationMode,
             ConfirmedAtUtc = stage.ConfirmedAtUtc,
             ConfirmedByUserId = stage.ConfirmedByUserId,
-            ConfirmationNote = stage.ConfirmationNote
+            ConfirmationNote = stage.ConfirmationNote,
+            PricingBaseAmount = stage.PricingBaseAmount,
+            PricingDiscountFraction = stage.PricingDiscountFraction,
+            PricingCalculatedAmount = stage.PricingCalculatedAmount,
+            PricingUnavailableReason = stage.PricingUnavailableReason
         };
 
     private static BillingPreparationHoursLine ToHours(int requestId, BillingPreparationHoursLineSnapshot hours)
@@ -234,7 +252,11 @@ public sealed class SqlBillingPreparationStore(IDbContextFactory<SiNetSQLDbConte
             ConfirmationMode = (int)hours.ConfirmationMode,
             ConfirmedAtUtc = hours.ConfirmedAtUtc,
             ConfirmedByUserId = hours.ConfirmedByUserId,
-            ConfirmationNote = hours.ConfirmationNote
+            ConfirmationNote = hours.ConfirmationNote,
+            PricingHourlyRate = hours.PricingHourlyRate,
+            PricingDiscountFraction = hours.PricingDiscountFraction,
+            PricingCalculatedAmount = hours.PricingCalculatedAmount,
+            PricingUnavailableReason = hours.PricingUnavailableReason
         };
         foreach (var report in hours.Reports)
         {
@@ -292,7 +314,11 @@ public sealed class SqlBillingPreparationStore(IDbContextFactory<SiNetSQLDbConte
                     (BillingConfirmationMode)s.ConfirmationMode,
                     s.ConfirmedAtUtc,
                     s.ConfirmedByUserId,
-                    s.ConfirmationNote))
+                    s.ConfirmationNote,
+                    s.PricingBaseAmount,
+                    s.PricingDiscountFraction,
+                    s.PricingCalculatedAmount,
+                    s.PricingUnavailableReason))
                 .ToList(),
             row.Hours
                 .OrderBy(h => h.Id)
@@ -321,8 +347,19 @@ public sealed class SqlBillingPreparationStore(IDbContextFactory<SiNetSQLDbConte
                     (BillingConfirmationMode)h.ConfirmationMode,
                     h.ConfirmedAtUtc,
                     h.ConfirmedByUserId,
-                    h.ConfirmationNote))
-                .ToList());
+                    h.ConfirmationNote,
+                    h.PricingHourlyRate,
+                    h.PricingDiscountFraction,
+                    h.PricingCalculatedAmount,
+                    h.PricingUnavailableReason))
+                .ToList(),
+            row.PricingStageTotal,
+            row.PricingHoursTotal,
+            row.PricingTotal,
+            row.PricingIsPartial,
+            row.PricingFrozenAtUtc,
+            row.PricingSourceSnapshotUtc,
+            row.PricingFormulaVersion);
 
     private static IReadOnlyList<int> ParseIds(string? csv)
     {

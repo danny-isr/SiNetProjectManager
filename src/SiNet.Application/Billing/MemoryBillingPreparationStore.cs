@@ -92,12 +92,17 @@ public sealed class MemoryBillingPreparationTaskPort : IBillingPreparationTaskPo
     public bool OpenTaskExists { get; set; }
     public string? LastBody { get; private set; }
 
+    public bool ThrowOnCreate { get; set; }
+
     public Task<int> CreatePrepareBillTaskAsync(
         int siNetProjectId,
         string title,
         string body,
         CancellationToken cancellationToken = default)
     {
+        if (ThrowOnCreate)
+            throw new InvalidOperationException("יצירת משימת הכנת חשבון נכשלה.");
+
         CreateCalls++;
         LastBody = body;
         LastTaskId = 9000 + CreateCalls;

@@ -1,0 +1,386 @@
+using System.IO;
+using SiNet.Application.Billing;
+using Xunit;
+
+namespace SiNet.App.Wpf.Tests.Billing;
+
+public sealed class BillingPreparationPricingFreezeTests
+{
+    private readonly MemoryBillingPreparationStore _store = new();
+    private readonly MemoryBillingPreparationComponentSource _components = new();
+    private readonly MemoryBillingPreparationTaskPort _tasks = new();
+    private readonly BillingPreparationService _service;
+
+    public BillingPreparationPricingFreezeTests()
+    {
+        _service = new BillingPreparationService(
+            _store,
+            _components,
+            new MemoryBillingPreparationProjectMapper(12),
+            _tasks,
+            new FixedBillingPreparationActor(new BillingActor(7, "manager")),
+            new FrozenUtcTimeProvider(new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc)));
+    }
+
+    [Fact]
+    public async Task Saved_selection_has_nullable_freeze_before_approval()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        var saved = await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, saved.Status);
+        Assert.Null(saved.TaskId);
+        Assert.Null(saved.ApprovedAtUtc);
+        Assert.Null(saved.PricingFrozenAtUtc);
+        Assert.Null(saved.PricingTotal);
+        Assert.Null(saved.Stages[0].PricingCalculatedAmount);
+        Assert.Null(saved.Hours[0].PricingCalculatedAmount);
+    }
+
+    [Fact]
+    public async Task Complete_fixed_and_hour_selection_freezes_exact_totals()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        var request = approved.Request;
+        Assert.Equal(BillingPreparationStatus.TaskOpen, request.Status);
+        Assert.Equal(110_000m, request.Stages[0].PricingCalculatedAmount);
+        Assert.Equal(2_200_000m, request.Stages[0].PricingBaseAmount);
+        Assert.Equal(0m, request.Stages[0].PricingDiscountFraction);
+        Assert.Null(request.Stages[0].PricingUnavailableReason);
+        Assert.Equal(280m, request.Hours[0].PricingHourlyRate);
+        Assert.Equal(280m, request.Hours[0].PricingCalculatedAmount);
+        Assert.Equal(1m, request.Hours[0].TotalHours);
+        Assert.Equal(57875, request.Hours[0].Reports[0].HoursReportId);
+        Assert.Equal(110_000m, request.PricingStageTotal);
+        Assert.Equal(280m, request.PricingHoursTotal);
+        Assert.Equal(110_280m, request.PricingTotal);
+        Assert.False(request.PricingIsPartial);
+        Assert.Equal(BillingPreparationPricing.FormulaVersion, request.PricingFormulaVersion);
+        Assert.Equal(new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), request.PricingSourceSnapshotUtc);
+        Assert.Equal(new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc), request.PricingFrozenAtUtc);
+        Assert.Contains("סה\"כ להכנת חשבון: ₪ 110,280", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("שלבי תשלום: ₪ 110,000", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("שעות: ₪ 280", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("משקל השלב בתת החוזה: 25%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("חויב בזמן האישור: 10%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("להוסיף בחשבון הזה: 20%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("לאחר החשבון: 30%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("תוספת כספית: ₪ 110,000", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("תעריף: ₪ 280", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("סכום שעות: ₪ 280", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("תקופה: 02/06/2026–02/06/2026", _tasks.LastBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Stage_freeze_uses_persisted_weight_not_catalog_weight()
+    {
+        _components.Load = CompleteCatalog() with
+        {
+            Stages =
+            [
+                StageDraft(7390, 3853, "פיקוח עליון על הביצוע", billable: 2_200_000m, weight: 0.99m)
+            ]
+        };
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], []);
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(110_000m, approved.Request.PricingTotal);
+        Assert.Equal(0.25m, approved.Request.Stages[0].StageWeightWithinSubContract);
+    }
+
+    [Fact]
+    public async Task Hourly_amount_uses_persisted_total_hours_times_frozen_rate()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        var hours = Hours14317() with { TotalHours = 3m };
+        await _service.SaveSelectionAsync(ensured.Request.Id, [], [hours]);
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(840m, approved.Request.Hours[0].PricingCalculatedAmount);
+        Assert.Equal(57875, approved.Request.Hours[0].Reports[0].HoursReportId);
+        Assert.Contains("סכום שעות: ₪ 840", _tasks.LastBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unknown_stage_pricing_blocks_approval_before_task()
+    {
+        _components.Load = CompleteCatalog() with
+        {
+            Stages = [StageDraft(7390, 3853, "פיקוח עליון על הביצוע", billable: null, weight: 0.25m)]
+        };
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], []);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        Assert.Contains("לא ניתן לאשר", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("לא נמצא בסיס תמחור", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.NotNull(stored);
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, stored.Status);
+        Assert.Null(stored.TaskId);
+        Assert.Null(stored.ApprovedAtUtc);
+        Assert.True(stored.PricingIsPartial);
+        Assert.Null(stored.Stages[0].PricingCalculatedAmount);
+        Assert.NotEqual(0m, stored.Stages[0].PricingCalculatedAmount ?? -1m);
+    }
+
+    [Fact]
+    public async Task Ambiguous_hourly_pricing_blocks_approval()
+    {
+        _components.Load = CompleteCatalog() with
+        {
+            HourlySubContracts =
+            [
+                new BillingHourlySubContractDraft(
+                    14317, "פיקוח עליון", MasterPlanSnapshotFeeTypeIds.WorkingHours,
+                    AmountUnavailableReason: "תעריף לא ניתן לקביעה")
+            ]
+        };
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [], [Hours14317()]);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        Assert.Contains("תעריף לא ניתן לקביעה", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.Null(stored!.Hours[0].PricingCalculatedAmount);
+        Assert.True(stored.PricingIsPartial);
+    }
+
+    [Fact]
+    public async Task Manual_override_can_freeze_partial_pricing_without_manufacturing_a_total()
+    {
+        _components.Load = CompleteCatalog() with
+        {
+            Stages = [StageDraft(7390, 3853, "פיקוח עליון על הביצוע", billable: null, weight: 0.25m)]
+        };
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        await _service.ApplyManualOverrideAsync(ensured.Request.Id, "חסר בסיס לשלב");
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
+        Assert.True(approved.Request.PricingIsPartial);
+        Assert.Null(approved.Request.Stages[0].PricingCalculatedAmount);
+        Assert.Equal(280m, approved.Request.PricingHoursTotal);
+        Assert.Equal(280m, approved.Request.PricingTotal);
+        Assert.Contains("סכום מחושב חלקית", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("לא נמצא בסיס תמחור", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("סה\"כ להכנת חשבון:", _tasks.LastBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Changing_catalog_after_freeze_does_not_change_task_money()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.ThrowOnCreate = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        var frozen = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.Equal(110_280m, frozen!.PricingTotal);
+        _components.Load = CompleteCatalog() with
+        {
+            Stages = [StageDraft(7390, 3853, "פיקוח עליון על הביצוע", billable: 9_999_999m, weight: 0.25m)],
+            HourlySubContracts =
+            [
+                new BillingHourlySubContractDraft(
+                    14317, "פיקוח עליון", MasterPlanSnapshotFeeTypeIds.WorkingHours, UniqueHourlyRate: 999m)
+            ]
+        };
+        _tasks.ThrowOnCreate = false;
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(110_280m, approved.Request.PricingTotal);
+        Assert.Equal(280m, approved.Request.Hours[0].PricingHourlyRate);
+        Assert.Contains("סה\"כ להכנת חשבון: ₪ 110,280", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("₪ 999", _tasks.LastBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Task_create_failure_keeps_ready_for_approval_and_freeze()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.ThrowOnCreate = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        var stored = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, stored!.Status);
+        Assert.Null(stored.TaskId);
+        Assert.Null(stored.ApprovedAtUtc);
+        Assert.Null(stored.ApprovedByUserId);
+        Assert.Equal(110_280m, stored.PricingTotal);
+        Assert.Equal(0, _tasks.CreateCalls);
+    }
+
+    [Fact]
+    public async Task Save_after_failed_approval_clears_freeze_and_next_approval_recaptures()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.ThrowOnCreate = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        var firstFrozenAt = (await _store.GetByIdAsync(ensured.Request.Id))!.PricingFrozenAtUtc;
+        Assert.NotNull(firstFrozenAt);
+
+        var saved = await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        Assert.Null(saved.PricingFrozenAtUtc);
+        Assert.Null(saved.PricingTotal);
+        Assert.Null(saved.Stages[0].PricingCalculatedAmount);
+        Assert.Null(saved.Hours[0].PricingCalculatedAmount);
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, saved.Status);
+
+        _components.Load = CompleteCatalog() with
+        {
+            HourlySubContracts =
+            [
+                new BillingHourlySubContractDraft(
+                    14317, "פיקוח עליון", MasterPlanSnapshotFeeTypeIds.WorkingHours, UniqueHourlyRate: 300m)
+            ]
+        };
+        _tasks.ThrowOnCreate = false;
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(300m, approved.Request.Hours[0].PricingHourlyRate);
+        Assert.Equal(110_300m, approved.Request.PricingTotal);
+        Assert.Contains("סה\"כ להכנת חשבון: ₪ 110,300", _tasks.LastBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Freeze_and_task_money_do_not_use_contract_value_or_hour_cost()
+    {
+        var root = FindRepoRoot();
+        var files = new[]
+        {
+            Path.Combine(root, "src", "SiNet.Application", "Billing", "BillingPreparationAmountCalculator.cs"),
+            Path.Combine(root, "src", "SiNet.Application", "Billing", "BillingPreparationPricingFreeze.cs"),
+            Path.Combine(root, "src", "SiNet.Application", "Billing", "BillingPreparationTaskInstructions.cs")
+        };
+        foreach (var file in files)
+        {
+            var src = File.ReadAllText(file);
+            Assert.DoesNotContain("ContractValue", src, StringComparison.Ordinal);
+            Assert.DoesNotContain("HourCost", src, StringComparison.Ordinal);
+        }
+
+        var draft = StageDraft(7390, 3853, "פיקוח", billable: 2_200_000m, weight: 0.25m);
+        var priced = BillingPreparationAmountCalculator.StageAddition(draft, 0.20m);
+        Assert.NotEqual(5_000_000m * 0.20m, priced.Amount);
+        Assert.Equal(110_000m, priced.Amount);
+    }
+
+    [Fact]
+    public void Task_instructions_use_frozen_values_even_if_a_later_catalog_is_passed()
+    {
+        var frozen = EmptyRequest() with
+        {
+            PricingStageTotal = 110_000m,
+            PricingHoursTotal = 280m,
+            PricingTotal = 110_280m,
+            PricingIsPartial = false,
+            PricingFrozenAtUtc = new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc),
+            PricingFormulaVersion = BillingPreparationPricing.FormulaVersion,
+            Stages = [Stage7390() with { PricingCalculatedAmount = 110_000m, PricingBaseAmount = 2_200_000m }],
+            Hours = [Hours14317() with { PricingHourlyRate = 280m, PricingCalculatedAmount = 280m }]
+        };
+        var laterCatalog = new[]
+        {
+            StageDraft(7390, 3853, "פיקוח עליון על הביצוע", billable: 9_999_999m, weight: 0.25m)
+        };
+        var laterHours = new[]
+        {
+            new BillingHourlySubContractDraft(
+                14317, "פיקוח עליון", MasterPlanSnapshotFeeTypeIds.WorkingHours, UniqueHourlyRate: 999m)
+        };
+        var body = BillingPreparationTaskInstructions.Build(frozen, laterCatalog, laterHours);
+        Assert.Contains("סה\"כ להכנת חשבון: ₪ 110,280", body, StringComparison.Ordinal);
+        Assert.Contains("תוספת כספית: ₪ 110,000", body, StringComparison.Ordinal);
+        Assert.Contains("תעריף: ₪ 280", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("₪ 999", body, StringComparison.Ordinal);
+    }
+
+    private static BillingPreparationSnapshotLoad CompleteCatalog() =>
+        new(
+            true,
+            new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+            "לקוח",
+            "1844",
+            "פרויקט",
+            [StageDraft(7390, 3853, "פיקוח עליון על הביצוע", billable: 2_200_000m, weight: 0.25m)],
+            [
+                new BillingHourlySubContractDraft(
+                    14317, "פיקוח עליון", MasterPlanSnapshotFeeTypeIds.WorkingHours, UniqueHourlyRate: 280m)
+            ],
+            [
+                new BillingHourReportFact(57875, 4608, 14317, 7390, new DateTime(2026, 6, 2), 1, "A", 1m, "x")
+            ]);
+
+    private static BillingPreparationStageDraft StageDraft(
+        int stageId,
+        int subId,
+        string name,
+        decimal? billable,
+        decimal weight) =>
+        new(
+            stageId,
+            subId,
+            name,
+            "תכנון פיזי",
+            weight,
+            BillingStageProgressCalculator.Observe([0.10m]),
+            0.10m,
+            Included: false,
+            MasterPlanSnapshotFeeTypeIds.FixedPrice,
+            SubContractBillableAmount: billable);
+
+    private static BillingPreparationStageLineSnapshot Stage7390() =>
+        new(
+            7390, 3853, "פיקוח עליון על הביצוע", "תכנון פיזי", 0.25m,
+            0.10m, 0.30m, 0.20m, false,
+            new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+            BillingConfirmationMode.None, null, null, null);
+
+    private static BillingPreparationHoursLineSnapshot Hours14317() =>
+        new(
+            14317, "פיקוח עליון",
+            new DateTime(2026, 6, 2), new DateTime(2026, 6, 2),
+            1, 1m,
+            [new BillingPreparationHourReportSnapshot(57875, new DateTime(2026, 6, 2), 1, "A", 1m, 14317, 7390, "x")],
+            [],
+            new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+            BillingConfirmationMode.None, null, null, null);
+
+    private static BillingPreparationRequestRecord EmptyRequest() =>
+        new(
+            2, 4608, 1844, "1844", "פרויקט", "לקוח",
+            BillingPreparationStatus.ReadyForApproval,
+            new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc),
+            7, "manager",
+            null, null, null, null, null, null,
+            false, null, null, null,
+            [],
+            []);
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "SiNet.sln"))
+                || File.Exists(Path.Combine(dir.FullName, "AGENTS.md")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Repo root not found.");
+    }
+}

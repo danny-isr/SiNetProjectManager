@@ -51,7 +51,11 @@ public sealed record BillingPreparationStageLineSnapshot(
     BillingConfirmationMode ConfirmationMode,
     DateTime? ConfirmedAtUtc,
     int? ConfirmedByUserId,
-    string? ConfirmationNote);
+    string? ConfirmationNote,
+    decimal? PricingBaseAmount = null,
+    decimal? PricingDiscountFraction = null,
+    decimal? PricingCalculatedAmount = null,
+    string? PricingUnavailableReason = null);
 
 public sealed record BillingPreparationHoursLineSnapshot(
     int MasterPlanSubContractId,
@@ -66,7 +70,11 @@ public sealed record BillingPreparationHoursLineSnapshot(
     BillingConfirmationMode ConfirmationMode,
     DateTime? ConfirmedAtUtc,
     int? ConfirmedByUserId,
-    string? ConfirmationNote);
+    string? ConfirmationNote,
+    decimal? PricingHourlyRate = null,
+    decimal? PricingDiscountFraction = null,
+    decimal? PricingCalculatedAmount = null,
+    string? PricingUnavailableReason = null);
 
 public sealed record BillingPreparationRequestRecord(
     int Id,
@@ -90,7 +98,14 @@ public sealed record BillingPreparationRequestRecord(
     DateTime? ManualOverrideAtUtc,
     int? ManualOverrideByUserId,
     IReadOnlyList<BillingPreparationStageLineSnapshot> Stages,
-    IReadOnlyList<BillingPreparationHoursLineSnapshot> Hours);
+    IReadOnlyList<BillingPreparationHoursLineSnapshot> Hours,
+    decimal? PricingStageTotal = null,
+    decimal? PricingHoursTotal = null,
+    decimal? PricingTotal = null,
+    bool? PricingIsPartial = null,
+    DateTime? PricingFrozenAtUtc = null,
+    DateTime? PricingSourceSnapshotUtc = null,
+    string? PricingFormulaVersion = null);
 
 public sealed record BillingPreparationEnsureResult(
     BillingPreparationRequestRecord Request,

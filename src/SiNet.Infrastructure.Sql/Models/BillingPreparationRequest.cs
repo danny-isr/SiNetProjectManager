@@ -28,6 +28,14 @@ public sealed class BillingPreparationRequest
     public DateTime? ManualOverrideAtUtc { get; set; }
     public int? ManualOverrideByUserId { get; set; }
 
+    public decimal? PricingStageTotal { get; set; }
+    public decimal? PricingHoursTotal { get; set; }
+    public decimal? PricingTotal { get; set; }
+    public bool? PricingIsPartial { get; set; }
+    public DateTime? PricingFrozenAtUtc { get; set; }
+    public DateTime? PricingSourceSnapshotUtc { get; set; }
+    public string? PricingFormulaVersion { get; set; }
+
     public ICollection<BillingPreparationStageLine> Stages { get; set; } = new List<BillingPreparationStageLine>();
     public ICollection<BillingPreparationHoursLine> Hours { get; set; } = new List<BillingPreparationHoursLine>();
 }
@@ -50,6 +58,10 @@ public sealed class BillingPreparationStageLine
     public DateTime? ConfirmedAtUtc { get; set; }
     public int? ConfirmedByUserId { get; set; }
     public string? ConfirmationNote { get; set; }
+    public decimal? PricingBaseAmount { get; set; }
+    public decimal? PricingDiscountFraction { get; set; }
+    public decimal? PricingCalculatedAmount { get; set; }
+    public string? PricingUnavailableReason { get; set; }
 
     public BillingPreparationRequest Request { get; set; } = null!;
 }
@@ -70,6 +82,10 @@ public sealed class BillingPreparationHoursLine
     public DateTime? ConfirmedAtUtc { get; set; }
     public int? ConfirmedByUserId { get; set; }
     public string? ConfirmationNote { get; set; }
+    public decimal? PricingHourlyRate { get; set; }
+    public decimal? PricingDiscountFraction { get; set; }
+    public decimal? PricingCalculatedAmount { get; set; }
+    public string? PricingUnavailableReason { get; set; }
 
     public BillingPreparationRequest Request { get; set; } = null!;
     public ICollection<BillingPreparationHoursReport> Reports { get; set; } = new List<BillingPreparationHoursReport>();
