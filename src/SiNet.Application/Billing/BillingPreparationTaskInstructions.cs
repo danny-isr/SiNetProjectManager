@@ -5,6 +5,36 @@ namespace SiNet.Application.Billing;
 
 public static class BillingPreparationTaskInstructions
 {
+    public const string RequestIdentityPrefix = "Billing Preparation Request #";
+
+    public static string RequestIdentityMarker(int requestId) =>
+        RequestIdentityPrefix + requestId.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// True when <paramref name="body"/> identifies exactly this preparation request.
+    /// Digit-bounded so <c>#2</c> does not match <c>#21</c>.
+    /// </summary>
+    public static bool BodyIdentifiesRequest(string? body, int requestId)
+    {
+        if (string.IsNullOrEmpty(body) || requestId <= 0)
+            return false;
+
+        var marker = RequestIdentityMarker(requestId);
+        var start = 0;
+        while (true)
+        {
+            var index = body.IndexOf(marker, start, StringComparison.Ordinal);
+            if (index < 0)
+                return false;
+
+            var after = index + marker.Length;
+            if (after >= body.Length || !char.IsAsciiDigit(body[after]))
+                return true;
+
+            start = after;
+        }
+    }
+
     public static string Build(BillingPreparationRequestRecord request) =>
         Build(request, stageCatalog: null, hourlyCatalog: null);
 
@@ -100,7 +130,7 @@ public static class BillingPreparationTaskInstructions
             }
         }
 
-        sb.Append("מקור החלטה: Billing Preparation Request #").Append(request.Id).AppendLine();
+        sb.Append("מקור החלטה: ").Append(RequestIdentityMarker(request.Id)).AppendLine();
         if (!string.IsNullOrWhiteSpace(request.ApprovedByLogin))
             sb.Append("אושר על ידי ").AppendLine(request.ApprovedByLogin);
         return sb.ToString().TrimEnd();

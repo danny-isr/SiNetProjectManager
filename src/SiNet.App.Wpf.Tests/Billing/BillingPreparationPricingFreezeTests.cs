@@ -444,6 +444,179 @@ public sealed class BillingPreparationPricingFreezeTests
     }
 
     [Fact]
+    public void Request_identity_marker_is_digit_bounded()
+    {
+        Assert.True(BillingPreparationTaskInstructions.BodyIdentifiesRequest(
+            "מקור החלטה: Billing Preparation Request #2", 2));
+        Assert.False(BillingPreparationTaskInstructions.BodyIdentifiesRequest(
+            "מקור החלטה: Billing Preparation Request #21", 2));
+        Assert.False(BillingPreparationTaskInstructions.BodyIdentifiesRequest(
+            "מקור החלטה: Billing Preparation Request #12", 2));
+        Assert.True(BillingPreparationTaskInstructions.BodyIdentifiesRequest(
+            "מקור החלטה: Billing Preparation Request #2\nאושר על ידי manager", 2));
+        Assert.False(BillingPreparationTaskInstructions.BodyIdentifiesRequest(
+            "מקור החלטה: Billing Preparation Request #99", 2));
+    }
+
+    [Fact]
+    public async Task Task_link_persist_failure_leaves_one_task_and_retry_recovers_it()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.NextTaskId = 777;
+        _store.ThrowOnTaskLinkPersist = true;
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        Assert.Equal("FINAL request persistence failed.", ex.Message);
+
+        var afterFailure = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.Equal(1, _tasks.CreateCalls);
+        Assert.Equal(777, _tasks.LastTaskId);
+        Assert.Single(_tasks.Tasks);
+        Assert.True(_tasks.Tasks[0].IsOpen);
+        Assert.True(BillingPreparationTaskInstructions.BodyIdentifiesRequest(
+            _tasks.LastBody, ensured.Request.Id));
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, afterFailure!.Status);
+        Assert.Null(afterFailure.TaskId);
+        Assert.Null(afterFailure.ApprovedAtUtc);
+        Assert.Null(afterFailure.ApprovedByUserId);
+        Assert.Equal(110_280m, afterFailure.PricingTotal);
+        Assert.True(BillingPreparationPricingFreeze.HasFreeze(afterFailure));
+
+        _store.ThrowOnTaskLinkPersist = false;
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(1, _tasks.CreateCalls);
+        Assert.Equal(777, approved.TaskId);
+        Assert.Equal(777, approved.Request.TaskId);
+        Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
+        Assert.Equal(new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc), approved.Request.ApprovedAtUtc);
+        Assert.Equal(7, approved.Request.ApprovedByUserId);
+        Assert.Equal("manager", approved.Request.ApprovedByLogin);
+        Assert.Equal(110_280m, approved.Request.PricingTotal);
+        Assert.Equal(110_000m, approved.Request.PricingStageTotal);
+        Assert.Equal(280m, approved.Request.PricingHoursTotal);
+        Assert.Same(_tasks.LastBody, _tasks.Tasks[0].Body);
+    }
+
+    [Fact]
+    public async Task Unrelated_open_PrepareBill_is_not_adopted_and_still_blocks()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.Seed(
+            500,
+            12,
+            "מקור החלטה: Billing Preparation Request #99\nסה\"כ להכנת חשבון: ₪ 1");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        Assert.Equal("כבר קיימת משימת הכנת חשבון פתוחה לפרויקט.", ex.Message);
+        Assert.Equal(0, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.Null(stored!.TaskId);
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, stored.Status);
+        Assert.Null(stored.ApprovedAtUtc);
+    }
+
+    [Fact]
+    public async Task Matching_marker_for_another_request_is_not_adopted()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.Seed(
+            501,
+            12,
+            "מקור החלטה: " + BillingPreparationTaskInstructions.RequestIdentityMarker(ensured.Request.Id * 10 + 1));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        Assert.Equal("כבר קיימת משימת הכנת חשבון פתוחה לפרויקט.", ex.Message);
+        Assert.Equal(0, _tasks.CreateCalls);
+        Assert.Null((await _store.GetByIdAsync(ensured.Request.Id))!.TaskId);
+    }
+
+    [Fact]
+    public async Task Closed_matching_task_is_not_adopted()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.Seed(
+            321,
+            12,
+            "מקור החלטה: " + BillingPreparationTaskInstructions.RequestIdentityMarker(ensured.Request.Id),
+            isOpen: false);
+        _tasks.OpenTaskExists = false;
+        _tasks.NextTaskId = 778;
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(1, _tasks.CreateCalls);
+        Assert.Equal(778, approved.TaskId);
+        Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
+        Assert.Equal(2, _tasks.Tasks.Count);
+    }
+
+    [Fact]
+    public async Task Corrupt_freeze_with_matching_open_task_fails_safely()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.NextTaskId = 777;
+        _store.ThrowOnTaskLinkPersist = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        _store.ThrowOnTaskLinkPersist = false;
+
+        var frozen = await _store.GetByIdAsync(ensured.Request.Id);
+        var corrupt = frozen! with { PricingFrozenAtUtc = frozen.PricingFrozenAtUtc, PricingTotal = null };
+        await _store.UpdateAsync(corrupt);
+        Assert.True(BillingPreparationPricingFreeze.HasIncompleteFreeze(corrupt));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        Assert.Equal(BillingPreparationPricingFreeze.IncompleteFreezeMessage, ex.Message);
+        Assert.Equal(1, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.Null(stored!.TaskId);
+        Assert.Null(stored.ApprovedAtUtc);
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, stored.Status);
+        Assert.Equal(777, _tasks.LastTaskId);
+    }
+
+    [Fact]
+    public async Task Ordinary_successful_approval_still_creates_exactly_one_task()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(1, _tasks.CreateCalls);
+        Assert.Equal(approved.TaskId, approved.Request.TaskId);
+        Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
+        Assert.Equal(110_280m, approved.Request.PricingTotal);
+        Assert.Contains(
+            BillingPreparationTaskInstructions.RequestIdentityMarker(ensured.Request.Id),
+            _tasks.LastBody,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Task_link_recovery_uses_existing_body_marker_without_schema_change()
+    {
+        var root = FindRepoRoot();
+        var service = File.ReadAllText(Path.Combine(root, "src", "SiNet.Application", "Billing", "BillingPreparationService.cs"));
+        var port = File.ReadAllText(Path.Combine(root, "src", "SiNet.Infrastructure.Sql", "Services", "Billing", "SqlBillingPreparationTaskPort.cs"));
+        Assert.Contains("FindOpenPrepareBillTaskForRequestAsync", service, StringComparison.Ordinal);
+        Assert.Contains("FindOpenPrepareBillTaskForRequestAsync", port, StringComparison.Ordinal);
+        Assert.Contains("t.Body", port, StringComparison.Ordinal);
+        Assert.Contains("AssignmentStatus.IsOpen", port, StringComparison.Ordinal);
+        Assert.Contains("TaskTypeCodes.PrepareBill", port, StringComparison.Ordinal);
+        Assert.DoesNotContain("Add-Migration", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HasFreeze_requires_coherent_metadata_not_only_frozen_at()
     {
         var frozenAt = new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc);

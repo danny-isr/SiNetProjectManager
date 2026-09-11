@@ -77,6 +77,11 @@ public interface IBillingPreparationTaskPort
     Task<bool> HasOpenPrepareBillTaskAsync(
         int siNetProjectId,
         CancellationToken cancellationToken = default);
+
+    Task<int?> FindOpenPrepareBillTaskForRequestAsync(
+        int siNetProjectId,
+        int billingPreparationRequestId,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IBillingPreparationService

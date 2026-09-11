@@ -5,6 +5,8 @@ public sealed class MemoryBillingPreparationStore : IBillingPreparationStore
     private readonly Dictionary<int, BillingPreparationRequestRecord> _rows = [];
     private int _nextId = 1;
 
+    public bool ThrowOnTaskLinkPersist { get; set; }
+
     public Task<BillingPreparationRequestRecord?> GetActiveByMasterPlanProjectIdAsync(
         int masterPlanProjectId,
         CancellationToken cancellationToken = default)
@@ -58,6 +60,8 @@ public sealed class MemoryBillingPreparationStore : IBillingPreparationStore
     {
         if (request.Id <= 0 || !_rows.ContainsKey(request.Id))
             throw new InvalidOperationException("Cannot update unsaved preparation request.");
+        if (ThrowOnTaskLinkPersist && request.TaskId is not null)
+            throw new InvalidOperationException("FINAL request persistence failed.");
         _rows[request.Id] = request;
         return Task.FromResult(request);
     }
@@ -87,12 +91,24 @@ public sealed class FixedBillingPreparationActor(BillingActor actor) : IBillingP
 
 public sealed class MemoryBillingPreparationTaskPort : IBillingPreparationTaskPort
 {
+    public IList<MemoryPrepareBillTask> Tasks { get; } = new List<MemoryPrepareBillTask>();
     public int LastTaskId { get; private set; }
     public int CreateCalls { get; set; }
     public bool OpenTaskExists { get; set; }
     public string? LastBody { get; private set; }
-
     public bool ThrowOnCreate { get; set; }
+    public int? NextTaskId { get; set; }
+
+    public void Seed(
+        int id,
+        int siNetProjectId,
+        string body,
+        bool isOpen = true)
+    {
+        Tasks.Add(new MemoryPrepareBillTask(id, siNetProjectId, body, isOpen));
+        if (isOpen)
+            OpenTaskExists = true;
+    }
 
     public Task<int> CreatePrepareBillTaskAsync(
         int siNetProjectId,
@@ -105,7 +121,9 @@ public sealed class MemoryBillingPreparationTaskPort : IBillingPreparationTaskPo
 
         CreateCalls++;
         LastBody = body;
-        LastTaskId = 9000 + CreateCalls;
+        LastTaskId = NextTaskId ?? (9000 + CreateCalls);
+        NextTaskId = null;
+        Tasks.Add(new MemoryPrepareBillTask(LastTaskId, siNetProjectId, body, IsOpen: true));
         OpenTaskExists = true;
         return Task.FromResult(LastTaskId);
     }
@@ -113,8 +131,32 @@ public sealed class MemoryBillingPreparationTaskPort : IBillingPreparationTaskPo
     public Task<bool> HasOpenPrepareBillTaskAsync(
         int siNetProjectId,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult(OpenTaskExists && CreateCalls > 0);
+        Task.FromResult(
+            OpenTaskExists
+            || Tasks.Any(t => t.IsOpen && t.SiNetProjectId == siNetProjectId));
+
+    public Task<int?> FindOpenPrepareBillTaskForRequestAsync(
+        int siNetProjectId,
+        int billingPreparationRequestId,
+        CancellationToken cancellationToken = default)
+    {
+        var match = Tasks
+            .Where(t => t.IsOpen
+                         && t.SiNetProjectId == siNetProjectId
+                         && BillingPreparationTaskInstructions.BodyIdentifiesRequest(
+                             t.Body, billingPreparationRequestId))
+            .OrderBy(t => t.Id)
+            .Select(t => (int?)t.Id)
+            .FirstOrDefault();
+        return Task.FromResult(match);
+    }
 }
+
+public sealed record MemoryPrepareBillTask(
+    int Id,
+    int SiNetProjectId,
+    string Body,
+    bool IsOpen);
 
 public sealed class MemoryBillingPreparationProjectMapper(int? siNetProjectId = 12)
     : IBillingPreparationProjectMapper

@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 11.09.2026 (live bill amount from proven MasterPlan formulas; Decision 2 superseded)  
+> **Updated:** 11.09.2026 (recover approval when task exists but request TaskId persist failed)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -485,15 +485,26 @@ Approved task instructions use **persisted freeze evidence** captured at the app
 Capture order on Approve:
 
 1. Existing `TaskId` returns immediately (idempotent). Otherwise the request must already be `ReadyForApproval`. Any other status (`WaitingForSnapshot`, `WaitingForSelection`, `TaskOpen` without a task id, `AwaitingMasterPlanConfirmation`, `Completed`, `Cancelled`) is rejected with «הבקשה אינה במצב מוכן לאישור.» — no freeze, no task. This is enforced in the service, not only WPF `CanExecute`.
-2. Load the current MasterPlan pricing catalog only when capturing a **new** freeze.
-3. Resolve `PricingSourceSnapshotUtc` = catalog `LatestBackupUtc` otherwise the request `SnapshotTimestampUtc`. If both are NULL, block with «לא ניתן לאשר — לא ניתן לזהות את snapshot המקור של נתוני התמחור.» Do not persist an anonymous freeze.
-4. Calculate line evidence for those **saved** lines (`FixedPrices.Sum × (1 − discount) × persisted Weight × Delta`; hours = persisted `TotalHours ×` unique rate `× (1 − discount)`).
-5. Persist nullable freeze columns on the request and lines **while status stays ReadyForApproval**. A freeze is valid only when metadata is coherent (`PricingFrozenAtUtc`, `PricingSourceSnapshotUtc`, `MP-BILLING-1`, totals, `PricingIsPartial`, and each selected line has amount XOR unavailable-reason). Incomplete freeze is not auto-repaired.
-6. If `PricingIsPartial` and there is no `ManualOverride`, **block** before task creation. Unknown amounts stay `NULL` (never 0).
-7. Create the `PrepareBill` task from the **persisted freeze**.
-8. Only after task creation succeeds: set `TaskId`, `ApprovedAt`/`ApprovedBy`, `Status = TaskOpen`.
+2. If `TaskId` is still NULL, look for an **open** `PrepareBill` task on the same SiNet `ProjectId` whose `ProjectAssignment.Body` identifies this request via the existing marker `מקור החלטה: Billing Preparation Request #<id>` (digit-bounded; `#2` must not match `#21`). Match **this** request only — do not adopt an unrelated open PrepareBill on the same project.
+   - Matching open task + valid persisted freeze: **recover** — do not recapture pricing, do not create another task, do not edit the existing task Body. Finalize the request (`Status = TaskOpen`, `TaskId` = recovered id, `ApprovedAt`/`ApprovedBy`).
+   - Matching open task without a valid/coherent freeze, or with incomplete freeze: **fail safely** — do not recover, do not create another task.
+   - Unrelated open PrepareBill (no matching marker): keep the existing block «כבר קיימת משימת הכנת חשבון פתוחה לפרויקט.»
+   - Closed/completed task with a matching marker is **not** adopted.
+3. Load the current MasterPlan pricing catalog only when capturing a **new** freeze (no matching recoverable task).
+4. Resolve `PricingSourceSnapshotUtc` = catalog `LatestBackupUtc` otherwise the request `SnapshotTimestampUtc`. If both are NULL, block with «לא ניתן לאשר — לא ניתן לזהות את snapshot המקור של נתוני התמחור.» Do not persist an anonymous freeze.
+5. Calculate line evidence for those **saved** lines (`FixedPrices.Sum × (1 − discount) × persisted Weight × Delta`; hours = persisted `TotalHours ×` unique rate `× (1 − discount)`).
+6. Persist nullable freeze columns on the request and lines **while status stays ReadyForApproval**. A freeze is valid only when metadata is coherent (`PricingFrozenAtUtc`, `PricingSourceSnapshotUtc`, `MP-BILLING-1`, totals, `PricingIsPartial`, and each selected line has amount XOR unavailable-reason). Incomplete freeze is not auto-repaired.
+7. If `PricingIsPartial` and there is no `ManualOverride`, **block** before task creation. Unknown amounts stay `NULL` (never 0).
+8. Create the `PrepareBill` task from the **persisted freeze**. The task Body stores the request marker above (`ProjectAssignment.Body`).
+9. Only after task creation succeeds: set `TaskId`, `ApprovedAt`/`ApprovedBy`, `Status = TaskOpen`.
 
-If task creation fails: status stays ReadyForApproval, `TaskId`/`ApprovedAt` stay NULL, a **valid** freeze remains for retry (retry must not recapture from a later catalog and does not require a live snapshot timestamp). If the manager Save-s a changed (or re-saved) selection before a task exists, **clear** the freeze; the next Approve captures a new one. A later monthly `.bak` restore must not change money already written into an approved task.
+If task creation fails: status stays ReadyForApproval, `TaskId`/`ApprovedAt` stay NULL, a **valid** freeze remains for retry (retry must not recapture from a later catalog and does not require a live snapshot timestamp).
+
+If task creation **succeeds** but the final request `UpdateAsync` (TaskId / TaskOpen / Approved*) fails: the open PrepareBill already exists with this request's Body marker; the request stays ReadyForApproval with `TaskId` NULL and the freeze intact. Retry recovers that same task via the marker — it must not create a second task.
+
+If the manager Save-s a changed (or re-saved) selection before a task exists, **clear** the freeze; the next Approve captures a new one. A later monthly `.bak` restore must not change money already written into an approved task.
+
+Concurrency: `IX_ProjectAssignment_UniqueOpenTask` (`ProjectId` + `AssignedToId` + `TaskTypeId` + `ParentAssignmentId`, queued rows with `WorkPriority IS NOT NULL`) plus `CreateTaskAsync` duplicate check already prevent two queued open PrepareBill tasks for the same SiNet project and Office-Management assignee. No extra column/migration.
 
 Request #2 historical rows stay freeze-NULL after this migration (no backfill).
 

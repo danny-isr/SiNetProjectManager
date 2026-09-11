@@ -221,6 +221,30 @@ public sealed class BillingPreparationService(
         if (request.SiNetProjectId is not int siNetProjectId)
             throw new InvalidOperationException("לא נמצא פרויקט SiNet תואם — לא ניתן לפתוח משימה.");
 
+        var matchingOpenTaskId = await _tasks
+            .FindOpenPrepareBillTaskForRequestAsync(siNetProjectId, request.Id, cancellationToken)
+            .ConfigureAwait(false);
+        if (matchingOpenTaskId is int recoveredTaskId)
+        {
+            if (BillingPreparationPricingFreeze.HasIncompleteFreeze(request)
+                || !BillingPreparationPricingFreeze.HasFreeze(request))
+            {
+                throw new InvalidOperationException(BillingPreparationPricingFreeze.IncompleteFreezeMessage);
+            }
+
+            if (request.PricingIsPartial == true && !request.ManualOverride)
+                throw new InvalidOperationException(BillingPreparationPricingFreeze.PartialApprovalBlockedMessage(request));
+
+            var recoverWho = await _actor.GetAsync(cancellationToken).ConfigureAwait(false);
+            return await FinalizeApprovedRequestAsync(
+                    request,
+                    recoveredTaskId,
+                    recoverWho,
+                    request.SnapshotTimestampUtc,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         if (await _tasks.HasOpenPrepareBillTaskAsync(siNetProjectId, cancellationToken).ConfigureAwait(false))
             throw new InvalidOperationException("כבר קיימת משימת הכנת חשבון פתוחה לפרויקט.");
 
@@ -256,13 +280,24 @@ public sealed class BillingPreparationService(
         var taskId = await _tasks.CreatePrepareBillTaskAsync(siNetProjectId, title, body, cancellationToken)
             .ConfigureAwait(false);
 
+        return await FinalizeApprovedRequestAsync(frozen, taskId, who, now, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<BillingPreparationApproveResult> FinalizeApprovedRequestAsync(
+        BillingPreparationRequestRecord frozen,
+        int taskId,
+        BillingActor who,
+        DateTime? snapshotFallbackUtc,
+        CancellationToken cancellationToken)
+    {
         var approved = frozen with
         {
             Status = BillingPreparationStatus.TaskOpen,
             ApprovedAtUtc = _time.GetUtcNow().UtcDateTime,
             ApprovedByUserId = who.UserId,
             ApprovedByLogin = who.Login,
-            SnapshotTimestampUtc = frozen.SnapshotTimestampUtc ?? now,
+            SnapshotTimestampUtc = frozen.SnapshotTimestampUtc ?? snapshotFallbackUtc,
             TaskId = taskId
         };
         approved = await _store.UpdateAsync(approved, cancellationToken).ConfigureAwait(false);

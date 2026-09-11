@@ -93,4 +93,34 @@ public sealed class SqlBillingPreparationTaskPort(
                 cancellationToken)
             .ConfigureAwait(false);
     }
+
+    public async Task<int?> FindOpenPrepareBillTaskForRequestAsync(
+        int siNetProjectId,
+        int billingPreparationRequestId,
+        CancellationToken cancellationToken = default)
+    {
+        if (siNetProjectId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(siNetProjectId));
+        if (billingPreparationRequestId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(billingPreparationRequestId));
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var open = await db.ProjectAssignments
+            .AsNoTracking()
+            .Where(t => t.ProjectId == siNetProjectId
+                        && t.TaskType != null
+                        && t.TaskType.Code == TaskTypeCodes.PrepareBill
+                        && t.AssignmentStatus != null
+                        && t.AssignmentStatus.IsOpen)
+            .Select(t => new { t.Id, t.Body })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return open
+            .Where(t => BillingPreparationTaskInstructions.BodyIdentifiesRequest(
+                t.Body, billingPreparationRequestId))
+            .OrderBy(t => t.Id)
+            .Select(t => (int?)t.Id)
+            .FirstOrDefault();
+    }
 }
