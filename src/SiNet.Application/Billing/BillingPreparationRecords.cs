@@ -14,7 +14,10 @@ public sealed record BillingPreparationStageDraft(
     string? ContractName = null,
     string? ContractNumber = null,
     string? SubContractNumber = null,
-    int OrderNum = 0);
+    int OrderNum = 0,
+    decimal? SubContractBillableAmount = null,
+    decimal DiscountFraction = 0m,
+    bool HasUnpricedIndexation = false);
 
 public sealed record BillingPreparationHoursDraft(
     int MasterPlanSubContractId,

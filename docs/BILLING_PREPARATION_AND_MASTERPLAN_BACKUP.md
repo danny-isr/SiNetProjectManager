@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 11.09.2026 (compact preparation editor, SubContract/stage search, unsaved-changes protection; business calculations unchanged)  
+> **Updated:** 11.09.2026 (live bill amount from proven MasterPlan formulas; Decision 2 superseded)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -239,7 +239,7 @@ Reload: Observed = persisted ObservedCumulativeProgress; Addition = persisted Re
 
 A7 confirmation is unchanged: newer snapshot `StepProgress >= TargetCumulativeProgress`.
 
-**Decision 2 — no automatic stage amount in V1.** Stage amount remains **BLOCKED**. Task instructions are stage + cumulative %. Do not compute `ContractValue * Percentage`.
+**Decision 2 — live bill amount (supersedes V1 BLOCKED, 11.09.2026).** Automatic amounts are allowed **only** from formulas proven against historical `Db_Mp_SiEng` bills (see §4.4 / §5.5 / §5.6). Do **not** compute `ContractValue * Percentage`. Preview is UI-only (no SQL write). Unknown pricing is never treated as ₪0.
 
 **Decision 3 — hourly scope is manager-defined.** Never show «שעות לא מחויבות» as a MasterPlan fact. Show **available/reportable** hours for an explicit SubContract + date range; resolve to concrete `HoursReportId`s on approve. SiNet may warn «already in preparation request #X»; never «already billed in MasterPlan».
 
@@ -329,15 +329,17 @@ UI context should show **SubContract name + TypeID display + FeeType**, not SiNe
 
 `BillLines.StepPercentage` matches live `SubContractSteps.Percentage` on **8974 / 9204** lines; **230** mismatch (live stage table drifted after older bills). Preparation UI must show **current** `SubContractSteps.Percentage`, and persist **both** current and billed snapshot values on approval.
 
-### 4.4 Stage monetary value — BLOCKED for general use
+### 4.4 Stage monetary value — PROVEN (FeeType=3), 11.09.2026
 
-| Candidate | Observation |
-| --- | --- |
-| `SubContractSteps.VariablePrice` | **0** non-zero rows in this snapshot |
-| `PercentagePrices` | Only **82** rows, almost all `FeeTypeID=1` (אחוז מעלות), `PercentageStatusID=1` (אומדן). This is a **cost-base × fee%**, not a stage value. |
-| `BillLines.PercentagePricePrice` | Present on some lines; not a general stage catalog |
+Proven on vault `MasterPlanDatabase` / `Db_Mp_SiEng`, project **4608**.
 
-**Do not** invent stage amounts from Replica `MP_Bills.Sum` or `ProjectsExtraData.ProgressPercentage`. Amount on a preparation line is allowed only when a **reliable** snapshot field exists for that component; otherwise omit amount.
+The billable basis is **`FixedPrices.Sum`** (SubContract + confirmed `ContractChange`), not `Contracts` and not `SubContracts`. Bill-time snapshot is `BillSubContracts.FixedPriceSum`. Discount is `SubContractDiscounts.Percentage` (`BillSubContracts.SubContractAveragedDiscount`). `SubContractSteps.VariablePrice` is unused.
+
+**This-bill addition:** `FixedPrices.Sum × (1 − discount) × stage weight × ΔStepProgress`.
+
+`StepProgress` is cumulative: 40%→60% bills 20% of the stage. Debit `BillLines.Balance` matches the **cumulative** form of the same formula (76/80 lines on 4608; four ~₪0 leftovers). Bill 12084 / SC 3853 header ₪58,300 = 7390 Δ5% (₪27,500) + 7388 Δ35% (₪30,800). Bill 2570 debit-stage sum = `Bills.Sum` ₪519,440.
+
+Indexation (`IndexMultiplier` ≠ 1) is rare and **not** used on 4608. If live `SubContracts.IndexTypeID` is set, mark the SubContract amount **unavailable** — do not guess `IndexValues`. Never use `ContractValue * Percentage`.
 
 ### 4.5 Partial-stage submission — PROVEN (cumulative bills)
 
@@ -457,7 +459,31 @@ UI must present the limitation and require the manager to choose an explicit hou
 Schema intent: `BillWorkingHours.HoursReportID` → `HoursReports.ID`.  
 This snapshot: unused. A7 must not auto-complete hourly instructions from Replica hours.
 
+### 5.5 Hourly money — PROVEN when the SubContract has a unique rate
+
+Historical FeeType=4 `BillLines` on 4608: `WorkingHourPrice × WorkingHourCount` (discount 0) = `Balance`. Examples: 147.5×280=₪41,300; 58×280=₪16,240. Catalog rate is **`WorkingHoursChanges.Price`** on the confirmed contract change — **not** `SubContracts.HourCost` (0) and **not** employee cost. `BillSubContracts.WorkingHourRateID` is NULL on 4608.
+
+`BillWorkingHours` has **0** rows: a selected `HoursReport` cannot be tied to a role. Therefore:
+
+- If confirmed `WorkingHoursChanges.Price` values on that SubContract are **unique** (528/592 FeeType=4 subs): `hours × unique rate × (1 − PercentageDiscount)`.
+- If **multiple** role prices (64 subs): amount **unavailable** («תעריף לא ניתן לקביעה»).
+- Never one global rate for all hourly SubContracts.
+
+### 5.6 Bill total — PROVEN as `Bills.Sum` (before the VAT rate)
+
+| Field | Proven meaning |
+| --- | --- |
+| `Bills.Sum` | Component total of this bill. Equals debit-stage sums and/or hourly qty×rate and/or header `Balance` |
+| `Bills.VAT` | VAT **rate percent** (17 or 18), not money |
+| `Bills.IncludeVat` | `Sum × (1 + VAT/100)` (e.g. 97440×1.18 = 114979.2) |
+| `Bills.CollectionSum` | Equals `Sum` on 4608, not `IncludeVat` |
+
+Preparation «סכום החשבון» uses **`Bills.Sum` semantics** (component total). Do not add VAT in the preview and do not label כולל/לפני מע"מ. Display whole shekels when the amount is whole; 2 decimals when agorot exist (historical Balances such as 9346.15).
+
+Approved task instructions include the monetary summary computed at approval from the frozen selection and the then-current catalog. Line-level amount columns would require a **new migration** (not created in this slice). Reloading an approved request after a later monthly restore may differ from the frozen task text.
+
 ---
+
 
 ## 6. The three percentages (must stay distinct)
 
@@ -504,7 +530,7 @@ Mixed fee examples (not the September four): 3884, 4097, 4189, 3458.
 | --- | --- | --- |
 | Milestone mapping (stage ID, name, SubContract) | **PROVEN** | Read from `Db_Mp_SiEng`, not Replica |
 | Stage % of SubContract | **PROVEN** | Not automatically % of whole project |
-| Stage monetary value | **BLOCKED** | Omit unless a later proven field appears |
+| Stage monetary value | **PROVEN** FeeType=3 | `FixedPrices.Sum × (1−discount) × weight × Δprogress`; indexation unknown → unavailable |
 | Partial-stage semantics (`StepProgress` cumulative) | **PROVEN** | Never SUM across cumulative bills |
 | Previously submitted % | **PARTIAL** | MAX over submitted/approved/closed lines |
 | Previously approved % | **PARTIAL** | MAX over approved/closed; can differ |
@@ -530,7 +556,8 @@ Mixed fee examples (not the September four): 3884, 4097, 4189, 3458.
 - Hourly component as first-class row with **explicit** manager scope (no auto unbilled list presented as truth).
 - `WaitingForSnapshot` when `SubContracts` / `SubContractSteps` missing for the project in the latest restore.
 - Audited manual override.
-- Approve → one `PrepareBill` task with frozen instruction snapshot (stages use **target cumulative** wording).
+- Live bill amount preview (`Bills.Sum` semantics) from proven FeeType=3 / unique-rate FeeType=4 formulas. Unknown pricing is listed, never treated as ₪0.
+- Approve → one `PrepareBill` task with frozen instruction snapshot (stages use **target cumulative** wording). Monetary summary is computed at approval from the frozen selection and the then-current catalog (not persisted as new line columns).
 - Task complete → `AwaitingMasterPlanConfirmation`.
 - Stage auto-`Completed` only from a **newer** monthly snapshot proving `StepProgress >= target` for the approved `StepID`.
 - Hourly `Completed` only via explicit manager «אשר שבוצע ב-MasterPlan» (Manual).
@@ -539,7 +566,9 @@ Mixed fee examples (not the September four): 3884, 4097, 4189, 3458.
 
 - Auto list of “unbilled hours” / “already billed in MasterPlan”.
 - Auto `Completed` from Replica `MP_Bills` header rows or from **old** snapshot lines that already had the same %.
-- Stage currency amounts (`ContractValue * Percentage`).
+- `ContractValue * Percentage` as a stage amount (wrong field).
+- Guessing indexation when `IndexTypeID` is set.
+- Pricing HoursReports on a SubContract that has more than one `WorkingHoursChanges.Price`.
 
 When a newer bak is restored, **re-run the same SELECT pack** before turning on any BLOCKED automation. Do not assume Release `BillWorkingHours` is populated.
 

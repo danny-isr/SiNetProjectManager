@@ -89,6 +89,9 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
         ContractNumber = catalog?.ContractNumber;
         SubContractNumber = catalog?.SubContractNumber;
         OrderNum = catalog?.OrderNum ?? 0;
+        SubContractBillableAmount = catalog?.SubContractBillableAmount;
+        DiscountFraction = catalog?.DiscountFraction ?? 0m;
+        HasUnpricedIndexation = catalog?.HasUnpricedIndexation ?? false;
         _additionPercent = source.RequestedDelta * 100m;
     }
 
@@ -110,8 +113,13 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
     public int? ConfirmedByUserId { get; }
     public string? ConfirmationNote { get; }
     public int FeeTypeId { get; }
+    public decimal? SubContractBillableAmount { get; }
+    public decimal DiscountFraction { get; }
+    public bool HasUnpricedIndexation { get; }
     public string AdditionAutomationId =>
         "BillingDashboard.StageAddition." + MasterPlanStageId.ToString(CultureInfo.InvariantCulture);
+    public string AmountAutomationId =>
+        "BillingDashboard.StageAmount." + MasterPlanStageId.ToString(CultureInfo.InvariantCulture);
 
     public decimal AdditionPercent
     {
@@ -202,6 +210,46 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
     public string RelativeShareText =>
         "תרומת התוספת לתת החוזה: " + FormatPercent(RelativeSharePercent);
 
+    public BillingPricedValue AdditionAmount =>
+        BillingPreparationAmountCalculator.StageAddition(ToPricingDraft(), RequestedDelta);
+
+    public bool ShowAdditionAmount => HasPositiveAddition && !HasAdditionValidation;
+    public bool AdditionAmountIsPriced => AdditionAmount.IsPriced;
+    public string AdditionAmountText
+    {
+        get
+        {
+            if (!ShowAdditionAmount)
+                return string.Empty;
+            if (AdditionAmount.IsPriced)
+                return "תוספת כספית בחשבון: " + BillingMoneyFormatter.FormatShekels(AdditionAmount.Amount!.Value);
+            return "תוספת כספית בחשבון: לא ניתן לחשב — " + (AdditionAmount.UnavailableReason ?? "לא נמצא בסיס תמחור");
+        }
+    }
+
+    public BillingPreparationStageDraft ToPricingDraft() =>
+        new(
+            MasterPlanStageId,
+            MasterPlanSubContractId,
+            StageName,
+            SubContractName,
+            StageWeightWithinSubContract,
+            new BillingStageProgressCalculator.ObservedCumulativeProgress(
+                ObservedCumulativeProgress,
+                HasDataQualityFlag,
+                HasDataQualityFlag ? [ObservedCumulativeProgress ?? -1] : []),
+            ObservedCumulativeProgress,
+            HasPositiveAddition,
+            FeeTypeId,
+            MasterPlanContractId,
+            ContractName,
+            ContractNumber,
+            SubContractNumber,
+            OrderNum,
+            SubContractBillableAmount,
+            DiscountFraction,
+            HasUnpricedIndexation);
+
     public string? AdditionValidationMessage
     {
         get
@@ -281,6 +329,10 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
         OnPropertyChanged(nameof(RemainingCompactText));
         OnPropertyChanged(nameof(AdditionValidationMessage));
         OnPropertyChanged(nameof(HasAdditionValidation));
+        OnPropertyChanged(nameof(AdditionAmount));
+        OnPropertyChanged(nameof(ShowAdditionAmount));
+        OnPropertyChanged(nameof(AdditionAmountIsPriced));
+        OnPropertyChanged(nameof(AdditionAmountText));
     }
 
     private static string FormatPercent(decimal percent) =>

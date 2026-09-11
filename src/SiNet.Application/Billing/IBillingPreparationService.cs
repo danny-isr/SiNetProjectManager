@@ -54,7 +54,10 @@ public sealed record BillingPreparationSnapshotLoad(
 public sealed record BillingHourlySubContractDraft(
     int MasterPlanSubContractId,
     string Name,
-    int FeeTypeId);
+    int FeeTypeId,
+    decimal? UniqueHourlyRate = null,
+    decimal HourlyDiscountFraction = 0m,
+    string? AmountUnavailableReason = null);
 
 public interface IBillingPreparationProjectMapper
 {

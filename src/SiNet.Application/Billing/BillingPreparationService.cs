@@ -232,7 +232,10 @@ public sealed class BillingPreparationService(
             SnapshotTimestampUtc = request.SnapshotTimestampUtc ?? now
         };
         var title = $"הכנת חשבון — פרויקט {approved.ProjectNumber ?? approved.MasterPlanProjectId.ToString()}";
-        var body = BillingPreparationTaskInstructions.Build(approved);
+        var catalog = await _components.LoadAsync(approved.MasterPlanProjectId, cancellationToken)
+            .ConfigureAwait(false);
+        var body = BillingPreparationTaskInstructions.Build(
+            approved, catalog.Stages, catalog.HourlySubContracts);
         var taskId = await _tasks.CreatePrepareBillTaskAsync(siNetProjectId, title, body, cancellationToken)
             .ConfigureAwait(false);
         approved = approved with { TaskId = taskId };

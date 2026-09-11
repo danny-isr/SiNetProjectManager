@@ -21,6 +21,9 @@ public sealed class BillingPreparationHoursScopeEditVm : ObservableObject
     private DateTime? _toDate;
     private int _reportCount;
     private decimal _totalHours;
+    private decimal _pricedHoursAmount;
+    private bool _hoursAmountIsPartial;
+    private string _hoursAmountText = string.Empty;
     private string? _validationMessage;
     private IReadOnlyList<int> _overlappingHourReportIds = [];
     private IReadOnlyList<BillingPreparationHourReportSnapshot> _resolvedReports = [];
@@ -217,8 +220,41 @@ public sealed class BillingPreparationHoursScopeEditVm : ObservableObject
     public string SelectedNamesText =>
         string.Join(
             Environment.NewLine,
-            _choices.Where(c => c.IsSelected).Select(c => "• " + c.Name + " — "
-                + c.ReportCount + " דיווחים, " + c.TotalHours.ToString("0.##") + " שעות"));
+            _choices.Where(c => c.IsSelected).Select(FormatSelectedName));
+
+    public decimal PricedHoursAmount => _pricedHoursAmount;
+    public bool HoursAmountIsPartial => _hoursAmountIsPartial;
+    public string HoursAmountText => _hoursAmountText;
+    public bool ShowHoursAmount => Included && SelectedSubContractCount > 0;
+
+    public IReadOnlyList<(BillingHourlySubContractDraft Draft, decimal Hours, string Label)> PricedHourItems()
+    {
+        if (!Included)
+            return [];
+        return _choices
+            .Where(c => c.IsSelected)
+            .Select(c => (c.Source, c.TotalHours, c.Name))
+            .ToList();
+    }
+
+    public bool ShowUnifiedHourlyRate
+    {
+        get
+        {
+            var rates = _choices
+                .Where(c => c.IsSelected && c.Source.UniqueHourlyRate is not null)
+                .Select(c => c.Source.UniqueHourlyRate!.Value)
+                .Distinct()
+                .ToList();
+            return rates.Count == 1 && _choices.Where(c => c.IsSelected).All(c => c.Source.UniqueHourlyRate is not null);
+        }
+    }
+
+    public string UnifiedHourlyRateText =>
+        ShowUnifiedHourlyRate
+            ? "תעריף: " + BillingMoneyFormatter.FormatShekels(
+                _choices.First(c => c.IsSelected).Source.UniqueHourlyRate!.Value)
+            : string.Empty;
 
     public IReadOnlyList<BillingHourlySubContractDraft> AvailableHourlySubContracts =>
         _choices.Select(c => c.Source).ToList();
@@ -410,6 +446,37 @@ public sealed class BillingPreparationHoursScopeEditVm : ObservableObject
         OnPropertyChanged(nameof(SelectedNamesText));
         OnPropertyChanged(nameof(SubContractName));
         OnPropertyChanged(nameof(MasterPlanSubContractId));
+        RefreshHoursAmount();
         SetOverlappingIds(_overlappingHourReportIds);
+    }
+
+    private static string FormatSelectedName(BillingHourlySubContractChoiceVm choice)
+    {
+        var line = "• " + choice.Name + " — "
+                   + choice.ReportCount + " דיווחים, "
+                   + choice.TotalHours.ToString("0.##") + " שעות";
+        if (choice.Source.UniqueHourlyRate is decimal)
+            line += ", " + choice.RateBasisText + ", " + choice.AmountText;
+        else
+            line += " — " + (choice.PricedAmount.UnavailableReason ?? "תעריף לא ניתן לקביעה");
+        return line;
+    }
+
+    private void RefreshHoursAmount()
+    {
+        var summary = BillingPreparationAmountCalculator.Summarize(
+            [],
+            PricedHourItems());
+        _pricedHoursAmount = summary.PricedHoursTotal;
+        _hoursAmountIsPartial = summary.IsPartial;
+        _hoursAmountText = summary.IsPartial
+            ? "סכום שעות לחשבון (חלקי): " + BillingMoneyFormatter.FormatShekels(summary.PricedHoursTotal)
+            : "סכום שעות לחשבון: " + BillingMoneyFormatter.FormatShekels(summary.PricedHoursTotal);
+        OnPropertyChanged(nameof(PricedHoursAmount));
+        OnPropertyChanged(nameof(HoursAmountIsPartial));
+        OnPropertyChanged(nameof(HoursAmountText));
+        OnPropertyChanged(nameof(ShowHoursAmount));
+        OnPropertyChanged(nameof(ShowUnifiedHourlyRate));
+        OnPropertyChanged(nameof(UnifiedHourlyRateText));
     }
 }

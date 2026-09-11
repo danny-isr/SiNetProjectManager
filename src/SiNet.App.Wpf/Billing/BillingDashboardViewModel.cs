@@ -80,6 +80,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private bool _isDirty;
     private int _suspendDirty;
     private bool _suppressSelectionGuard;
+    private BillingLiveAmountSummary _liveAmount = new(0m, 0m, 0m, []);
 
     public BillingDashboardViewModel(
         IBillingDashboardReadService service,
@@ -209,10 +210,12 @@ public sealed class BillingDashboardViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(HasSelectedPreparation));
+            OnPropertyChanged(nameof(ShowPreparationAmountCard));
             OnPropertyChanged(nameof(SelectedPreparationStatusText));
             OnPropertyChanged(nameof(SelectedPreparationInstructions));
             OnPropertyChanged(nameof(ShowWaitingForSnapshot));
             OnPropertyChanged(nameof(CanConfirmHourlyVisible));
+            RefreshPreparationAmount();
             RaisePreparationCommands();
             if (value is not null)
                 _ = LoadPreparationComponentsAsync();
@@ -258,7 +261,32 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public string SelectedPreparationInstructions =>
         SelectedPreparation is null
             ? string.Empty
-            : BillingPreparationTaskInstructions.Build(SelectedPreparation.Source);
+            : BillingPreparationTaskInstructions.Build(
+                SelectedPreparation.Source, _stageCatalog, _hourlySubContracts);
+
+    public bool ShowPreparationAmountCard => HasSelectedPreparation;
+    internal BillingLiveAmountSummary LiveAmount => _liveAmount;
+    public string PreparationAmountTitle =>
+        _liveAmount.IsPartial ? "סכום מחושב חלקית" : "סכום החשבון להכנה";
+    public string PreparationAmountMainText =>
+        BillingMoneyFormatter.FormatShekels(_liveAmount.PricedTotal);
+    public string PreparationStageAmountText =>
+        BillingMoneyFormatter.FormatShekels(_liveAmount.PricedStageTotal);
+    public string PreparationHoursAmountText =>
+        BillingMoneyFormatter.FormatShekels(_liveAmount.PricedHoursTotal);
+    public string PreparationTotalCaption =>
+        _liveAmount.IsPartial ? "סכום מחושב חלקית" : "סה\"כ";
+    public string PreparationTotalText => PreparationAmountMainText;
+    public bool ShowPreparationAmountMissing => _liveAmount.IsPartial;
+    public string PreparationAmountMissingCountText =>
+        _liveAmount.Missing.Count == 0
+            ? string.Empty
+            : _liveAmount.Missing.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+              + " רכיבים אינם כלולים בסכום";
+    public string PreparationAmountMissingDetails =>
+        string.Join(
+            Environment.NewLine,
+            _liveAmount.Missing.Select(m => "⚠ " + m.Label + " — " + m.Reason));
 
     public string ManualOverrideReason
     {
@@ -1076,6 +1104,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowFlatSubContractGroups));
         OnPropertyChanged(nameof(ShowStageLegend));
         ApplyStageSearch();
+        RefreshPreparationAmount();
         RaisePreparationCommands();
     }
 
@@ -1113,6 +1142,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             if (e.PropertyName == nameof(BillingPreparationStageEditVm.AdditionPercent))
                 MarkPreparationDirty();
 
+            RefreshPreparationAmount();
             RaisePreparationCommands();
         }
     }
@@ -1161,6 +1191,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             return;
         AttachHourlyScope(new BillingPreparationHoursScopeEditVm());
         MarkPreparationDirty();
+        RefreshPreparationAmount();
         RaisePreparationCommands();
         _ = RefreshHourlyOverlapAsync();
     }
@@ -1172,6 +1203,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         edit.PropertyChanged -= OnHourlyScopePropertyChanged;
         HourlyScopeEdits.Remove(edit);
         MarkPreparationDirty();
+        RefreshPreparationAmount();
         RaisePreparationCommands();
         _ = RefreshHourlyOverlapAsync();
     }
@@ -1183,7 +1215,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
             or nameof(BillingPreparationHoursScopeEditVm.SelectedSubContractCount)
             or nameof(BillingPreparationHoursScopeEditVm.FromDate)
             or nameof(BillingPreparationHoursScopeEditVm.ToDate)
-            or nameof(BillingPreparationHoursScopeEditVm.ReportCount))
+            or nameof(BillingPreparationHoursScopeEditVm.ReportCount)
+            or nameof(BillingPreparationHoursScopeEditVm.TotalHours)
+            or nameof(BillingPreparationHoursScopeEditVm.PricedHoursAmount))
         {
             if (e.PropertyName is nameof(BillingPreparationHoursScopeEditVm.Included)
                 or nameof(BillingPreparationHoursScopeEditVm.MasterPlanSubContractId)
@@ -1194,6 +1228,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
                 MarkPreparationDirty();
             }
 
+            RefreshPreparationAmount();
             RaisePreparationCommands();
             _ = RefreshHourlyOverlapAsync();
         }
@@ -1216,6 +1251,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             RebuildStageEdits();
             BindHourlyCatalog();
             await RefreshHourlyOverlapAsync().ConfigureAwait(true);
+            RefreshPreparationAmount();
             ClearDirty();
         }
         catch (Exception ex)
@@ -1249,6 +1285,35 @@ public sealed class BillingDashboardViewModel : ObservableObject
             edit.SetOverlappingIds(hits);
     }
 
+    internal void RefreshPreparationAmount()
+    {
+        if (SelectedPreparation is null)
+        {
+            _liveAmount = new BillingLiveAmountSummary(0m, 0m, 0m, []);
+        }
+        else
+        {
+            var stages = StageEdits
+                .Where(s => s.HasPositiveAddition && !s.HasAdditionValidation)
+                .Select(s => (s.ToPricingDraft(), s.RequestedDelta));
+            var hours = HourlyScopeEdits.SelectMany(h => h.PricedHourItems());
+            _liveAmount = BillingPreparationAmountCalculator.Summarize(stages, hours);
+        }
+
+        OnPropertyChanged(nameof(LiveAmount));
+        OnPropertyChanged(nameof(PreparationAmountTitle));
+        OnPropertyChanged(nameof(PreparationAmountMainText));
+        OnPropertyChanged(nameof(PreparationStageAmountText));
+        OnPropertyChanged(nameof(PreparationHoursAmountText));
+        OnPropertyChanged(nameof(PreparationTotalCaption));
+        OnPropertyChanged(nameof(PreparationTotalText));
+        OnPropertyChanged(nameof(ShowPreparationAmountMissing));
+        OnPropertyChanged(nameof(PreparationAmountMissingCountText));
+        OnPropertyChanged(nameof(PreparationAmountMissingDetails));
+        OnPropertyChanged(nameof(SelectedPreparationInstructions));
+        RaisePreparationCommands();
+    }
+
     private bool CanEditPreparation() =>
         !IsBusy
         && _preparation is not null
@@ -1262,6 +1327,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private bool CanApprovePreparation() =>
         CanSavePreparation()
         && SelectedPreparation is not null
+        && (!_liveAmount.IsPartial || SelectedPreparation.Source.ManualOverride)
         && (SelectedPreparation.Source.ManualOverride
             || StageEdits.Any(s => s.HasPositiveAddition)
             || HourlyScopeEdits.Any(h => h.Included && h.SelectedSubContractCount > 0)
@@ -1354,6 +1420,12 @@ public sealed class BillingDashboardViewModel : ObservableObject
             await SavePreparationAsync().ConfigureAwait(true);
             if (!string.IsNullOrEmpty(OperationErrorMessage) || SelectedPreparation is null)
                 return;
+            if (_liveAmount.IsPartial && !SelectedPreparation.Source.ManualOverride)
+            {
+                OperationErrorMessage = "לא ניתן לאשר — יש רכיבים שנבחרו ללא בסיס תמחור. "
+                    + PreparationAmountMissingDetails;
+                return;
+            }
             var approved = await _preparation
                 .ApproveAndCreateTaskAsync(SelectedPreparation.Id)
                 .ConfigureAwait(true);

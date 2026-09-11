@@ -230,6 +230,8 @@ public sealed class BillingPreparationWorkflowServiceTests
         Assert.Contains("חויב בזמן האישור: 25%", _tasks.LastBody, StringComparison.Ordinal);
         Assert.Contains("תת חוזה: כבישים", _tasks.LastBody, StringComparison.Ordinal);
         Assert.Contains("משקל השלב בתת החוזה: 20%", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("סה\"כ להכנת חשבון: ₪ 50,000", _tasks.LastBody, StringComparison.Ordinal);
+        Assert.Contains("שלבי תשלום: ₪ 50,000", _tasks.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("להגיש עד 50% מצטבר", _tasks.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("לא מחויבות", _tasks.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("already billed", _tasks.LastBody, StringComparison.OrdinalIgnoreCase);
@@ -306,8 +308,11 @@ public sealed class BillingPreparationWorkflowServiceTests
                 12791, 9794, "תכנון מפורט", "כבישים", 0.20m,
                 BillingStageProgressCalculator.Observe([0.40m]),
                 0.40m,
-                Included: false)],
-            [new BillingHourlySubContractDraft(100, "תנועה", 4)],
+                Included: false,
+                MasterPlanSnapshotFeeTypeIds.FixedPrice,
+                SubContractBillableAmount: 1_000_000m)],
+            [new BillingHourlySubContractDraft(
+                100, "תנועה", 4, UniqueHourlyRate: 280m)],
             []);
 
     private static BillingPreparationStageLineSnapshot StageLine(decimal observed, decimal target) =>

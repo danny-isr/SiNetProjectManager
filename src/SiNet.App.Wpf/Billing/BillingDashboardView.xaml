@@ -52,6 +52,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -104,7 +105,14 @@
                                    VerticalAlignment="Center"
                                    Margin="0,0,12,0" />
                     </WrapPanel>
-                    <WrapPanel Grid.Row="2" Margin="0,2,0,0">
+                    <TextBlock Grid.Row="2"
+                               Text="{Binding AdditionAmountText}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource BillingAdditionBrush}"
+                               Margin="0,4,0,0"
+                               Visibility="{Binding ShowAdditionAmount, Converter={StaticResource BoolToVis}}"
+                               AutomationProperties.AutomationId="{Binding AmountAutomationId}" />
+                    <WrapPanel Grid.Row="3" Margin="0,2,0,0">
                         <TextBlock Text="לאחר "
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center" />
@@ -123,12 +131,12 @@
                                    Foreground="{DynamicResource SiMutedForegroundBrush}"
                                    VerticalAlignment="Center" />
                     </WrapPanel>
-                    <TextBlock Grid.Row="3"
+                    <TextBlock Grid.Row="4"
                                Text="{Binding AdditionValidationMessage}"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource SiDangerBrush}"
                                Visibility="{Binding HasAdditionValidation, Converter={StaticResource BoolToVis}}" />
-                    <Grid Grid.Row="4" Height="6" Margin="0,6,0,0">
+                    <Grid Grid.Row="5" Height="6" Margin="0,6,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="{Binding ObservedBarShare, Converter={StaticResource StarLen}}" />
                             <ColumnDefinition Width="{Binding AdditionBarShare, Converter={StaticResource StarLen}}" />
@@ -167,6 +175,11 @@
                             <TextBlock Text="{Binding AdditionSummaryText}"
                                        Foreground="{DynamicResource BillingAdditionBrush}"
                                        Margin="0,0,10,2" />
+                            <TextBlock Text="{Binding AdditionMoneyText}"
+                                       Foreground="{DynamicResource BillingAdditionBrush}"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,10,2"
+                                       Visibility="{Binding ShowAdditionMoney, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Text="{Binding AfterSummaryText}"
                                        FontWeight="SemiBold"
                                        Margin="0,0,10,2" />
@@ -744,7 +757,82 @@
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Stretch"
                                 ResizeBehavior="PreviousAndNext" />
-                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                    <DockPanel Grid.Column="2" LastChildFill="True">
+                        <Border DockPanel.Dock="Top"
+                                Margin="0,0,0,10"
+                                Padding="16,12"
+                                BorderBrush="{DynamicResource SiPrimaryBrush}"
+                                BorderThickness="2"
+                                Background="{DynamicResource SiSurfaceBrush}"
+                                Visibility="{Binding ShowPreparationAmountCard, Converter={StaticResource BoolToVis}}"
+                                AutomationProperties.AutomationId="BillingDashboard.PreparationAmountSummary">
+                            <StackPanel>
+                                <TextBlock Text="{Binding PreparationAmountTitle}"
+                                           Style="{DynamicResource SiTextLargeStyle}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource SiPrimaryBrush}" />
+                                <TextBlock Text="{Binding PreparationAmountMainText}"
+                                           Style="{DynamicResource SiTextLargeStyle}"
+                                           FontWeight="Bold"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,8,0,12"
+                                           AutomationProperties.AutomationId="BillingDashboard.PreparationAmountMain">
+                                    <TextBlock.LayoutTransform>
+                                        <ScaleTransform ScaleX="1.8" ScaleY="1.8" />
+                                    </TextBlock.LayoutTransform>
+                                </TextBlock>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="שלבי תשלום" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding PreparationStageAmountText}"
+                                               FontWeight="SemiBold"
+                                               AutomationProperties.AutomationId="BillingDashboard.PreparationStageAmount" />
+                                    <TextBlock Grid.Row="1" Text="שעות" />
+                                    <TextBlock Grid.Row="1"
+                                               Grid.Column="1"
+                                               Text="{Binding PreparationHoursAmountText}"
+                                               FontWeight="SemiBold"
+                                               AutomationProperties.AutomationId="BillingDashboard.PreparationHoursAmount" />
+                                    <Border Grid.Row="2"
+                                            Grid.ColumnSpan="2"
+                                            Height="1"
+                                            Margin="0,8"
+                                            Background="{DynamicResource SiBorderBrush}" />
+                                    <TextBlock Grid.Row="3"
+                                               Text="{Binding PreparationTotalCaption}"
+                                               FontWeight="Bold" />
+                                    <TextBlock Grid.Row="3"
+                                               Grid.Column="1"
+                                               Text="{Binding PreparationTotalText}"
+                                               Style="{DynamicResource SiTextLargeStyle}"
+                                               FontWeight="Bold"
+                                               AutomationProperties.AutomationId="BillingDashboard.PreparationAmountTotal" />
+                                </Grid>
+                                <TextBlock Text="{Binding PreparationAmountMissingCountText}"
+                                           Margin="0,10,0,0"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource SiDangerBrush}"
+                                           Visibility="{Binding ShowPreparationAmountMissing, Converter={StaticResource BoolToVis}}"
+                                           AutomationProperties.AutomationId="BillingDashboard.PreparationAmountMissingCount" />
+                                <TextBlock Text="{Binding PreparationAmountMissingDetails}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"
+                                           Foreground="{DynamicResource SiDangerBrush}"
+                                           Visibility="{Binding ShowPreparationAmountMissing, Converter={StaticResource BoolToVis}}"
+                                           AutomationProperties.AutomationId="BillingDashboard.PreparationAmountMissing" />
+                            </StackPanel>
+                        </Border>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <TextBlock Text="בקשת הכנה"
                                        Style="{StaticResource SectionHeaderStyle}" />
@@ -927,6 +1015,14 @@
                                                 <TextBlock Text="{Binding AggregatePreviewText}"
                                                            TextWrapping="Wrap"
                                                            AutomationProperties.AutomationId="BillingDashboard.HourlyPreview" />
+                                                <TextBlock Text="{Binding HoursAmountText}"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,6,0,0"
+                                                           Visibility="{Binding ShowHoursAmount, Converter={StaticResource BoolToVis}}"
+                                                           AutomationProperties.AutomationId="BillingDashboard.HourlyAmount" />
+                                                <TextBlock Text="{Binding UnifiedHourlyRateText}"
+                                                           Margin="0,2,0,0"
+                                                           Visibility="{Binding ShowUnifiedHourlyRate, Converter={StaticResource BoolToVis}}" />
                                                 <Expander Header="הסכמי המשנה שנבחרו"
                                                           IsExpanded="{Binding ShowSelectedNames, Mode=TwoWay}"
                                                           Margin="0,4,0,0">
@@ -991,7 +1087,8 @@
                                        Margin="0,12,0,0"
                                        FontFamily="Consolas" />
                         </StackPanel>
-                    </ScrollViewer>
+                        </ScrollViewer>
+                    </DockPanel>
                 </Grid>
             </TabItem>
             </TabControl>

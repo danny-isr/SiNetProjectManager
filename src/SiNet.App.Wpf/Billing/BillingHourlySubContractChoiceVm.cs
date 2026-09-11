@@ -37,8 +37,29 @@ public sealed class BillingHourlySubContractChoiceVm : ObservableObject
     public decimal TotalHours
     {
         get => _totalHours;
-        set => SetField(ref _totalHours, value);
+        set
+        {
+            if (SetField(ref _totalHours, value))
+            {
+                OnPropertyChanged(nameof(PricedAmount));
+                OnPropertyChanged(nameof(AmountText));
+                OnPropertyChanged(nameof(RateBasisText));
+            }
+        }
     }
+
+    public BillingPricedValue PricedAmount =>
+        BillingPreparationAmountCalculator.Hourly(Source, TotalHours);
+
+    public string AmountText =>
+        PricedAmount.IsPriced
+            ? BillingMoneyFormatter.FormatShekels(PricedAmount.Amount!.Value)
+            : (PricedAmount.UnavailableReason ?? "תעריף לא ניתן לקביעה");
+
+    public string RateBasisText =>
+        Source.UniqueHourlyRate is decimal rate
+            ? "תעריף: " + BillingMoneyFormatter.FormatShekels(rate)
+            : (Source.AmountUnavailableReason ?? "תעריף לא ניתן לקביעה");
 
     public string AutomationId =>
         "BillingDashboard.HourlySubContract." + MasterPlanSubContractId.ToString(System.Globalization.CultureInfo.InvariantCulture);

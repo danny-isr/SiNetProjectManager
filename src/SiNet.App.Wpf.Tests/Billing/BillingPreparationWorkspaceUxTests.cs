@@ -36,6 +36,8 @@ public sealed class BillingPreparationWorkspaceUxTests
         Assert.Contains("BillingDashboard.StageSearch", xaml, StringComparison.Ordinal);
         Assert.Contains("BillingDashboard.DirtyBanner", xaml, StringComparison.Ordinal);
         Assert.Contains("DirtyBannerText", xaml, StringComparison.Ordinal);
+        Assert.Contains("BillingDashboard.PreparationAmountSummary", xaml, StringComparison.Ordinal);
+        Assert.Contains("PreparationAmountMainText", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

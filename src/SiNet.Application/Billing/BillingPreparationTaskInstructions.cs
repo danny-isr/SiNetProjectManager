@@ -5,7 +5,13 @@ namespace SiNet.Application.Billing;
 
 public static class BillingPreparationTaskInstructions
 {
-    public static string Build(BillingPreparationRequestRecord request)
+    public static string Build(BillingPreparationRequestRecord request) =>
+        Build(request, stageCatalog: null, hourlyCatalog: null);
+
+    public static string Build(
+        BillingPreparationRequestRecord request,
+        IReadOnlyList<BillingPreparationStageDraft>? stageCatalog,
+        IReadOnlyList<BillingHourlySubContractDraft>? hourlyCatalog)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -15,6 +21,10 @@ public static class BillingPreparationTaskInstructions
         if (!string.IsNullOrWhiteSpace(request.ProjectName))
             sb.AppendLine(request.ProjectName.Trim());
         sb.AppendLine();
+
+        if (stageCatalog is not null || hourlyCatalog is not null)
+            AppendMoneySummary(sb, request, stageCatalog ?? [], hourlyCatalog ?? []);
+
         sb.AppendLine("יש לבצע ב-MasterPlan:");
         sb.AppendLine();
 
@@ -51,6 +61,14 @@ public static class BillingPreparationTaskInstructions
                             .SubContractContributionPercent(stage.StageWeightWithinSubContract, stage.RequestedDelta)
                             .ToString("0.##", CultureInfo.InvariantCulture))
                         .AppendLine("%");
+                    var priced = PriceStage(stage, stageCatalog);
+                    if (priced is not null)
+                    {
+                        sb.Append("  תוספת כספית: ");
+                        sb.AppendLine(priced.IsPriced
+                            ? BillingMoneyFormatter.FormatShekels(priced.Amount!.Value)
+                            : priced.UnavailableReason ?? "לא נמצא בסיס תמחור");
+                    }
                 }
             }
 
@@ -75,6 +93,14 @@ public static class BillingPreparationTaskInstructions
                     sb.Append(" דיווחים, ");
                     sb.Append(hours.TotalHours.ToString("0.##", CultureInfo.InvariantCulture));
                     sb.AppendLine(" שעות");
+                    var priced = PriceHours(hours, hourlyCatalog);
+                    if (priced is not null)
+                    {
+                        sb.Append("  סכום שעות: ");
+                        sb.AppendLine(priced.IsPriced
+                            ? BillingMoneyFormatter.FormatShekels(priced.Amount!.Value)
+                            : priced.UnavailableReason ?? "תעריף לא ניתן לקביעה");
+                    }
                 }
 
                 sb.AppendLine("סה\"כ:");
@@ -90,6 +116,88 @@ public static class BillingPreparationTaskInstructions
         if (!string.IsNullOrWhiteSpace(request.ApprovedByLogin))
             sb.Append("אושר על ידי ").AppendLine(request.ApprovedByLogin);
         return sb.ToString().TrimEnd();
+    }
+
+    private static void AppendMoneySummary(
+        StringBuilder sb,
+        BillingPreparationRequestRecord request,
+        IReadOnlyList<BillingPreparationStageDraft> stageCatalog,
+        IReadOnlyList<BillingHourlySubContractDraft> hourlyCatalog)
+    {
+        var stages = request.Stages
+            .Where(s => s.RequestedDelta > 0m)
+            .Select(s => (ResolveStageDraft(s, stageCatalog), s.RequestedDelta));
+        var hours = request.Hours.Select(h =>
+        {
+            var draft = hourlyCatalog.FirstOrDefault(c => c.MasterPlanSubContractId == h.MasterPlanSubContractId)
+                        ?? new BillingHourlySubContractDraft(
+                            h.MasterPlanSubContractId,
+                            h.SubContractName,
+                            MasterPlanSnapshotFeeTypeIds.WorkingHours,
+                            AmountUnavailableReason: "לא נמצא בסיס תמחור שעתי");
+            return (draft, h.TotalHours, h.SubContractName);
+        });
+        var summary = BillingPreparationAmountCalculator.Summarize(stages, hours);
+        if (summary.IsPartial)
+            sb.Append("סכום מחושב חלקית: ");
+        else
+            sb.Append("סה\"כ להכנת חשבון: ");
+        sb.AppendLine(BillingMoneyFormatter.FormatShekels(summary.PricedTotal));
+        sb.Append("שלבי תשלום: ").AppendLine(BillingMoneyFormatter.FormatShekels(summary.PricedStageTotal));
+        sb.Append("שעות: ").AppendLine(BillingMoneyFormatter.FormatShekels(summary.PricedHoursTotal));
+        if (summary.IsPartial)
+        {
+            sb.Append(summary.Missing.Count.ToString(CultureInfo.InvariantCulture))
+                .AppendLine(" רכיבים אינם כלולים בסכום");
+            foreach (var missing in summary.Missing)
+                sb.Append("⚠ ").Append(missing.Label).Append(" — ").AppendLine(missing.Reason);
+        }
+
+        sb.AppendLine();
+    }
+
+    private static BillingPricedValue? PriceStage(
+        BillingPreparationStageLineSnapshot stage,
+        IReadOnlyList<BillingPreparationStageDraft>? catalog)
+    {
+        if (catalog is null)
+            return null;
+        return BillingPreparationAmountCalculator.StageAddition(
+            ResolveStageDraft(stage, catalog), stage.RequestedDelta);
+    }
+
+    private static BillingPricedValue? PriceHours(
+        BillingPreparationHoursLineSnapshot hours,
+        IReadOnlyList<BillingHourlySubContractDraft>? catalog)
+    {
+        if (catalog is null)
+            return null;
+        var draft = catalog.FirstOrDefault(c => c.MasterPlanSubContractId == hours.MasterPlanSubContractId)
+                    ?? new BillingHourlySubContractDraft(
+                        hours.MasterPlanSubContractId,
+                        hours.SubContractName,
+                        MasterPlanSnapshotFeeTypeIds.WorkingHours,
+                        AmountUnavailableReason: "לא נמצא בסיס תמחור שעתי");
+        return BillingPreparationAmountCalculator.Hourly(draft, hours.TotalHours);
+    }
+
+    private static BillingPreparationStageDraft ResolveStageDraft(
+        BillingPreparationStageLineSnapshot stage,
+        IReadOnlyList<BillingPreparationStageDraft> catalog)
+    {
+        var match = catalog.FirstOrDefault(d => d.MasterPlanStageId == stage.MasterPlanStageId);
+        if (match is not null)
+            return match;
+        return new BillingPreparationStageDraft(
+            stage.MasterPlanStageId,
+            stage.MasterPlanSubContractId,
+            stage.StageName,
+            stage.SubContractName,
+            stage.StageWeightWithinSubContract,
+            new BillingStageProgressCalculator.ObservedCumulativeProgress(
+                stage.ObservedCumulativeProgress, stage.HasDataQualityFlag, []),
+            stage.ObservedCumulativeProgress,
+            true);
     }
 
     private static string Percent(decimal fraction) =>

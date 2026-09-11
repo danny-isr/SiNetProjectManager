@@ -38,9 +38,36 @@ public sealed class SqlBillingPreparationComponentSource(
         }
 
         var header = await LoadHeaderAsync(conn, masterPlanProjectId, cancellationToken).ConfigureAwait(false);
-        var stages = await LoadStagesAsync(conn, masterPlanProjectId, cancellationToken).ConfigureAwait(false);
-        var hourly = await LoadHourlySubContractsAsync(conn, masterPlanProjectId, cancellationToken)
+        var prices = await LoadFixedPricesAsync(conn, masterPlanProjectId, cancellationToken).ConfigureAwait(false);
+        var discounts = await LoadDiscountsAsync(conn, masterPlanProjectId, cancellationToken).ConfigureAwait(false);
+        var indexed = await LoadIndexedSubContractIdsAsync(conn, masterPlanProjectId, cancellationToken)
             .ConfigureAwait(false);
+        var stages = (await LoadStagesAsync(conn, masterPlanProjectId, cancellationToken).ConfigureAwait(false))
+            .Select(s =>
+            {
+                decimal? basis = prices.TryGetValue(s.MasterPlanSubContractId, out var sum) ? sum : null;
+                discounts.TryGetValue(s.MasterPlanSubContractId, out var discount);
+                return s with
+                {
+                    SubContractBillableAmount = basis,
+                    DiscountFraction = discount,
+                    HasUnpricedIndexation = indexed.Contains(s.MasterPlanSubContractId)
+                };
+            })
+            .ToList();
+        var hourlyRates = await LoadHourlyRatesAsync(conn, masterPlanProjectId, cancellationToken)
+            .ConfigureAwait(false);
+        var hourly = (await LoadHourlySubContractsAsync(conn, masterPlanProjectId, cancellationToken)
+                .ConfigureAwait(false))
+            .Select(h => hourlyRates.TryGetValue(h.MasterPlanSubContractId, out var rate)
+                ? h with
+                {
+                    UniqueHourlyRate = rate.Rate,
+                    HourlyDiscountFraction = rate.Discount,
+                    AmountUnavailableReason = rate.UnavailableReason
+                }
+                : h with { AmountUnavailableReason = "לא נמצא בסיס תמחור שעתי" })
+            .ToList();
         var hours = await LoadHourReportsAsync(conn, masterPlanProjectId, cancellationToken).ConfigureAwait(false);
         var backupUtc = await TryLoadBackupStampAsync(cancellationToken).ConfigureAwait(false);
 
@@ -303,6 +330,168 @@ public sealed class SqlBillingPreparationComponentSource(
             return null;
         }
     }
+
+    private static async Task<Dictionary<int, decimal>> LoadFixedPricesAsync(
+        SqlConnection conn,
+        int projectId,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(conn, "FixedPrices", cancellationToken).ConfigureAwait(false)
+            || !await TableExistsAsync(conn, "ContractChanges", cancellationToken).ConfigureAwait(false))
+            return [];
+
+        const string sql =
+            """
+            SELECT fp.SubContractID, fp.Sum
+            FROM dbo.FixedPrices fp
+            INNER JOIN dbo.ContractChanges cc ON cc.ID = fp.ContractChangeID
+            INNER JOIN dbo.SubContracts sc ON sc.ID = fp.SubContractID
+            INNER JOIN dbo.Contracts c ON c.ID = sc.ContractID
+            INNER JOIN (
+              SELECT fp2.SubContractID, MAX(cc2.DateTime) AS MaxDt
+              FROM dbo.FixedPrices fp2
+              INNER JOIN dbo.ContractChanges cc2 ON cc2.ID = fp2.ContractChangeID
+              INNER JOIN dbo.SubContracts sc2 ON sc2.ID = fp2.SubContractID
+              INNER JOIN dbo.Contracts c2 ON c2.ID = sc2.ContractID
+              WHERE c2.ProjectID = @ProjectId AND cc2.IsConfirmed = 1
+              GROUP BY fp2.SubContractID
+            ) latest ON latest.SubContractID = fp.SubContractID AND cc.DateTime = latest.MaxDt
+            WHERE c.ProjectID = @ProjectId AND cc.IsConfirmed = 1
+            """;
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@ProjectId", SqlDbType.Int).Value = projectId;
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var map = new Dictionary<int, decimal>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (reader.IsDBNull(1))
+                continue;
+            map[reader.GetInt32(0)] = Convert.ToDecimal(reader.GetValue(1));
+        }
+        return map;
+    }
+
+    private static async Task<Dictionary<int, decimal>> LoadDiscountsAsync(
+        SqlConnection conn,
+        int projectId,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(conn, "SubContractDiscounts", cancellationToken).ConfigureAwait(false))
+            return [];
+
+        const string sql =
+            """
+            SELECT d.SubContractID, d.Percentage
+            FROM dbo.SubContractDiscounts d
+            INNER JOIN dbo.SubContracts sc ON sc.ID = d.SubContractID
+            INNER JOIN dbo.Contracts c ON c.ID = sc.ContractID
+            INNER JOIN (
+              SELECT d2.SubContractID, MAX(d2.DateTime) AS MaxDt
+              FROM dbo.SubContractDiscounts d2
+              INNER JOIN dbo.SubContracts sc2 ON sc2.ID = d2.SubContractID
+              INNER JOIN dbo.Contracts c2 ON c2.ID = sc2.ContractID
+              WHERE c2.ProjectID = @ProjectId
+              GROUP BY d2.SubContractID
+            ) latest ON latest.SubContractID = d.SubContractID AND d.DateTime = latest.MaxDt
+            WHERE c.ProjectID = @ProjectId
+            """;
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@ProjectId", SqlDbType.Int).Value = projectId;
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var map = new Dictionary<int, decimal>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            map[reader.GetInt32(0)] = Convert.ToDecimal(reader.GetValue(1));
+        return map;
+    }
+
+    private static async Task<HashSet<int>> LoadIndexedSubContractIdsAsync(
+        SqlConnection conn,
+        int projectId,
+        CancellationToken cancellationToken)
+    {
+        const string sql =
+            """
+            SELECT sc.ID
+            FROM dbo.SubContracts sc
+            INNER JOIN dbo.Contracts c ON c.ID = sc.ContractID
+            WHERE c.ProjectID = @ProjectId AND sc.IndexTypeID IS NOT NULL
+            """;
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@ProjectId", SqlDbType.Int).Value = projectId;
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var ids = new HashSet<int>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            ids.Add(reader.GetInt32(0));
+        return ids;
+    }
+
+    private static async Task<Dictionary<int, HourlyRateFact>> LoadHourlyRatesAsync(
+        SqlConnection conn,
+        int projectId,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(conn, "WorkingHours", cancellationToken).ConfigureAwait(false)
+            || !await TableExistsAsync(conn, "WorkingHoursChanges", cancellationToken).ConfigureAwait(false)
+            || !await TableExistsAsync(conn, "ContractChanges", cancellationToken).ConfigureAwait(false))
+            return [];
+
+        const string sql =
+            """
+            SELECT wh.SubContractID, whc.Price, ISNULL(whc.PercentageDiscount, 0)
+            FROM dbo.WorkingHours wh
+            INNER JOIN dbo.WorkingHoursChanges whc ON whc.WorkingHoursID = wh.ID
+            INNER JOIN dbo.ContractChanges cc ON cc.ID = whc.ContractChangeID
+            INNER JOIN dbo.SubContracts sc ON sc.ID = wh.SubContractID
+            INNER JOIN dbo.Contracts c ON c.ID = sc.ContractID
+            INNER JOIN (
+              SELECT wh2.SubContractID, MAX(cc2.DateTime) AS MaxDt
+              FROM dbo.WorkingHours wh2
+              INNER JOIN dbo.WorkingHoursChanges whc2 ON whc2.WorkingHoursID = wh2.ID
+              INNER JOIN dbo.ContractChanges cc2 ON cc2.ID = whc2.ContractChangeID
+              INNER JOIN dbo.SubContracts sc2 ON sc2.ID = wh2.SubContractID
+              INNER JOIN dbo.Contracts c2 ON c2.ID = sc2.ContractID
+              WHERE c2.ProjectID = @ProjectId AND cc2.IsConfirmed = 1 AND sc2.FeeTypeID = @FeeType
+              GROUP BY wh2.SubContractID
+            ) latest ON latest.SubContractID = wh.SubContractID AND cc.DateTime = latest.MaxDt
+            WHERE c.ProjectID = @ProjectId AND cc.IsConfirmed = 1 AND sc.FeeTypeID = @FeeType
+            """;
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.Add("@ProjectId", SqlDbType.Int).Value = projectId;
+        cmd.Parameters.Add("@FeeType", SqlDbType.Int).Value = MasterPlanSnapshotFeeTypeIds.WorkingHours;
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var buckets = new Dictionary<int, List<(decimal Price, decimal Discount)>>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var subId = reader.GetInt32(0);
+            var price = Convert.ToDecimal(reader.GetValue(1));
+            var discount = Convert.ToDecimal(reader.GetValue(2));
+            if (!buckets.TryGetValue(subId, out var list))
+            {
+                list = [];
+                buckets[subId] = list;
+            }
+
+            list.Add((price, discount));
+        }
+
+        var map = new Dictionary<int, HourlyRateFact>();
+        foreach (var (subId, list) in buckets)
+        {
+            var distinctPrices = list.Select(x => x.Price).Distinct().ToList();
+            var distinctDiscounts = list.Select(x => x.Discount).Distinct().ToList();
+            if (distinctPrices.Count != 1 || distinctDiscounts.Count != 1)
+            {
+                map[subId] = new HourlyRateFact(null, 0m, "תעריף לא ניתן לקביעה");
+                continue;
+            }
+
+            map[subId] = new HourlyRateFact(distinctPrices[0], distinctDiscounts[0], null);
+        }
+
+        return map;
+    }
+
+    private sealed record HourlyRateFact(decimal? Rate, decimal Discount, string? UnavailableReason);
 
     private static async Task<bool> TableExistsAsync(
         SqlConnection connection,

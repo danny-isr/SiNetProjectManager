@@ -61,6 +61,8 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
     private decimal _additionSummaryPercent;
     private decimal _afterSummaryPercent;
     private decimal _remainingSummaryPercent;
+    private decimal _pricedAdditionAmount;
+    private bool _hasUnpricedAddition;
 
     public BillingPreparationSubContractGroupVm(BillingSubContractStageGroupDraft draft, bool showContract)
     {
@@ -184,6 +186,45 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
         private set => SetField(ref _remainingSummaryPercent, value);
     }
 
+    public decimal PricedAdditionAmount
+    {
+        get => _pricedAdditionAmount;
+        private set => SetField(ref _pricedAdditionAmount, value);
+    }
+
+    public bool HasUnpricedAddition
+    {
+        get => _hasUnpricedAddition;
+        private set => SetField(ref _hasUnpricedAddition, value);
+    }
+
+    public bool ShowAdditionMoney => HasPositiveAddition;
+    public string AdditionMoneyText
+    {
+        get
+        {
+            if (!HasPositiveAddition)
+                return string.Empty;
+            if (HasUnpricedAddition)
+                return "סכום חלקי " + BillingMoneyFormatter.FormatShekels(PricedAdditionAmount);
+            return BillingMoneyFormatter.FormatShekels(PricedAdditionAmount);
+        }
+    }
+
+    public string HeaderAdditionMoneyText
+    {
+        get
+        {
+            if (!HasPositiveAddition)
+                return string.Empty;
+            var percent = BillingStageProgressMessages.FormatPercent(AdditionSummaryPercent);
+            var money = HasUnpricedAddition
+                ? "סכום חלקי " + BillingMoneyFormatter.FormatShekels(PricedAdditionAmount)
+                : BillingMoneyFormatter.FormatShekels(PricedAdditionAmount);
+            return "🔵 תוספת בחשבון: " + percent + "   |   " + money;
+        }
+    }
+
     public bool HasPositiveAddition => AdditionCount > 0;
     public bool HasInvalidAddition => EditableStages.Any(s => s.HasAdditionValidation);
     public bool WeightsSumApproximatelyToOne => _draft.WeightsSumApproximatelyToOne;
@@ -294,6 +335,20 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
                 .Sum(s => s.RemainingContributionPercent);
         }
 
+        decimal priced = 0m;
+        var unpriced = false;
+        foreach (var stage in EditableStages.Where(s => s.HasPositiveAddition && !s.HasAdditionValidation))
+        {
+            var amount = stage.AdditionAmount;
+            if (amount.IsPriced)
+                priced += amount.Amount!.Value;
+            else
+                unpriced = true;
+        }
+
+        PricedAdditionAmount = priced;
+        HasUnpricedAddition = unpriced;
+
         OnPropertyChanged(nameof(AdditionCount));
         OnPropertyChanged(nameof(CompactSummaryText));
         OnPropertyChanged(nameof(CompactHeaderTitle));
@@ -308,6 +363,9 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
         OnPropertyChanged(nameof(ShowDefinedWeightSummary));
         OnPropertyChanged(nameof(HeaderWeightWarning));
         OnPropertyChanged(nameof(HeaderPartialWarning));
+        OnPropertyChanged(nameof(ShowAdditionMoney));
+        OnPropertyChanged(nameof(AdditionMoneyText));
+        OnPropertyChanged(nameof(HeaderAdditionMoneyText));
     }
 
     private void PublishVisibleStages()
