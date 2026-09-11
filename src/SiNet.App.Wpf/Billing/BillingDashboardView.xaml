@@ -954,7 +954,6 @@
                                                               VerticalAlignment="Center" />
                                                 </DockPanel>
                                                 <TextBlock Text="הסכמי משנה שעתיים" Style="{StaticResource DetailLabelStyle}" />
-                                                <Grid>
                                                 <ToggleButton x:Name="HourlySelectorToggle"
                                                               Content="{Binding SelectionSummaryText}"
                                                               IsChecked="{Binding IsSelectorOpen, Mode=TwoWay}"
@@ -962,55 +961,54 @@
                                                               Padding="8,6"
                                                               Margin="0,0,0,6"
                                                               AutomationProperties.AutomationId="BillingDashboard.HourlySelectorToggle" />
-                                                <Popup IsOpen="{Binding IsSelectorOpen, Mode=TwoWay}"
-                                                       PlacementTarget="{Binding ElementName=HourlySelectorToggle}"
-                                                       Placement="Bottom"
-                                                       StaysOpen="False"
-                                                       AllowsTransparency="True">
-                                                    <Border Background="{DynamicResource SiBackgroundBrush}"
-                                                            BorderBrush="{DynamicResource SiBorderBrush}"
-                                                            BorderThickness="1"
-                                                            Padding="8"
-                                                            MinWidth="320">
-                                                        <StackPanel>
-                                                            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                                                     Margin="0,0,0,6"
-                                                                     AutomationProperties.AutomationId="BillingDashboard.HourlySearch" />
-                                                            <WrapPanel Margin="0,0,0,6">
-                                                                <Button Content="בחר הכל"
-                                                                        Command="{Binding SelectAllCommand}"
-                                                                        Padding="8,4"
-                                                                        Margin="0,0,8,0"
-                                                                        Style="{DynamicResource SiSecondaryButtonStyle}"
-                                                                        AutomationProperties.AutomationId="BillingDashboard.HourlySelectAll" />
-                                                                <Button Content="נקה הכל"
-                                                                        Command="{Binding ClearAllCommand}"
-                                                                        Padding="8,4"
-                                                                        Style="{DynamicResource SiSecondaryButtonStyle}"
-                                                                        AutomationProperties.AutomationId="BillingDashboard.HourlyClearAll" />
-                                                            </WrapPanel>
-                                                            <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
-                                                                <ItemsControl ItemsSource="{Binding VisibleChoices}">
-                                                                    <ItemsControl.ItemTemplate>
-                                                                        <DataTemplate>
-                                                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                                                      Content="{Binding Name}"
-                                                                                      Margin="2,3"
-                                                                                      AutomationProperties.AutomationId="{Binding AutomationId}" />
-                                                                        </DataTemplate>
-                                                                    </ItemsControl.ItemTemplate>
-                                                                </ItemsControl>
-                                                            </ScrollViewer>
-                                                        </StackPanel>
-                                                    </Border>
-                                                </Popup>
-                                                </Grid>
+                                                <Border Background="{DynamicResource SiBackgroundBrush}"
+                                                        BorderBrush="{DynamicResource SiBorderBrush}"
+                                                        BorderThickness="1"
+                                                        Padding="8"
+                                                        Margin="0,0,0,6"
+                                                        Visibility="{Binding IsSelectorOpen, Converter={StaticResource BoolToVis}}">
+                                                    <StackPanel>
+                                                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Margin="0,0,0,6"
+                                                                 AutomationProperties.AutomationId="BillingDashboard.HourlySearch" />
+                                                        <WrapPanel Margin="0,0,0,6">
+                                                            <Button Content="בחר הכל"
+                                                                    Command="{Binding SelectAllCommand}"
+                                                                    Padding="8,4"
+                                                                    Margin="0,0,8,0"
+                                                                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                                                                    AutomationProperties.AutomationId="BillingDashboard.HourlySelectAll" />
+                                                            <Button Content="נקה הכל"
+                                                                    Command="{Binding ClearAllCommand}"
+                                                                    Padding="8,4"
+                                                                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                                                                    AutomationProperties.AutomationId="BillingDashboard.HourlyClearAll" />
+                                                        </WrapPanel>
+                                                        <ScrollViewer MaxHeight="{DynamicResource SiPopupListMaxHeight}"
+                                                                      VerticalScrollBarVisibility="Auto">
+                                                            <ItemsControl ItemsSource="{Binding VisibleChoices}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                                  Content="{Binding Name}"
+                                                                                  Margin="2,3"
+                                                                                  AutomationProperties.AutomationId="{Binding AutomationId}" />
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </ScrollViewer>
+                                                    </StackPanel>
+                                                </Border>
                                                 <TextBlock Text="{Binding SubContractName}" Margin="0,0,0,4" />
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                                     <TextBlock Text="מתאריך" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                                    <DatePicker SelectedDate="{Binding FromDate, UpdateSourceTrigger=PropertyChanged}" Width="120" />
+                                                    <TextBox Text="{Binding FromDateText, UpdateSourceTrigger=PropertyChanged}"
+                                                             Width="120"
+                                                             AutomationProperties.AutomationId="BillingDashboard.HourlyFromDate" />
                                                     <TextBlock Text="עד תאריך" VerticalAlignment="Center" Margin="12,0,8,0" />
-                                                    <DatePicker SelectedDate="{Binding ToDate, UpdateSourceTrigger=PropertyChanged}" Width="120" />
+                                                    <TextBox Text="{Binding ToDateText, UpdateSourceTrigger=PropertyChanged}"
+                                                             Width="120"
+                                                             AutomationProperties.AutomationId="BillingDashboard.HourlyToDate" />
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding AggregatePreviewText}"
                                                            TextWrapping="Wrap"
@@ -1058,7 +1056,8 @@
                                         Command="{Binding SavePreparationCommand}"
                                         Style="{DynamicResource SiSecondaryButtonStyle}"
                                         Padding="10,6"
-                                        Margin="0,0,8,8" />
+                                        Margin="0,0,8,8"
+                                        AutomationProperties.AutomationId="BillingDashboard.SavePreparation" />
                                 <Button Content="אשר טיפול ידני ללא בקרת שלבים"
                                         Command="{Binding ManualOverrideCommand}"
                                         Style="{DynamicResource SiSecondaryButtonStyle}"

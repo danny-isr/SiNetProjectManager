@@ -286,6 +286,47 @@ public sealed class BillingPreparationHoursScopeUiTests
         Assert.False(BillingPreparationHoursScopeComposer.ContainsForbiddenUnbilledClaim(xaml));
     }
 
+    [Fact]
+    public void Hourly_date_text_parses_israeli_and_iso_formats()
+    {
+        var edit = new BillingPreparationHoursScopeEditVm();
+        edit.FromDateText = "02/06/2026";
+        Assert.Equal(new DateTime(2026, 6, 2), edit.FromDate);
+        edit.ToDateText = "2/6/2026";
+        Assert.Equal(new DateTime(2026, 6, 2), edit.ToDate);
+        edit.FromDateText = "2026-06-03";
+        Assert.Equal(new DateTime(2026, 6, 3), edit.FromDate);
+        Assert.Equal("03/06/2026", edit.FromDateText);
+    }
+
+    [Fact]
+    public void Incomplete_hourly_date_text_does_not_wipe_existing_date()
+    {
+        var edit = new BillingPreparationHoursScopeEditVm
+        {
+            FromDate = new DateTime(2026, 6, 2)
+        };
+        edit.FromDateText = "02/0";
+        Assert.Equal(new DateTime(2026, 6, 2), edit.FromDate);
+        Assert.Equal("02/06/2026", edit.FromDateText);
+    }
+
+    [Fact]
+    public void New_hourly_scope_opens_selector_inline_by_default()
+    {
+        var edit = new BillingPreparationHoursScopeEditVm();
+        Assert.True(edit.IsSelectorOpen);
+        var xaml = File.ReadAllText(
+            Path.Combine(FindRepoRoot(), "src", "SiNet.App.Wpf", "Billing", "BillingDashboardView.xaml"));
+        Assert.DoesNotContain("<Popup", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<DatePicker", xaml, StringComparison.Ordinal);
+        Assert.Contains("FromDateText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToDateText", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"BillingDashboard.HourlyFromDate\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"BillingDashboard.SavePreparation\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxHeight=\"{DynamicResource SiPopupListMaxHeight}\"", xaml, StringComparison.Ordinal);
+    }
+
     private BillingDashboardViewModel CreateVm() =>
         new(new UnusedDashboardRead(), preparation: _service);
 

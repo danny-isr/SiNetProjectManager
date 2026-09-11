@@ -14,7 +14,7 @@ namespace SiNet.App.Wpf.Billing;
 public sealed class BillingPreparationHoursScopeEditVm : ObservableObject
 {
     private bool _included = true;
-    private bool _isSelectorOpen;
+    private bool _isSelectorOpen = true;
     private bool _showSelectedNames;
     private string _searchText = string.Empty;
     private DateTime? _fromDate;
@@ -149,7 +149,10 @@ public sealed class BillingPreparationHoursScopeEditVm : ObservableObject
         set
         {
             if (SetField(ref _fromDate, value?.Date))
+            {
+                OnPropertyChanged(nameof(FromDateText));
                 RefreshPreview();
+            }
         }
     }
 
@@ -159,7 +162,30 @@ public sealed class BillingPreparationHoursScopeEditVm : ObservableObject
         set
         {
             if (SetField(ref _toDate, value?.Date))
+            {
+                OnPropertyChanged(nameof(ToDateText));
                 RefreshPreview();
+            }
+        }
+    }
+
+    public string FromDateText
+    {
+        get => FormatDate(_fromDate);
+        set
+        {
+            if (TryParseDate(value, out var parsed) && parsed != _fromDate)
+                FromDate = parsed;
+        }
+    }
+
+    public string ToDateText
+    {
+        get => FormatDate(_toDate);
+        set
+        {
+            if (TryParseDate(value, out var parsed) && parsed != _toDate)
+                ToDate = parsed;
         }
     }
 
@@ -478,5 +504,28 @@ public sealed class BillingPreparationHoursScopeEditVm : ObservableObject
         OnPropertyChanged(nameof(ShowHoursAmount));
         OnPropertyChanged(nameof(ShowUnifiedHourlyRate));
         OnPropertyChanged(nameof(UnifiedHourlyRateText));
+    }
+
+    private static string FormatDate(DateTime? value) =>
+        value is DateTime d ? d.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : string.Empty;
+
+    private static bool TryParseDate(string? text, out DateTime? parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        var trimmed = text.Trim();
+        string[] formats = ["dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd"];
+        if (!DateTime.TryParseExact(
+                trimmed,
+                formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var dt))
+            return false;
+
+        parsed = dt.Date;
+        return true;
     }
 }
