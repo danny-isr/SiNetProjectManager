@@ -201,6 +201,11 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("משקל השלב בתת החוזה: ", stageVm, StringComparison.Ordinal);
         Assert.Contains("הרחב הכל", view, StringComparison.Ordinal);
         Assert.Contains("כווץ הכל", view, StringComparison.Ordinal);
+        Assert.Contains("BillingDashboard.StageSearch", view, StringComparison.Ordinal);
+        Assert.Contains("חיפוש תת חוזה או שלב", view, StringComparison.Ordinal);
+        Assert.Contains("GridSplitter", view, StringComparison.Ordinal);
+        Assert.DoesNotContain("<ColumnDefinition Width=\"460\" MinWidth=\"320\" />", view, StringComparison.Ordinal);
+        Assert.Contains("<ColumnDefinition Width=\"*\" MinWidth=\"420\" />", view, StringComparison.Ordinal);
         Assert.Contains("BillingObservedBrush", view, StringComparison.Ordinal);
         Assert.Contains("BillingAdditionBrush", view, StringComparison.Ordinal);
         Assert.Contains("BillingRemainingBrush", view, StringComparison.Ordinal);

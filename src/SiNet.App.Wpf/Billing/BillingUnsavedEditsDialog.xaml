@@ -1,0 +1,33 @@
+<Window x:Class="SiNet.App.Wpf.Billing.BillingUnsavedEditsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="שינויים שלא נשמרו"
+        Width="460" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        FlowDirection="RightToLeft"
+        Background="{DynamicResource SiBackgroundBrush}">
+    <StackPanel Margin="16">
+        <TextBlock Text="יש שינויים שלא נשמרו בהכנת החשבון."
+                   TextWrapping="Wrap"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,16" />
+        <TextBlock Text="שמירה אוטומטית אינה מתבצעת. ניתן להישאר בעריכה או לבטל את השינויים ולהמשיך."
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                   Margin="0,0,0,16" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button Content="הישאר בעריכה"
+                    IsDefault="True"
+                    IsCancel="True"
+                    Click="Stay_Click"
+                    Style="{DynamicResource SiPrimaryButtonStyle}"
+                    Padding="16,6"
+                    Margin="0,0,8,0" />
+            <Button Content="בטל שינויים והמשך"
+                    Click="Discard_Click"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="16,6" />
+        </StackPanel>
+    </StackPanel>
+</Window>

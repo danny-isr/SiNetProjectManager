@@ -5,8 +5,10 @@ using SiNet.App.Wpf.Inspection;
 
 namespace SiNet.App.Wpf.Billing;
 
-public sealed class BillingPreparationContractGroupVm
+public sealed class BillingPreparationContractGroupVm : ObservableObject
 {
+    private bool _isSearchVisible = true;
+
     public BillingPreparationContractGroupVm(
         int contractId,
         string? contractName,
@@ -29,13 +31,32 @@ public sealed class BillingPreparationContractGroupVm
         "חוזה: " + (string.IsNullOrWhiteSpace(ContractName) ? ContractId.ToString(CultureInfo.InvariantCulture) : ContractName);
     public string NumberText => BillingSubContractStageGroupBuilder.FormatNumberLabel(ContractNumber);
     public bool ShowNumber => !string.IsNullOrWhiteSpace(ContractNumber);
+
+    public bool IsSearchVisible
+    {
+        get => _isSearchVisible;
+        private set => SetField(ref _isSearchVisible, value);
+    }
+
+    public void ApplySearch(string? query)
+    {
+        var active = BillingPreparationStageSearch.IsActive(query);
+        var contractMatch = active
+            && BillingPreparationStageSearch.MatchesContract(ContractName, ContractNumber, query);
+        foreach (var sub in SubContracts)
+            sub.ApplySearch(query, contractMatch);
+        IsSearchVisible = !active || contractMatch || SubContracts.Any(s => s.IsSearchVisible);
+    }
 }
 
 public sealed class BillingPreparationSubContractGroupVm : ObservableObject
 {
     private readonly BillingSubContractStageGroupDraft _draft;
-    private readonly bool _showContract;
     private bool _isExpanded;
+    private bool _restingExpanded;
+    private bool _isSearchVisible = true;
+    private bool _filterMatchingStagesOnly;
+    private HashSet<int> _matchingStageIds = [];
     private decimal _observedSummaryPercent;
     private decimal _additionSummaryPercent;
     private decimal _afterSummaryPercent;
@@ -44,8 +65,9 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
     public BillingPreparationSubContractGroupVm(BillingSubContractStageGroupDraft draft, bool showContract)
     {
         _draft = draft ?? throw new ArgumentNullException(nameof(draft));
-        _showContract = showContract;
+        _ = showContract;
         EditableStages = [];
+        VisibleEditableStages = [];
     }
 
     public static BillingPreparationSubContractGroupVm FromOrphan(
@@ -69,6 +91,7 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
         var group = new BillingPreparationSubContractGroupVm(draft, showContract);
         group.AddEditable(edit);
         group.IsExpanded = true;
+        group.CaptureRestingExpansion();
         group.RefreshSummary();
         return group;
     }
@@ -81,6 +104,7 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
     public string? ContractNumber => _draft.ContractNumber;
     public IReadOnlyList<BillingPreparationStageDraft> SummaryStages => _draft.SummaryStages;
     public ObservableCollection<BillingPreparationStageEditVm> EditableStages { get; }
+    public IReadOnlyList<BillingPreparationStageEditVm> VisibleEditableStages { get; private set; }
     public string GroupAutomationId =>
         "BillingDashboard.SubContract." + SubContractId.ToString(CultureInfo.InvariantCulture);
 
@@ -91,7 +115,7 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
         "חוזה: " + (string.IsNullOrWhiteSpace(ContractName)
             ? ContractId.ToString(CultureInfo.InvariantCulture)
             : ContractName);
-    public bool ShowContractHeader => _showContract;
+    public bool ShowContractHeader => false;
     public int PaymentStageCount =>
         _draft.SummaryStages.Count > 0 ? _draft.SummaryStages.Count : EditableStages.Count;
     public string StageCountText => BillingSubContractStageGroupBuilder.FormatStageCount(PaymentStageCount);
@@ -102,10 +126,38 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
         + AdditionCount.ToString(CultureInfo.InvariantCulture)
         + " עם תוספת בחשבון";
 
+    public string CompactHeaderTitle
+    {
+        get
+        {
+            var parts = new List<string> { HeaderTitle };
+            var compactNumber = BillingSubContractStageGroupBuilder.FormatCompactNumberLabel(SubContractNumber);
+            if (!string.IsNullOrWhiteSpace(compactNumber))
+                parts.Add(compactNumber);
+            parts.Add(PaymentStageCount.ToString(CultureInfo.InvariantCulture) + " שלבים");
+            if (AdditionCount > 0)
+                parts.Add(AdditionCount.ToString(CultureInfo.InvariantCulture) + " עם תוספת");
+            return string.Join(" | ", parts);
+        }
+    }
+
     public bool IsExpanded
     {
         get => _isExpanded;
-        set => SetField(ref _isExpanded, value);
+        set
+        {
+            if (SetField(ref _isExpanded, value))
+            {
+                OnPropertyChanged(nameof(HeaderWeightWarning));
+                OnPropertyChanged(nameof(HeaderPartialWarning));
+            }
+        }
+    }
+
+    public bool IsSearchVisible
+    {
+        get => _isSearchVisible;
+        private set => SetField(ref _isSearchVisible, value);
     }
 
     public decimal ObservedSummaryPercent
@@ -134,35 +186,85 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
 
     public bool HasPositiveAddition => AdditionCount > 0;
     public bool HasInvalidAddition => EditableStages.Any(s => s.HasAdditionValidation);
+    public bool WeightsSumApproximatelyToOne => _draft.WeightsSumApproximatelyToOne;
     public bool ShowWeightSumWarning => !_draft.WeightsSumApproximatelyToOne && PaymentStageCount > 0;
     public string WeightSumWarning =>
         ShowWeightSumWarning
             ? BillingSubContractStageGroupBuilder.FormatWeightSumWarning(_draft.ValidWeightSum * 100m)
             : string.Empty;
+    public string CompactWeightSumWarning =>
+        ShowWeightSumWarning
+            ? BillingSubContractStageGroupBuilder.FormatCompactWeightSumWarning(_draft.ValidWeightSum * 100m)
+            : string.Empty;
+    public string HeaderWeightWarning => IsExpanded ? WeightSumWarning : CompactWeightSumWarning;
     public bool ShowPartialSummaryWarning => _draft.IsPartialBecauseOfDataQuality;
     public string PartialSummaryWarning => BillingSubContractStageGroupBuilder.PartialSummaryWarning;
+    public string CompactPartialSummaryWarning =>
+        BillingSubContractStageGroupBuilder.CompactPartialSummaryWarning;
+    public string HeaderPartialWarning =>
+        IsExpanded ? PartialSummaryWarning : CompactPartialSummaryWarning;
+    public bool ShowDefinedWeightSummary => ShowWeightSumWarning;
+    public string DefinedWeightSummaryText =>
+        ShowDefinedWeightSummary
+            ? BillingSubContractStageGroupBuilder.FormatDefinedWeightSummary(_draft.ValidWeightSum * 100m)
+            : string.Empty;
     public bool ShowAfterBillAsValid => !HasInvalidAddition;
 
     public string ObservedSummaryText =>
-        "כבר חויב " + BillingStageProgressMessages.FormatPercent(ObservedSummaryPercent);
+        BillingSubContractStageGroupBuilder.FormatObservedSummary(
+            ObservedSummaryPercent, _draft.WeightsSumApproximatelyToOne);
     public string AdditionSummaryText =>
-        "תוספת בחשבון הזה " + BillingStageProgressMessages.FormatPercent(AdditionSummaryPercent);
+        BillingSubContractStageGroupBuilder.FormatAdditionSummary(
+            AdditionSummaryPercent, _draft.WeightsSumApproximatelyToOne);
     public string AfterSummaryText =>
-        ShowAfterBillAsValid
-            ? "לאחר החשבון " + BillingStageProgressMessages.FormatPercent(AfterSummaryPercent)
-            : "לאחר החשבון: לא תקין";
+        BillingSubContractStageGroupBuilder.FormatAfterSummary(
+            AfterSummaryPercent, ShowAfterBillAsValid, _draft.WeightsSumApproximatelyToOne);
     public string RemainingSummaryText =>
-        ShowAfterBillAsValid
-            ? "נותר " + BillingStageProgressMessages.FormatPercent(RemainingSummaryPercent)
-            : "נותר: לא תקין";
+        BillingSubContractStageGroupBuilder.FormatRemainingSummary(
+            RemainingSummaryPercent, ShowAfterBillAsValid, _draft.WeightsSumApproximatelyToOne);
+
+    public void CaptureRestingExpansion() => _restingExpanded = IsExpanded;
+
+    public void ApplySearch(string? query, bool contractMatched)
+    {
+        var active = BillingPreparationStageSearch.IsActive(query);
+        if (!active)
+        {
+            IsSearchVisible = true;
+            _filterMatchingStagesOnly = false;
+            _matchingStageIds = [];
+            IsExpanded = _restingExpanded;
+            PublishVisibleStages();
+            return;
+        }
+
+        var subMatch = BillingPreparationStageSearch.MatchesSubContract(
+            SubContractName, SubContractNumber, query);
+        var matchingEditable = EditableStages
+            .Where(s => BillingPreparationStageSearch.MatchesStageName(s.StageName, query))
+            .Select(s => s.MasterPlanStageId)
+            .ToHashSet();
+        var hiddenOrSummaryMatch = SummaryStages.Any(s =>
+            BillingPreparationStageSearch.MatchesStageName(s.StageName, query));
+        var visible = contractMatched || subMatch || matchingEditable.Count > 0 || hiddenOrSummaryMatch;
+        IsSearchVisible = visible;
+        var showWholeGroup = contractMatched || subMatch || (hiddenOrSummaryMatch && matchingEditable.Count == 0);
+        _filterMatchingStagesOnly = visible && !showWholeGroup;
+        _matchingStageIds = matchingEditable;
+        if (visible)
+            IsExpanded = true;
+        PublishVisibleStages();
+    }
 
     public void AddEditable(BillingPreparationStageEditVm edit)
     {
         ArgumentNullException.ThrowIfNull(edit);
         EditableStages.Add(edit);
+        PublishVisibleStages();
         OnPropertyChanged(nameof(PaymentStageCount));
         OnPropertyChanged(nameof(StageCountText));
         OnPropertyChanged(nameof(CompactSummaryText));
+        OnPropertyChanged(nameof(CompactHeaderTitle));
     }
 
     public void RefreshSummary()
@@ -194,6 +296,7 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
 
         OnPropertyChanged(nameof(AdditionCount));
         OnPropertyChanged(nameof(CompactSummaryText));
+        OnPropertyChanged(nameof(CompactHeaderTitle));
         OnPropertyChanged(nameof(HasPositiveAddition));
         OnPropertyChanged(nameof(HasInvalidAddition));
         OnPropertyChanged(nameof(ShowAfterBillAsValid));
@@ -201,5 +304,17 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
         OnPropertyChanged(nameof(AdditionSummaryText));
         OnPropertyChanged(nameof(AfterSummaryText));
         OnPropertyChanged(nameof(RemainingSummaryText));
+        OnPropertyChanged(nameof(DefinedWeightSummaryText));
+        OnPropertyChanged(nameof(ShowDefinedWeightSummary));
+        OnPropertyChanged(nameof(HeaderWeightWarning));
+        OnPropertyChanged(nameof(HeaderPartialWarning));
+    }
+
+    private void PublishVisibleStages()
+    {
+        VisibleEditableStages = _filterMatchingStagesOnly
+            ? EditableStages.Where(s => _matchingStageIds.Contains(s.MasterPlanStageId)).ToList()
+            : EditableStages.ToList();
+        OnPropertyChanged(nameof(VisibleEditableStages));
     }
 }

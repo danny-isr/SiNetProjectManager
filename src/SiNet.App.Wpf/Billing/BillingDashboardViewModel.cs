@@ -76,6 +76,10 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private bool _showContractLevel;
     private int _componentLoadGeneration;
     private HashSet<int> _activePreparationProjectIds = [];
+    private string _stageSearchText = string.Empty;
+    private bool _isDirty;
+    private int _suspendDirty;
+    private bool _suppressSelectionGuard;
 
     public BillingDashboardViewModel(
         IBillingDashboardReadService service,
@@ -164,6 +168,14 @@ public sealed class BillingDashboardViewModel : ObservableObject
         get => _selectedWorkspaceTab;
         set
         {
+            if (_selectedWorkspaceTab == value)
+                return;
+            if (_selectedWorkspaceTab == 1 && value != 1 && !TryLeaveUnsavedPreparationEdits())
+            {
+                OnPropertyChanged(nameof(SelectedWorkspaceTab));
+                return;
+            }
+
             if (SetField(ref _selectedWorkspaceTab, value) && value == 1)
                 _ = RefreshPreparationAsync();
         }
@@ -174,21 +186,64 @@ public sealed class BillingDashboardViewModel : ObservableObject
         get => _selectedPreparation;
         set
         {
-            if (SetField(ref _selectedPreparation, value))
+            if (ReferenceEquals(_selectedPreparation, value))
+                return;
+            if (!_suppressSelectionGuard && !TryLeaveUnsavedPreparationEdits())
+            {
+                OnPropertyChanged(nameof(SelectedPreparation));
+                return;
+            }
+
+            if (!SetField(ref _selectedPreparation, value))
+                return;
+
+            _suspendDirty++;
+            try
             {
                 ReloadStageEdits();
                 ReloadHourlyScopeEdits();
-                OnPropertyChanged(nameof(HasSelectedPreparation));
-                OnPropertyChanged(nameof(SelectedPreparationStatusText));
-                OnPropertyChanged(nameof(SelectedPreparationInstructions));
-                OnPropertyChanged(nameof(ShowWaitingForSnapshot));
-                OnPropertyChanged(nameof(CanConfirmHourlyVisible));
-                RaisePreparationCommands();
-                if (value is not null)
-                    _ = LoadPreparationComponentsAsync();
+            }
+            finally
+            {
+                _suspendDirty--;
+            }
+
+            OnPropertyChanged(nameof(HasSelectedPreparation));
+            OnPropertyChanged(nameof(SelectedPreparationStatusText));
+            OnPropertyChanged(nameof(SelectedPreparationInstructions));
+            OnPropertyChanged(nameof(ShowWaitingForSnapshot));
+            OnPropertyChanged(nameof(CanConfirmHourlyVisible));
+            RaisePreparationCommands();
+            if (value is not null)
+                _ = LoadPreparationComponentsAsync();
+        }
+    }
+
+    public string StageSearchText
+    {
+        get => _stageSearchText;
+        set
+        {
+            if (SetField(ref _stageSearchText, value ?? string.Empty))
+                ApplyStageSearch();
+        }
+    }
+
+    public bool IsDirty
+    {
+        get => _isDirty;
+        private set
+        {
+            if (SetField(ref _isDirty, value))
+            {
+                OnPropertyChanged(nameof(ShowDirtyBanner));
+                OnPropertyChanged(nameof(DirtyBannerText));
             }
         }
     }
+
+    public bool ShowDirtyBanner => IsDirty;
+    public string DirtyBannerText => IsDirty ? "יש שינויים שלא נשמרו" : string.Empty;
 
     public bool HasSelectedPreparation => SelectedPreparation is not null;
     public string SelectedPreparationStatusText =>
@@ -208,13 +263,21 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public string ManualOverrideReason
     {
         get => _manualOverrideReason;
-        set => SetField(ref _manualOverrideReason, value);
+        set
+        {
+            if (SetField(ref _manualOverrideReason, value))
+                MarkPreparationDirty();
+        }
     }
 
     public string HourlyConfirmNote
     {
         get => _hourlyConfirmNote;
-        set => SetField(ref _hourlyConfirmNote, value);
+        set
+        {
+            if (SetField(ref _hourlyConfirmNote, value))
+                MarkPreparationDirty();
+        }
     }
 
     public string Title => "מרכז חיובים";
@@ -868,19 +931,54 @@ public sealed class BillingDashboardViewModel : ObservableObject
     {
         if (_preparation is null)
             return;
+        if (!TryLeaveUnsavedPreparationEdits())
+            return;
 
         var selectedId = SelectedPreparation?.Id;
         var rows = await _preparation.ListForPreparationTabAsync().ConfigureAwait(true);
         PreparationRows.Clear();
         foreach (var row in rows)
             PreparationRows.Add(new BillingPreparationRequestRowVm(row));
-        SelectedPreparation = selectedId is int id
-            ? PreparationRows.FirstOrDefault(r => r.Id == id)
-            : PreparationRows.Count > 0 ? PreparationRows[0] : null;
+        _suppressSelectionGuard = true;
+        _suspendDirty++;
+        try
+        {
+            SelectedPreparation = selectedId is int id
+                ? PreparationRows.FirstOrDefault(r => r.Id == id)
+                : PreparationRows.Count > 0 ? PreparationRows[0] : null;
+        }
+        finally
+        {
+            _suspendDirty--;
+            _suppressSelectionGuard = false;
+        }
+
         if (SelectedPreparation is not null)
             await LoadPreparationComponentsAsync().ConfigureAwait(true);
+        ClearDirty();
         RaisePreparationCommands();
     }
+
+    internal bool TryLeaveUnsavedPreparationEdits()
+    {
+        if (!IsDirty)
+            return true;
+        var decision = _prompts?.ConfirmDiscardUnsavedPreparationEdits()
+                       ?? BillingUnsavedEditsDecision.Stay;
+        if (decision == BillingUnsavedEditsDecision.Stay)
+            return false;
+        ClearDirty();
+        return true;
+    }
+
+    private void MarkPreparationDirty()
+    {
+        if (_suspendDirty > 0)
+            return;
+        IsDirty = true;
+    }
+
+    private void ClearDirty() => IsDirty = false;
 
     private void ReloadStageEdits()
     {
@@ -915,6 +1013,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             }
 
             groupVm.IsExpanded = groupVm.HasPositiveAddition || groupDrafts.Count == 1;
+            groupVm.CaptureRestingExpansion();
             groupVm.RefreshSummary();
             StageGroups.Add(groupVm);
         }
@@ -976,7 +1075,21 @@ public sealed class BillingDashboardViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowContractLevel));
         OnPropertyChanged(nameof(ShowFlatSubContractGroups));
         OnPropertyChanged(nameof(ShowStageLegend));
+        ApplyStageSearch();
         RaisePreparationCommands();
+    }
+
+    private void ApplyStageSearch()
+    {
+        if (_showContractLevel)
+        {
+            foreach (var contract in StageContractGroups)
+                contract.ApplySearch(_stageSearchText);
+            return;
+        }
+
+        foreach (var group in StageGroups)
+            group.ApplySearch(_stageSearchText, contractMatched: false);
     }
 
     private void AttachStage(BillingPreparationStageEditVm edit)
@@ -996,6 +1109,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
                 var group = StageGroups.FirstOrDefault(g => g.SubContractId == stage.MasterPlanSubContractId);
                 group?.RefreshSummary();
             }
+
+            if (e.PropertyName == nameof(BillingPreparationStageEditVm.AdditionPercent))
+                MarkPreparationDirty();
 
             RaisePreparationCommands();
         }
@@ -1044,6 +1160,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         if (!CanEditPreparation())
             return;
         AttachHourlyScope(new BillingPreparationHoursScopeEditVm());
+        MarkPreparationDirty();
         RaisePreparationCommands();
         _ = RefreshHourlyOverlapAsync();
     }
@@ -1054,6 +1171,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             return;
         edit.PropertyChanged -= OnHourlyScopePropertyChanged;
         HourlyScopeEdits.Remove(edit);
+        MarkPreparationDirty();
         RaisePreparationCommands();
         _ = RefreshHourlyOverlapAsync();
     }
@@ -1067,6 +1185,15 @@ public sealed class BillingDashboardViewModel : ObservableObject
             or nameof(BillingPreparationHoursScopeEditVm.ToDate)
             or nameof(BillingPreparationHoursScopeEditVm.ReportCount))
         {
+            if (e.PropertyName is nameof(BillingPreparationHoursScopeEditVm.Included)
+                or nameof(BillingPreparationHoursScopeEditVm.MasterPlanSubContractId)
+                or nameof(BillingPreparationHoursScopeEditVm.SelectedSubContractCount)
+                or nameof(BillingPreparationHoursScopeEditVm.FromDate)
+                or nameof(BillingPreparationHoursScopeEditVm.ToDate))
+            {
+                MarkPreparationDirty();
+            }
+
             RaisePreparationCommands();
             _ = RefreshHourlyOverlapAsync();
         }
@@ -1077,6 +1204,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         if (_preparation is null || SelectedPreparation is null)
             return;
         var generation = ++_componentLoadGeneration;
+        _suspendDirty++;
         try
         {
             var load = await _preparation.LoadComponentsAsync(SelectedPreparation.Id).ConfigureAwait(true);
@@ -1088,10 +1216,15 @@ public sealed class BillingDashboardViewModel : ObservableObject
             RebuildStageEdits();
             BindHourlyCatalog();
             await RefreshHourlyOverlapAsync().ConfigureAwait(true);
+            ClearDirty();
         }
         catch (Exception ex)
         {
             _logger?.Error("[Billing] load preparation components failed", ex);
+        }
+        finally
+        {
+            _suspendDirty--;
         }
     }
 
@@ -1186,6 +1319,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             var updated = await _preparation
                 .SaveSelectionAsync(SelectedPreparation.Id, stages, hours)
                 .ConfigureAwait(true);
+            ClearDirty();
             ReplacePreparation(updated);
         }
         catch (Exception ex)
@@ -1258,7 +1392,19 @@ public sealed class BillingDashboardViewModel : ObservableObject
             PreparationRows[index] = vm;
         else
             PreparationRows.Insert(0, vm);
-        SelectedPreparation = vm;
+        _suppressSelectionGuard = true;
+        _suspendDirty++;
+        try
+        {
+            SelectedPreparation = vm;
+        }
+        finally
+        {
+            _suspendDirty--;
+            _suppressSelectionGuard = false;
+        }
+
+        ClearDirty();
         RaisePreparationCommands();
     }
 

@@ -8,6 +8,14 @@ public interface IBillingReviewPrompts
     BillingNotNowPromptResult? PromptNotNow(string projectLabel);
 
     bool ConfirmClearDecision(string projectLabel);
+
+    BillingUnsavedEditsDecision ConfirmDiscardUnsavedPreparationEdits();
+}
+
+public enum BillingUnsavedEditsDecision
+{
+    Stay = 0,
+    Discard = 1
 }
 
 public sealed record BillingNotNowPromptResult(string Reason, DateTime? ReviewAgainDate);

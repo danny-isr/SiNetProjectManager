@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 11.09.2026 (payment stages grouped by SubContract; Billing Preparation color language is product-fixed; manager-facing validation stays in percentages)  
+> **Updated:** 11.09.2026 (compact preparation editor, SubContract/stage search, unsaved-changes protection; business calculations unchanged)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -155,7 +155,9 @@ Useful identity columns (proven, do not guess):
 
 `SubContractSteps.Percentage` is the **weight of that payment stage within its SubContract**. Snapshot-wide scale is **0–1** (no stored values > 1). Display as `× 100` with the label **«משקל השלב בתת החוזה»**. Do not call it project % or contract %.
 
-Completed 100% stages stay **hidden from the editable list** but **still count** in the SubContract weighted summary (`כבר חויב`). Data-quality / non-positive-weight rows never enter those totals silently; if they exist, show **«סיכום תת החוזה חלקי — קיימים שלבים עם בעיית איכות נתונים»**. If valid stage weights do not sum to ~100% (tolerance 0.02 on the 0–1 scale), show **«משקלי שלבי התשלום בתת החוזה מסתכמים ב-X% ולא ב-100%»**. Do not normalize.
+Completed 100% stages stay **hidden from the editable list** but **still count** in the SubContract weighted summary (`כבר חויב`). Data-quality / non-positive-weight rows never enter those totals silently; if they exist, show **«סיכום תת החוזה חלקי — קיימים שלבים עם בעיית איכות נתונים»**. If valid stage weights do not sum to ~100% (tolerance 0.02 on the 0–1 scale), show a **weight-sum warning**. Do **not** normalize to 100%. Collapsed SubContract headers use a compact indicator (`⚠ משקל שלבים: 95%` / `⚠ משקל שלבים: 114%`). The expanded group, tooltip, and details keep the full sentence **«משקלי שלבי התשלום בתת החוזה מסתכמים ב-X% ולא ב-100%»**. The data-quality partial-summary warning stays a separate sentence (`⚠ סיכום חלקי` when collapsed; full «סיכום תת החוזה חלקי — …» when expanded).
+
+When `WeightsSumApproximatelyToOne == false`, SubContract totals are labelled as totals **according to the defined payment stages** (`כבר חויב לפי שלבים`, `תוספת לפי שלבים`, `לאחר החשבון לפי שלבים`, `נותר לפי שלבים`, plus `משקל שלבים מוגדר: X%`). A valid ~100% group keeps the shorter labels (`כבר חויב` / `תוספת בחשבון הזה` / `לאחר החשבון` / `נותר`). Never present a non-100% remainder as if it were a normalized whole-SubContract percentage.
 
 ### Color language (product-fixed theme resources)
 
@@ -172,22 +174,47 @@ Each stage has a compact segmented bar for **100% of that stage** (green observe
 
 ### Compact stage card
 
+Desktop rows are **1–2 manager-facing lines** plus the segmented bar (target roughly 100–160px when the editor has remaining window width). Do not stack every label/value as a separate vertical pair when horizontal space exists. The full «משקל השלב בתת החוזה» wording remains the product term (legend / persisted instructions); the compact row may show `משקל בתת חוזה: 25%`.
+
 ```text
-פיקוח על הביצוע
-משקל השלב בתת החוזה: 25%
-כבר חויב:
-10% מהשלב
-2.5% מתת החוזה
-תוספת בחשבון הזה:
-[ 20 ] % מהשלב
-5% מתת החוזה
-לאחר החשבון:
-30% מהשלב
-7.5% מתת החוזה
-נותר:
-70% מהשלב
-17.5% מתת החוזה
+פיקוח עליון על הביצוע          משקל בתת חוזה: 25%
+🟢 חויב 10% / 2.5%   🔵 תוספת [20]% / 5%
+לאחר 30% / 7.5%      🔴 נותר 70% / 17.5%   עד 90%
+[ segmented progress bar ]
 ```
+
+A collapsed SubContract header must summarize without opening the group: name, number, stage count, current-addition count, then one compact totals line (`🟢 חויב` / `🔵 תוספת` / `לאחר` / `🔴 נותר`). Weight-sum noise stays compact until the group is expanded.
+
+**Contract title:** when the Contract wrapper is shown (`ShowContractLevel`), the SubContract header does **not** repeat `חוזה: …`. When the wrapper is not shown, SubContract rows still do not duplicate a contract title unless identity is genuinely needed for context.
+
+### Preparation workspace layout and search
+
+The preparation Tab gives the **request list a compact navigation width** (about 280–340px, resizable) and the Contract/SubContract/stage **editor the remaining width** (`*`, with MinWidth). Do **not** hard-code the editor to 460px.
+
+Search box above the hierarchy (`חיפוש תת חוזה או שלב`, AutomationId `BillingDashboard.StageSearch`) is **UI-only**. Case-insensitive match on contract name/number, SubContract name/number, and payment-stage name:
+
+- stage match → show that Contract + SubContract parent and the matching stage
+- SubContract match → show that whole SubContract group
+- Contract match → show that Contract hierarchy
+
+Search must not change `Included`, `AdditionPercent`, persistence, or summary math. Matching groups expand while search is active; clearing search restores the normal hierarchy.
+
+### Unsaved edits and refresh
+
+A preparation is **Dirty** only after a real manager edit (stage `AdditionPercent`, hourly scope add/remove, hourly SubContract selection, hourly From/To, manual override / hourly confirm notes). Loading or reloading persisted `BillingPreparationRequest` data does **not** mark Dirty. Successful Save clears Dirty. Dirty itself never writes the DB.
+
+Before an action that would discard unsaved edits (another preparation request, `רענון בקשות הכנה`, leaving the preparation tab when that reloads, closing the Billing window), prompt:
+
+«יש שינויים שלא נשמרו בהכנת החשבון.»
+
+Actions: **הישאר בעריכה** / **בטל שינויים והמשך**. No auto-save. No silent discard. Subtle banner while Dirty: «יש שינויים שלא נשמרו».
+
+Refresh semantics:
+
+| Control | Meaning |
+| --- | --- |
+| `רענון` (dashboard) | Reload billing **candidates** / replica freshness. Does not discard preparation editor edits. |
+| `רענון בקשות הכנה` | Reload the preparation **request list** and persisted request + snapshot catalog. If Dirty, confirm first. After confirmed discard, reload from persisted `BillingPreparationRequest`. |
 
 Weighted SubContract contribution = `StageWeight × stageProgress` (display percent). Derived only; not persisted.
 

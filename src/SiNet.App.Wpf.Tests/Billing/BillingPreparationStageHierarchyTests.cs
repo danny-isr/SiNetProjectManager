@@ -116,6 +116,52 @@ public sealed class BillingPreparationStageHierarchyTests
     }
 
     [Fact]
+    public void Compact_weight_warning_shows_the_defined_sum_without_normalizing()
+    {
+        Assert.Equal(
+            "⚠ משקל שלבים: 95%",
+            BillingSubContractStageGroupBuilder.FormatCompactWeightSumWarning(95m));
+        Assert.Equal(
+            "⚠ משקל שלבים: 114%",
+            BillingSubContractStageGroupBuilder.FormatCompactWeightSumWarning(114m));
+        Assert.DoesNotContain(
+            "100%",
+            BillingSubContractStageGroupBuilder.FormatCompactWeightSumWarning(114m).Replace("ולא ב-100%", "", StringComparison.Ordinal),
+            StringComparison.Ordinal);
+        Assert.NotEqual(
+            BillingSubContractStageGroupBuilder.FormatCompactWeightSumWarning(95m),
+            BillingSubContractStageGroupBuilder.CompactPartialSummaryWarning);
+    }
+
+    [Fact]
+    public void Invalid_weight_summary_uses_defined_stage_wording()
+    {
+        Assert.Equal(
+            "כבר חויב 82%",
+            BillingSubContractStageGroupBuilder.FormatObservedSummary(82m, weightsSumApproximatelyToOne: true));
+        Assert.Contains("לפי שלבים", BillingSubContractStageGroupBuilder.FormatObservedSummary(82m, false), StringComparison.Ordinal);
+        Assert.Contains("לפי שלבים", BillingSubContractStageGroupBuilder.FormatAdditionSummary(0m, false), StringComparison.Ordinal);
+        Assert.Contains("לפי שלבים", BillingSubContractStageGroupBuilder.FormatAfterSummary(82m, true, false), StringComparison.Ordinal);
+        Assert.Contains("לפי שלבים", BillingSubContractStageGroupBuilder.FormatRemainingSummary(32m, true, false), StringComparison.Ordinal);
+        Assert.Equal("משקל שלבים מוגדר: 114%", BillingSubContractStageGroupBuilder.FormatDefinedWeightSummary(114m));
+        Assert.DoesNotContain("לפי שלבים", BillingSubContractStageGroupBuilder.FormatRemainingSummary(30.15m, true, true), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Subcontract_header_does_not_repeat_contract_title_when_wrapper_is_used()
+    {
+        var draft = Assert.Single(BillingSubContractStageGroupBuilder.Build(
+        [
+            Draft(1, 10, "א", "כבישים", 0.5m, 0.10m, contractId: 1)
+        ]));
+        var wrapped = new BillingPreparationSubContractGroupVm(draft, showContract: true);
+        var flat = new BillingPreparationSubContractGroupVm(draft, showContract: false);
+        Assert.False(wrapped.ShowContractHeader);
+        Assert.False(flat.ShowContractHeader);
+        Assert.StartsWith("חוזה:", wrapped.ContractHeaderText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Observed_90_plus_addition_10_is_valid_and_20_is_invalid_in_percent_wording()
     {
         var observed = BillingStageProgressCalculator.Observe([0.90m]);

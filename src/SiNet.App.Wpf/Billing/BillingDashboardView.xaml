@@ -42,35 +42,47 @@
         <DataTemplate x:Key="BillingStageCardTemplate">
             <Border BorderBrush="{DynamicResource SiBorderBrush}"
                     BorderThickness="1"
-                    Padding="8"
-                    Margin="0,0,0,8"
+                    Padding="8,6"
+                    Margin="0,0,0,6"
                     Background="{DynamicResource SiSurfaceBrush}">
-                <StackPanel>
-                    <TextBlock Text="{Binding StageName}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding WeightText}"
-                               Foreground="{DynamicResource BillingStageWeightBrush}"
-                               FontWeight="SemiBold"
-                               Margin="0,4,0,0" />
-                    <Grid Height="8" Margin="0,6,0,4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="{Binding ObservedBarShare, Converter={StaticResource StarLen}}" />
-                            <ColumnDefinition Width="{Binding AdditionBarShare, Converter={StaticResource StarLen}}" />
-                            <ColumnDefinition Width="{Binding RemainingBarShare, Converter={StaticResource StarLen}}" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Background="{DynamicResource BillingObservedBrush}" />
-                        <Border Grid.Column="1" Background="{DynamicResource BillingAdditionBrush}" />
-                        <Border Grid.Column="2" Background="{DynamicResource BillingRemainingBrush}" />
+                        <TextBlock Text="{Binding StageName}"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding CompactWeightText}"
+                                   Foreground="{DynamicResource BillingStageWeightBrush}"
+                                   FontWeight="SemiBold"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock Text="כבר חויב:"
-                               Style="{StaticResource BillingSemanticLabelStyle}"
-                               Foreground="{DynamicResource BillingObservedBrush}" />
-                    <TextBlock Text="{Binding ObservedStageText}" />
-                    <TextBlock Text="{Binding ObservedContributionText}" />
-                    <TextBlock Text="תוספת בחשבון הזה:"
-                               Style="{StaticResource BillingSemanticLabelStyle}"
-                               Foreground="{DynamicResource BillingAdditionBrush}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                        <TextBox Width="70"
+                    <WrapPanel Grid.Row="1" Margin="0,4,0,0">
+                        <TextBlock Text="🟢 חויב "
+                                   Foreground="{DynamicResource BillingObservedBrush}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ObservedCompactText}"
+                                   Foreground="{DynamicResource BillingObservedBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0" />
+                        <TextBlock Text="🔵 תוספת"
+                                   Foreground="{DynamicResource BillingAdditionBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0" />
+                        <TextBox Width="52"
+                                 VerticalAlignment="Center"
                                  Text="{Binding AdditionPercent, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.AutomationId="{Binding AdditionAutomationId}">
                             <TextBox.Style>
@@ -84,67 +96,105 @@
                                 </Style>
                             </TextBox.Style>
                         </TextBox>
-                        <TextBlock Text="% מהשלב" VerticalAlignment="Center" Margin="6,0,0,0" />
-                    </StackPanel>
-                    <TextBlock Text="{Binding MaxAdditionHintText}"
-                               Foreground="{DynamicResource SiMutedForegroundBrush}"
-                               Margin="0,2,0,0" />
-                    <TextBlock Text="{Binding AdditionContributionText}" />
-                    <TextBlock Text="{Binding AdditionValidationMessage}"
+                        <TextBlock Text="% /"
+                                   VerticalAlignment="Center"
+                                   Margin="4,0,4,0" />
+                        <TextBlock Text="{Binding AdditionContributionCompactText}"
+                                   Foreground="{DynamicResource BillingAdditionBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0" />
+                    </WrapPanel>
+                    <WrapPanel Grid.Row="2" Margin="0,2,0,0">
+                        <TextBlock Text="לאחר "
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding AfterCompactText}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0" />
+                        <TextBlock Text="🔴 נותר "
+                                   Foreground="{DynamicResource BillingRemainingBrush}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding RemainingCompactText}"
+                                   Foreground="{DynamicResource BillingRemainingBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding MaxAdditionHintText}"
+                                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                                   VerticalAlignment="Center" />
+                    </WrapPanel>
+                    <TextBlock Grid.Row="3"
+                               Text="{Binding AdditionValidationMessage}"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource SiDangerBrush}"
                                Visibility="{Binding HasAdditionValidation, Converter={StaticResource BoolToVis}}" />
-                    <TextBlock Text="לאחר החשבון:"
-                               Style="{StaticResource BillingSemanticLabelStyle}" />
-                    <TextBlock Text="{Binding AfterStageText}" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding AfterContributionText}" />
-                    <TextBlock Text="נותר:"
-                               Style="{StaticResource BillingSemanticLabelStyle}"
-                               Foreground="{DynamicResource BillingRemainingBrush}" />
-                    <TextBlock Text="{Binding RemainingStageText}" />
-                    <TextBlock Text="{Binding RemainingContributionText}" />
-                </StackPanel>
+                    <Grid Grid.Row="4" Height="6" Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{Binding ObservedBarShare, Converter={StaticResource StarLen}}" />
+                            <ColumnDefinition Width="{Binding AdditionBarShare, Converter={StaticResource StarLen}}" />
+                            <ColumnDefinition Width="{Binding RemainingBarShare, Converter={StaticResource StarLen}}" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="{DynamicResource BillingObservedBrush}" />
+                        <Border Grid.Column="1" Background="{DynamicResource BillingAdditionBrush}" />
+                        <Border Grid.Column="2" Background="{DynamicResource BillingRemainingBrush}" />
+                    </Grid>
+                </Grid>
             </Border>
         </DataTemplate>
         <DataTemplate x:Key="BillingSubContractGroupTemplate">
             <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
                       Margin="0,0,0,8"
+                      Visibility="{Binding IsSearchVisible, Converter={StaticResource BoolToVis}}"
                       AutomationProperties.AutomationId="{Binding GroupAutomationId}">
                 <Expander.Header>
-                    <StackPanel Width="380">
+                    <StackPanel>
                         <TextBlock Text="{Binding ContractHeaderText}"
                                    Visibility="{Binding ShowContractHeader, Converter={StaticResource BoolToVis}}"
                                    Foreground="{DynamicResource SiMutedForegroundBrush}" />
-                        <TextBlock Text="{Binding HeaderTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding NumberText}"
-                                   Visibility="{Binding ShowNumber, Converter={StaticResource BoolToVis}}" />
-                        <TextBlock Text="{Binding CompactSummaryText}"
-                                   Foreground="{DynamicResource SiMutedForegroundBrush}" />
-                        <WrapPanel Margin="0,4,0,0">
+                        <TextBlock Text="{Binding CompactHeaderTitle}"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+                        <WrapPanel Margin="0,2,0,0">
+                            <TextBlock Text="🟢 "
+                                       Foreground="{DynamicResource BillingObservedBrush}"
+                                       VerticalAlignment="Center" />
                             <TextBlock Text="{Binding ObservedSummaryText}"
                                        Foreground="{DynamicResource BillingObservedBrush}"
                                        Margin="0,0,10,2" />
+                            <TextBlock Text="🔵 "
+                                       Foreground="{DynamicResource BillingAdditionBrush}"
+                                       VerticalAlignment="Center" />
                             <TextBlock Text="{Binding AdditionSummaryText}"
                                        Foreground="{DynamicResource BillingAdditionBrush}"
                                        Margin="0,0,10,2" />
                             <TextBlock Text="{Binding AfterSummaryText}"
                                        FontWeight="SemiBold"
                                        Margin="0,0,10,2" />
+                            <TextBlock Text="🔴 "
+                                       Foreground="{DynamicResource BillingRemainingBrush}"
+                                       VerticalAlignment="Center" />
                             <TextBlock Text="{Binding RemainingSummaryText}"
                                        Foreground="{DynamicResource BillingRemainingBrush}"
                                        Margin="0,0,10,2" />
                         </WrapPanel>
-                        <TextBlock Text="{Binding WeightSumWarning}"
+                        <TextBlock Text="{Binding DefinedWeightSummaryText}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource SiMutedForegroundBrush}"
+                                   Visibility="{Binding ShowDefinedWeightSummary, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Text="{Binding HeaderWeightWarning}"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource SiWarningBrush}"
+                                   ToolTip="{Binding WeightSumWarning}"
                                    Visibility="{Binding ShowWeightSumWarning, Converter={StaticResource BoolToVis}}" />
-                        <TextBlock Text="{Binding PartialSummaryWarning}"
+                        <TextBlock Text="{Binding HeaderPartialWarning}"
                                    TextWrapping="Wrap"
+                                   FontStyle="Italic"
                                    Foreground="{DynamicResource SiWarningBrush}"
+                                   ToolTip="{Binding PartialSummaryWarning}"
                                    Visibility="{Binding ShowPartialSummaryWarning, Converter={StaticResource BoolToVis}}" />
                     </StackPanel>
                 </Expander.Header>
-                <ItemsControl ItemsSource="{Binding EditableStages}"
+                <ItemsControl ItemsSource="{Binding VisibleEditableStages}"
                               ItemTemplate="{StaticResource BillingStageCardTemplate}"
                               Margin="8,8,0,0" />
             </Expander>
@@ -660,8 +710,9 @@
                      AutomationProperties.AutomationId="BillingDashboard.PreparationTab">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" MinWidth="280" />
-                        <ColumnDefinition Width="460" MinWidth="320" />
+                        <ColumnDefinition Width="320" MinWidth="260" MaxWidth="400" />
+                        <ColumnDefinition Width="6" />
+                        <ColumnDefinition Width="*" MinWidth="420" />
                     </Grid.ColumnDefinitions>
                     <DockPanel Grid.Column="0" Margin="0,0,10,0">
                         <Button DockPanel.Dock="Top"
@@ -669,7 +720,8 @@
                                 Command="{Binding RefreshPreparationCommand}"
                                 Margin="0,0,0,8"
                                 Padding="12,6"
-                                Style="{DynamicResource SiSecondaryButtonStyle}" />
+                                Style="{DynamicResource SiSecondaryButtonStyle}"
+                                ToolTip="טוען מחדש את רשימת בקשות ההכנה ואת נתוני המקור שנשמרו. שינויים שלא נשמרו בהכנת החשבון דורשים אישור לפני ביטולם. אין שמירה אוטומטית." />
                         <DataGrid ItemsSource="{Binding PreparationRows}"
                                   SelectedItem="{Binding SelectedPreparation}"
                                   AutoGenerateColumns="False"
@@ -687,10 +739,21 @@
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
-                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                    <GridSplitter Grid.Column="1"
+                                Width="6"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"
+                                ResizeBehavior="PreviousAndNext" />
+                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <TextBlock Text="בקשת הכנה"
                                        Style="{StaticResource SectionHeaderStyle}" />
+                            <TextBlock Text="{Binding DirtyBannerText}"
+                                       Foreground="{DynamicResource SiWarningBrush}"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,8"
+                                       Visibility="{Binding ShowDirtyBanner, Converter={StaticResource BoolToVis}}"
+                                       AutomationProperties.AutomationId="BillingDashboard.DirtyBanner" />
                             <TextBlock Text="{Binding SelectedPreparationStatusText}"
                                        Style="{StaticResource DetailValueStyle}" />
                             <TextBlock Text="ממתין לנתוני MasterPlan מהגיבוי החודשי."
@@ -733,6 +796,13 @@
                                         Style="{DynamicResource SiSecondaryButtonStyle}"
                                         AutomationProperties.AutomationId="BillingDashboard.CollapseAllStageGroups" />
                             </WrapPanel>
+                            <TextBlock Text="חיפוש תת חוזה או שלב"
+                                       Style="{StaticResource DetailLabelStyle}"
+                                       Visibility="{Binding ShowStageLegend, Converter={StaticResource BoolToVis}}" />
+                            <TextBox Text="{Binding StageSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,0,0,8"
+                                     Visibility="{Binding ShowStageLegend, Converter={StaticResource BoolToVis}}"
+                                     AutomationProperties.AutomationId="BillingDashboard.StageSearch" />
                             <Expander Margin="0,0,0,8"
                                       Visibility="{Binding ShowStageExclusionWarning, Converter={StaticResource BoolToVis}}"
                                       Header="{Binding StageExclusionWarningHeader}"
@@ -749,7 +819,9 @@
                                         <Border BorderBrush="{DynamicResource SiBorderBrush}"
                                                 BorderThickness="1"
                                                 Padding="8"
-                                                Margin="0,0,0,10">
+                                                Margin="0,0,0,10"
+                                                Visibility="{Binding IsSearchVisible, Converter={StaticResource BoolToVis}}"
+                                                AutomationProperties.AutomationId="{Binding GroupAutomationId}">
                                             <StackPanel>
                                                 <TextBlock Text="{Binding HeaderTitle}" FontWeight="SemiBold" />
                                                 <TextBlock Text="{Binding NumberText}"

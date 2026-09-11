@@ -771,6 +771,9 @@ public sealed class BillingDashboardViewModelTests
             new("סיבת בדיקה", new DateTime(2026, 9, 20));
 
         public bool ConfirmClearDecision(string projectLabel) => true;
+
+        public BillingUnsavedEditsDecision ConfirmDiscardUnsavedPreparationEdits() =>
+            BillingUnsavedEditsDecision.Stay;
     }
 
     private sealed class RecordingWrite : IBillingReviewDecisionService

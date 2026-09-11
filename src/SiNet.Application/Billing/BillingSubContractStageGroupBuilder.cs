@@ -150,11 +150,50 @@ public static class BillingSubContractStageGroupBuilder
         + BillingStageProgressMessages.FormatPercent(validWeightSumPercent)
         + " ולא ב-100%";
 
+    public static string FormatCompactWeightSumWarning(decimal validWeightSumPercent) =>
+        "⚠ משקל שלבים: " + BillingStageProgressMessages.FormatPercent(validWeightSumPercent);
+
     public static string PartialSummaryWarning =>
         "סיכום תת החוזה חלקי — קיימים שלבים עם בעיית איכות נתונים";
 
+    public static string CompactPartialSummaryWarning => "⚠ סיכום חלקי";
+
+    public static string FormatDefinedWeightSummary(decimal validWeightSumPercent) =>
+        "משקל שלבים מוגדר: " + BillingStageProgressMessages.FormatPercent(validWeightSumPercent);
+
+    public static string FormatObservedSummary(decimal percent, bool weightsSumApproximatelyToOne) =>
+        weightsSumApproximatelyToOne
+            ? "כבר חויב " + BillingStageProgressMessages.FormatPercent(percent)
+            : "כבר חויב לפי שלבים: " + BillingStageProgressMessages.FormatPercent(percent);
+
+    public static string FormatAdditionSummary(decimal percent, bool weightsSumApproximatelyToOne) =>
+        weightsSumApproximatelyToOne
+            ? "תוספת בחשבון הזה " + BillingStageProgressMessages.FormatPercent(percent)
+            : "תוספת לפי שלבים: " + BillingStageProgressMessages.FormatPercent(percent);
+
+    public static string FormatAfterSummary(decimal percent, bool afterIsValid, bool weightsSumApproximatelyToOne)
+    {
+        if (!afterIsValid)
+            return "לאחר החשבון: לא תקין";
+        return weightsSumApproximatelyToOne
+            ? "לאחר החשבון " + BillingStageProgressMessages.FormatPercent(percent)
+            : "לאחר החשבון לפי שלבים: " + BillingStageProgressMessages.FormatPercent(percent);
+    }
+
+    public static string FormatRemainingSummary(decimal percent, bool afterIsValid, bool weightsSumApproximatelyToOne)
+    {
+        if (!afterIsValid)
+            return "נותר: לא תקין";
+        return weightsSumApproximatelyToOne
+            ? "נותר " + BillingStageProgressMessages.FormatPercent(percent)
+            : "נותר לפי שלבים: " + BillingStageProgressMessages.FormatPercent(percent);
+    }
+
     public static string FormatNumberLabel(string? number) =>
         string.IsNullOrWhiteSpace(number) ? string.Empty : "מספר: " + number.Trim();
+
+    public static string FormatCompactNumberLabel(string? number) =>
+        string.IsNullOrWhiteSpace(number) ? string.Empty : "מס' " + number.Trim();
 
     public static string FormatStageCount(int count) =>
         count.ToString(CultureInfo.InvariantCulture) + " שלבי תשלום";

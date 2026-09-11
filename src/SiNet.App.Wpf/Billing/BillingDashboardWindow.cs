@@ -23,5 +23,10 @@ public sealed class BillingDashboardWindow : Window
         ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Content = new BillingDashboardView { DataContext = viewModel };
         Loaded += async (_, _) => await viewModel.LoadAsync().ConfigureAwait(true);
+        Closing += (_, e) =>
+        {
+            if (!viewModel.TryLeaveUnsavedPreparationEdits())
+                e.Cancel = true;
+        };
     }
 }

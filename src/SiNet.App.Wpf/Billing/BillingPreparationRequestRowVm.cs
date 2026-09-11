@@ -162,6 +162,18 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
     }
 
     public string WeightText => "משקל השלב בתת החוזה: " + FormatPercent(WeightPercent);
+    public string CompactWeightText => "משקל בתת חוזה: " + FormatPercent(WeightPercent);
+    public string ObservedCompactText =>
+        FormatPercent(ObservedPercent) + " / " + FormatPercent(ObservedContributionPercent);
+    public string AdditionContributionCompactText => FormatPercent(AdditionContributionPercent);
+    public string AfterCompactText =>
+        IsAfterBillValid
+            ? FormatPercent(AfterBillPercent) + " / " + FormatPercent(AfterContributionPercent)
+            : "לא תקין";
+    public string RemainingCompactText =>
+        IsAfterBillValid
+            ? FormatPercent(RemainingPercent) + " / " + FormatPercent(RemainingContributionPercent)
+            : "לא תקין";
     public string ObservedText => "כבר חויב: " + FormatPercent(ObservedPercent) + " מהשלב";
     public string ObservedStageText => FormatPercent(ObservedPercent) + " מהשלב";
     public string ObservedContributionText => FormatPercent(ObservedContributionPercent) + " מתת החוזה";
@@ -263,6 +275,10 @@ public sealed class BillingPreparationStageEditVm : ObservableObject
         OnPropertyChanged(nameof(RemainingStageText));
         OnPropertyChanged(nameof(RemainingContributionText));
         OnPropertyChanged(nameof(RelativeShareText));
+        OnPropertyChanged(nameof(ObservedCompactText));
+        OnPropertyChanged(nameof(AdditionContributionCompactText));
+        OnPropertyChanged(nameof(AfterCompactText));
+        OnPropertyChanged(nameof(RemainingCompactText));
         OnPropertyChanged(nameof(AdditionValidationMessage));
         OnPropertyChanged(nameof(HasAdditionValidation));
     }

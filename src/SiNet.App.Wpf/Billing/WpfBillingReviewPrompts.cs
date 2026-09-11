@@ -28,6 +28,15 @@ public sealed class WpfBillingReviewPrompts : IBillingReviewPrompts
         return Ask(text, "בטל החלטה") == MessageBoxResult.Yes;
     }
 
+    public BillingUnsavedEditsDecision ConfirmDiscardUnsavedPreparationEdits()
+    {
+        var dialog = new BillingUnsavedEditsDialog();
+        if (Owner() is Window owner)
+            dialog.Owner = owner;
+        dialog.ShowDialog();
+        return dialog.Decision;
+    }
+
     private static MessageBoxResult Ask(string text, string caption)
     {
         return Owner() is Window owner
