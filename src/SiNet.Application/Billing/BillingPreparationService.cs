@@ -212,6 +212,9 @@ public sealed class BillingPreparationService(
         if (request.TaskId is int existingTask)
             return new BillingPreparationApproveResult(request, existingTask);
 
+        if (request.Status != BillingPreparationStatus.ReadyForApproval)
+            throw new InvalidOperationException(BillingPreparationPricingFreeze.NotReadyForApprovalMessage);
+
         if (!request.ManualOverride && request.Stages.Count == 0 && request.Hours.Count == 0)
             throw new InvalidOperationException("יש לבחור שלבים, היקף שעות, או לאשר טיפול ידני.");
 
@@ -222,12 +225,24 @@ public sealed class BillingPreparationService(
             throw new InvalidOperationException("כבר קיימת משימת הכנת חשבון פתוחה לפרויקט.");
 
         var now = _time.GetUtcNow().UtcDateTime;
-        var frozen = request;
-        if (!BillingPreparationPricingFreeze.HasFreeze(request))
+        BillingPreparationRequestRecord frozen;
+        if (BillingPreparationPricingFreeze.HasFreeze(request))
+        {
+            frozen = request;
+        }
+        else if (BillingPreparationPricingFreeze.HasIncompleteFreeze(request))
+        {
+            throw new InvalidOperationException(BillingPreparationPricingFreeze.IncompleteFreezeMessage);
+        }
+        else
         {
             var catalog = await _components.LoadAsync(request.MasterPlanProjectId, cancellationToken)
                 .ConfigureAwait(false);
-            frozen = BillingPreparationPricingFreeze.Capture(request, catalog, now);
+            var sourceSnapshotUtc = BillingPreparationPricingFreeze.ResolveSourceSnapshotUtc(catalog, request);
+            if (sourceSnapshotUtc is null)
+                throw new InvalidOperationException(BillingPreparationPricingFreeze.MissingSourceSnapshotMessage);
+
+            frozen = BillingPreparationPricingFreeze.Capture(request, catalog, now, sourceSnapshotUtc.Value);
             frozen = await _store.UpdateAsync(frozen, cancellationToken).ConfigureAwait(false);
         }
 

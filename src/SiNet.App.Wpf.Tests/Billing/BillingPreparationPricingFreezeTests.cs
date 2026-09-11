@@ -59,6 +59,9 @@ public sealed class BillingPreparationPricingFreezeTests
         Assert.Equal(110_280m, request.PricingTotal);
         Assert.False(request.PricingIsPartial);
         Assert.Equal(BillingPreparationPricing.FormulaVersion, request.PricingFormulaVersion);
+        Assert.True(BillingPreparationPricingFreeze.HasFreeze(request));
+        Assert.False(BillingPreparationPricingFreeze.HasIncompleteFreeze(request));
+        Assert.Equal(request.PricingStageTotal + request.PricingHoursTotal, request.PricingTotal);
         Assert.Equal(new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), request.PricingSourceSnapshotUtc);
         Assert.Equal(new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc), request.PricingFrozenAtUtc);
         Assert.Contains("סה\"כ להכנת חשבון: ₪ 110,280", _tasks.LastBody, StringComparison.Ordinal);
@@ -285,6 +288,7 @@ public sealed class BillingPreparationPricingFreezeTests
             PricingTotal = 110_280m,
             PricingIsPartial = false,
             PricingFrozenAtUtc = new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc),
+            PricingSourceSnapshotUtc = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
             PricingFormulaVersion = BillingPreparationPricing.FormulaVersion,
             Stages = [Stage7390() with { PricingCalculatedAmount = 110_000m, PricingBaseAmount = 2_200_000m }],
             Hours = [Hours14317() with { PricingHourlyRate = 280m, PricingCalculatedAmount = 280m }]
@@ -303,6 +307,164 @@ public sealed class BillingPreparationPricingFreezeTests
         Assert.Contains("תוספת כספית: ₪ 110,000", body, StringComparison.Ordinal);
         Assert.Contains("תעריף: ₪ 280", body, StringComparison.Ordinal);
         Assert.DoesNotContain("₪ 999", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WaitingForSelection_with_selected_lines_cannot_be_approved()
+    {
+        _components.Load = CompleteCatalog();
+        var planted = await _store.InsertAsync(PlantedRequest(BillingPreparationStatus.WaitingForSelection));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(planted.Id));
+        Assert.Equal(BillingPreparationPricingFreeze.NotReadyForApprovalMessage, ex.Message);
+        Assert.Equal(0, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(planted.Id);
+        Assert.Equal(BillingPreparationStatus.WaitingForSelection, stored!.Status);
+        Assert.Null(stored.PricingFrozenAtUtc);
+        Assert.Null(stored.TaskId);
+        Assert.False(BillingPreparationPricingFreeze.HasFreeze(stored));
+    }
+
+    [Theory]
+    [InlineData(BillingPreparationStatus.WaitingForSnapshot)]
+    [InlineData(BillingPreparationStatus.TaskOpen)]
+    [InlineData(BillingPreparationStatus.AwaitingMasterPlanConfirmation)]
+    [InlineData(BillingPreparationStatus.Completed)]
+    [InlineData(BillingPreparationStatus.Cancelled)]
+    public async Task Non_ready_status_cannot_capture_pricing_or_create_task(BillingPreparationStatus status)
+    {
+        _components.Load = CompleteCatalog();
+        var planted = await _store.InsertAsync(PlantedRequest(status));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(planted.Id));
+        Assert.Equal(BillingPreparationPricingFreeze.NotReadyForApprovalMessage, ex.Message);
+        Assert.Equal(0, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(planted.Id);
+        Assert.Equal(status, stored!.Status);
+        Assert.Null(stored.PricingFrozenAtUtc);
+        Assert.Null(stored.TaskId);
+    }
+
+    [Fact]
+    public async Task Existing_task_id_is_idempotent_without_recapture()
+    {
+        _components.Load = CompleteCatalog();
+        var planted = await _store.InsertAsync(PlantedRequest(BillingPreparationStatus.TaskOpen) with { TaskId = 77 });
+        var approved = await _service.ApproveAndCreateTaskAsync(planted.Id);
+        Assert.Equal(77, approved.TaskId);
+        Assert.Equal(0, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(planted.Id);
+        Assert.Null(stored!.PricingFrozenAtUtc);
+        Assert.Equal(77, stored.TaskId);
+    }
+
+    [Fact]
+    public async Task New_freeze_uses_catalog_latest_backup_utc()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), approved.Request.PricingSourceSnapshotUtc);
+        Assert.True(BillingPreparationPricingFreeze.HasFreeze(approved.Request));
+    }
+
+    [Fact]
+    public async Task New_freeze_falls_back_to_request_snapshot_timestamp()
+    {
+        _components.Load = CompleteCatalog() with { LatestBackupUtc = null };
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        var saved = await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        var stamped = saved with { SnapshotTimestampUtc = new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc) };
+        await _store.UpdateAsync(stamped);
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc), approved.Request.PricingSourceSnapshotUtc);
+        Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
+    }
+
+    [Fact]
+    public async Task New_freeze_blocks_when_source_snapshot_is_unknown()
+    {
+        _components.Load = CompleteCatalog() with { LatestBackupUtc = null };
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        var saved = await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        Assert.Null(saved.SnapshotTimestampUtc);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        Assert.Equal(BillingPreparationPricingFreeze.MissingSourceSnapshotMessage, ex.Message);
+        Assert.Equal(0, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, stored!.Status);
+        Assert.Null(stored.PricingFrozenAtUtc);
+        Assert.Null(stored.PricingSourceSnapshotUtc);
+        Assert.Null(stored.TaskId);
+        Assert.False(BillingPreparationPricingFreeze.HasFreeze(stored));
+    }
+
+    [Fact]
+    public async Task Valid_freeze_retry_does_not_require_a_later_catalog_snapshot()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        _tasks.ThrowOnCreate = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        var frozen = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.NotNull(frozen);
+        Assert.True(BillingPreparationPricingFreeze.HasFreeze(frozen));
+        await _store.UpdateAsync(frozen with { SnapshotTimestampUtc = null, LatestMasterPlanBackupUtc = null });
+        _components.Load = CompleteCatalog() with { LatestBackupUtc = null };
+        _tasks.ThrowOnCreate = false;
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(110_280m, approved.Request.PricingTotal);
+        Assert.Equal(new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), approved.Request.PricingSourceSnapshotUtc);
+        Assert.Equal(1, _tasks.CreateCalls);
+    }
+
+    [Fact]
+    public async Task Incomplete_freeze_fails_safely_without_repair()
+    {
+        _components.Load = CompleteCatalog();
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        var saved = await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        var corrupt = saved with { PricingFrozenAtUtc = new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc) };
+        await _store.UpdateAsync(corrupt);
+        Assert.True(BillingPreparationPricingFreeze.HasIncompleteFreeze(corrupt));
+        Assert.False(BillingPreparationPricingFreeze.HasFreeze(corrupt));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ApproveAndCreateTaskAsync(ensured.Request.Id));
+        Assert.Equal(BillingPreparationPricingFreeze.IncompleteFreezeMessage, ex.Message);
+        Assert.Equal(0, _tasks.CreateCalls);
+        var stored = await _store.GetByIdAsync(ensured.Request.Id);
+        Assert.Null(stored!.PricingSourceSnapshotUtc);
+        Assert.Null(stored.PricingTotal);
+        Assert.Null(stored.TaskId);
+        Assert.Equal(BillingPreparationStatus.ReadyForApproval, stored.Status);
+    }
+
+    [Fact]
+    public void HasFreeze_requires_coherent_metadata_not_only_frozen_at()
+    {
+        var frozenAt = new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc);
+        var source = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        Assert.False(BillingPreparationPricingFreeze.HasFreeze(EmptyRequest() with { PricingFrozenAtUtc = frozenAt }));
+        var coherent = EmptyRequest() with
+        {
+            PricingStageTotal = 110_000m,
+            PricingHoursTotal = 280m,
+            PricingTotal = 110_280m,
+            PricingIsPartial = false,
+            PricingFrozenAtUtc = frozenAt,
+            PricingSourceSnapshotUtc = source,
+            PricingFormulaVersion = BillingPreparationPricing.FormulaVersion,
+            Stages = [Stage7390() with { PricingCalculatedAmount = 110_000m }],
+            Hours = [Hours14317() with { PricingCalculatedAmount = 280m }]
+        };
+        Assert.True(BillingPreparationPricingFreeze.HasFreeze(coherent));
+        Assert.False(BillingPreparationPricingFreeze.HasFreeze(coherent with { PricingTotal = 1m }));
+        Assert.False(BillingPreparationPricingFreeze.HasFreeze(
+            coherent with { Stages = [Stage7390() with { PricingCalculatedAmount = 0m, PricingUnavailableReason = "לא נמצא בסיס תמחור" }] }));
     }
 
     private static BillingPreparationSnapshotLoad CompleteCatalog() =>
@@ -355,6 +517,17 @@ public sealed class BillingPreparationPricingFreezeTests
             [],
             new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
             BillingConfirmationMode.None, null, null, null);
+
+    private static BillingPreparationRequestRecord PlantedRequest(BillingPreparationStatus status) =>
+        EmptyRequest() with
+        {
+            Id = 0,
+            Status = status,
+            SiNetProjectId = 12,
+            SnapshotTimestampUtc = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+            Stages = [Stage7390()],
+            Hours = [Hours14317()]
+        };
 
     private static BillingPreparationRequestRecord EmptyRequest() =>
         new(

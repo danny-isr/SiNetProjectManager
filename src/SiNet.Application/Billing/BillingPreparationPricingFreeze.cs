@@ -15,19 +15,46 @@ public static class BillingPreparationPricing
 /// </summary>
 public static class BillingPreparationPricingFreeze
 {
+    public const string NotReadyForApprovalMessage = "הבקשה אינה במצב מוכן לאישור.";
+    public const string MissingSourceSnapshotMessage =
+        "לא ניתן לאשר — לא ניתן לזהות את snapshot המקור של נתוני התמחור.";
+    public const string IncompleteFreezeMessage = "לא ניתן לאשר — ראיות התמחור השמורות אינן שלמות.";
+
+    /// <summary>
+    /// True only when persisted freeze metadata is internally coherent.
+    /// A half-written freeze is not treated as valid and is not auto-repaired.
+    /// </summary>
     public static bool HasFreeze(BillingPreparationRequestRecord request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return request.PricingFrozenAtUtc is not null;
+        return IsCoherent(request);
+    }
+
+    public static bool HasIncompleteFreeze(BillingPreparationRequestRecord request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return HasAnyFreezeMetadata(request) && !IsCoherent(request);
+    }
+
+    public static DateTime? ResolveSourceSnapshotUtc(
+        BillingPreparationSnapshotLoad catalog,
+        BillingPreparationRequestRecord request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(catalog);
+        return catalog.LatestBackupUtc ?? request.SnapshotTimestampUtc;
     }
 
     public static BillingPreparationRequestRecord Capture(
         BillingPreparationRequestRecord request,
         BillingPreparationSnapshotLoad catalog,
-        DateTime frozenAtUtc)
+        DateTime frozenAtUtc,
+        DateTime sourceSnapshotUtc)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(catalog);
+        if (sourceSnapshotUtc == default)
+            throw new ArgumentException("נדרש חותם זמן של snapshot המקור.", nameof(sourceSnapshotUtc));
 
         var stages = request.Stages.Select(s => FreezeStage(s, catalog.Stages)).ToList();
         var hours = request.Hours.Select(h => FreezeHours(h, catalog.HourlySubContracts)).ToList();
@@ -62,7 +89,7 @@ public static class BillingPreparationPricingFreeze
             PricingTotal = decimal.Round(stageTotal + hoursTotal, 4, MidpointRounding.AwayFromZero),
             PricingIsPartial = partial,
             PricingFrozenAtUtc = frozenAtUtc,
-            PricingSourceSnapshotUtc = catalog.LatestBackupUtc ?? request.SnapshotTimestampUtc,
+            PricingSourceSnapshotUtc = sourceSnapshotUtc,
             PricingFormulaVersion = BillingPreparationPricing.FormulaVersion
         };
     }
@@ -197,5 +224,69 @@ public static class BillingPreparationPricingFreeze
         return hours.PricingCalculatedAmount is not null
                || hours.PricingHourlyRate is not null
                || !string.IsNullOrWhiteSpace(hours.PricingUnavailableReason);
+    }
+
+    private static bool IsCoherent(BillingPreparationRequestRecord request)
+    {
+        if (request.PricingFrozenAtUtc is null
+            || request.PricingSourceSnapshotUtc is null
+            || request.PricingFormulaVersion != BillingPreparationPricing.FormulaVersion
+            || request.PricingIsPartial is null
+            || request.PricingStageTotal is not decimal stageTotal
+            || request.PricingHoursTotal is not decimal hoursTotal
+            || request.PricingTotal is not decimal total)
+        {
+            return false;
+        }
+
+        var expectedTotal = decimal.Round(stageTotal + hoursTotal, 4, MidpointRounding.AwayFromZero);
+        if (total != expectedTotal)
+            return false;
+
+        foreach (var stage in request.Stages)
+        {
+            if (!HasExclusiveLineEvidence(stage.PricingCalculatedAmount, stage.PricingUnavailableReason))
+                return false;
+        }
+
+        foreach (var hours in request.Hours)
+        {
+            if (!HasExclusiveLineEvidence(hours.PricingCalculatedAmount, hours.PricingUnavailableReason))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool HasAnyFreezeMetadata(BillingPreparationRequestRecord request)
+    {
+        if (request.PricingFrozenAtUtc is not null
+            || request.PricingSourceSnapshotUtc is not null
+            || !string.IsNullOrWhiteSpace(request.PricingFormulaVersion)
+            || request.PricingIsPartial is not null
+            || request.PricingStageTotal is not null
+            || request.PricingHoursTotal is not null
+            || request.PricingTotal is not null)
+        {
+            return true;
+        }
+
+        return request.Stages.Any(s =>
+                   s.PricingBaseAmount is not null
+                   || s.PricingDiscountFraction is not null
+                   || s.PricingCalculatedAmount is not null
+                   || !string.IsNullOrWhiteSpace(s.PricingUnavailableReason))
+               || request.Hours.Any(h =>
+                   h.PricingHourlyRate is not null
+                   || h.PricingDiscountFraction is not null
+                   || h.PricingCalculatedAmount is not null
+                   || !string.IsNullOrWhiteSpace(h.PricingUnavailableReason));
+    }
+
+    private static bool HasExclusiveLineEvidence(decimal? amount, string? reason)
+    {
+        var hasAmount = amount is not null;
+        var hasReason = !string.IsNullOrWhiteSpace(reason);
+        return hasAmount ^ hasReason;
     }
 }

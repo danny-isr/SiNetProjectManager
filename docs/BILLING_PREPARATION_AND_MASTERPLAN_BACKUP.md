@@ -484,15 +484,16 @@ Approved task instructions use **persisted freeze evidence** captured at the app
 
 Capture order on Approve:
 
-1. Request is `ReadyForApproval` with an already-saved selection.
-2. Load the current MasterPlan pricing catalog.
-3. Calculate line evidence for those **saved** lines (`FixedPrices.Sum × (1 − discount) × persisted Weight × Delta`; hours = persisted `TotalHours ×` unique rate `× (1 − discount)`).
-4. Persist nullable freeze columns on the request and lines **while status stays ReadyForApproval**.
-5. If `PricingIsPartial` and there is no `ManualOverride`, **block** before task creation. Unknown amounts stay `NULL` (never 0).
-6. Create the `PrepareBill` task from the **persisted freeze**.
-7. Only after task creation succeeds: set `TaskId`, `ApprovedAt`/`ApprovedBy`, `Status = TaskOpen`.
+1. Existing `TaskId` returns immediately (idempotent). Otherwise the request must already be `ReadyForApproval`. Any other status (`WaitingForSnapshot`, `WaitingForSelection`, `TaskOpen` without a task id, `AwaitingMasterPlanConfirmation`, `Completed`, `Cancelled`) is rejected with «הבקשה אינה במצב מוכן לאישור.» — no freeze, no task. This is enforced in the service, not only WPF `CanExecute`.
+2. Load the current MasterPlan pricing catalog only when capturing a **new** freeze.
+3. Resolve `PricingSourceSnapshotUtc` = catalog `LatestBackupUtc` otherwise the request `SnapshotTimestampUtc`. If both are NULL, block with «לא ניתן לאשר — לא ניתן לזהות את snapshot המקור של נתוני התמחור.» Do not persist an anonymous freeze.
+4. Calculate line evidence for those **saved** lines (`FixedPrices.Sum × (1 − discount) × persisted Weight × Delta`; hours = persisted `TotalHours ×` unique rate `× (1 − discount)`).
+5. Persist nullable freeze columns on the request and lines **while status stays ReadyForApproval**. A freeze is valid only when metadata is coherent (`PricingFrozenAtUtc`, `PricingSourceSnapshotUtc`, `MP-BILLING-1`, totals, `PricingIsPartial`, and each selected line has amount XOR unavailable-reason). Incomplete freeze is not auto-repaired.
+6. If `PricingIsPartial` and there is no `ManualOverride`, **block** before task creation. Unknown amounts stay `NULL` (never 0).
+7. Create the `PrepareBill` task from the **persisted freeze**.
+8. Only after task creation succeeds: set `TaskId`, `ApprovedAt`/`ApprovedBy`, `Status = TaskOpen`.
 
-If task creation fails: status stays ReadyForApproval, `TaskId`/`ApprovedAt` stay NULL, freeze remains for retry (retry must not recapture from a later catalog). If the manager Save-s a changed (or re-saved) selection before a task exists, **clear** the freeze; the next Approve captures a new one. A later monthly `.bak` restore must not change money already written into an approved task.
+If task creation fails: status stays ReadyForApproval, `TaskId`/`ApprovedAt` stay NULL, a **valid** freeze remains for retry (retry must not recapture from a later catalog and does not require a live snapshot timestamp). If the manager Save-s a changed (or re-saved) selection before a task exists, **clear** the freeze; the next Approve captures a new one. A later monthly `.bak` restore must not change money already written into an approved task.
 
 Request #2 historical rows stay freeze-NULL after this migration (no backfill).
 
