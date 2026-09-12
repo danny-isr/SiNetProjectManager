@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
@@ -79,8 +80,8 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
             () => CanCompleteTask);
 
         // Browse mode: react to the shared Current Project (e.g. driven by the embedded selector) and
-        // (re)load the file tree. Task mode also loads explicitly in ApplyContextAsync; the load is
-        // de-duplicated by project id so it never runs twice for the same project.
+        // (re)load the file tree. Most task types also load explicitly in ApplyContextAsync (de-duplicated
+        // by project id). PrepareBill is the task-completion shell only and skips that tree load.
         if (_currentProject is not null)
             _currentProject.CurrentProjectChanged += OnCurrentProjectChanged;
     }
@@ -237,8 +238,23 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// PrepareBill is a billing-instruction completion shell. The frozen task Body already holds the
+    /// amounts; awaiting <see cref="ProjectWorkTreeViewModel.LoadProjectAsync"/> before Show() left
+    /// the window invisible for tens of seconds. Other ProjectWork types still load the tree.
+    /// </summary>
+    internal static bool ShouldLoadProjectTreeInTaskMode(string? taskTypeCode) =>
+        !string.Equals(taskTypeCode, PrepareBillTaskType, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Task-mode entry. Validates the component key + project, binds the task/project header and
+    /// completion metadata. PrepareBill does not await the project file tree — the floating host
+    /// <c>Show()</c>s only after this method returns. Other ProjectWork types still load the tree.
+    /// Returns <see langword="false"/> when the context is not a ProjectWork surface or has no project.
+    /// </summary>
     public async Task<bool> ApplyContextAsync(WorkSurfaceContext? context, CancellationToken cancellationToken = default)
     {
+        var applyWatch = Stopwatch.StartNew();
         _taskContext = context;
         _loaded = false;
         OnPropertyChanged(nameof(IsTaskMode));
@@ -249,6 +265,10 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
         if (context is null)
             return false;
+
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.ApplyContext",
+            $"START task={context.TaskId} type={context.TaskTypeCode} project={context.ProjectId}");
 
         if (!WorkSurfaceComponentKeys.IsProjectWorkSurface(context.ComponentKey))
         {
@@ -280,14 +300,41 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
 
         TaskHeader = BuildTaskHeader(context);
 
+        var bindWatch = Stopwatch.StartNew();
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.BindProject",
+            $"START project={context.ProjectId}");
         await BindProjectAsync(context.ProjectId, cancellationToken).ConfigureAwait(true);
-        await LoadTreeAsync(context.ProjectId, cancellationToken, forceReload: true).ConfigureAwait(true);
-        _tree?.SetActiveRequiredCatalogCodes(ProjectWorkActiveRequiredCatalog.Resolve(context));
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.BindProject",
+            $"END ms={bindWatch.ElapsedMilliseconds} display={ActiveProjectDisplay}");
+
+        if (ShouldLoadProjectTreeInTaskMode(context.TaskTypeCode))
+        {
+            var treeWatch = Stopwatch.StartNew();
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "ProjectWork.LoadTree",
+                $"START project={context.ProjectId} force=true type={context.TaskTypeCode}");
+            await LoadTreeAsync(context.ProjectId, cancellationToken, forceReload: true).ConfigureAwait(true);
+            _tree?.SetActiveRequiredCatalogCodes(ProjectWorkActiveRequiredCatalog.Resolve(context));
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "ProjectWork.LoadTree",
+                $"END ms={treeWatch.ElapsedMilliseconds}");
+        }
+        else
+        {
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "ProjectWork.LoadTree",
+                $"SKIP type={context.TaskTypeCode} task={context.TaskId} — PrepareBill shell does not load the project file tree");
+        }
 
         _loaded = true;
         StatusMessage = $"\u05E0\u05E4\u05EA\u05D7\u05D4 \u05DE\u05E9\u05D9\u05DE\u05D4 #{context.TaskId} \u05E2\u05D1\u05D5\u05E8 \u05E4\u05E8\u05D5\u05D9\u05E7\u05D8 {context.ProjectId}.";
         OnPropertyChanged(nameof(CanCompleteTask));
         (CompleteTaskCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.ApplyContext",
+            $"END ms={applyWatch.ElapsedMilliseconds} loaded=true canComplete={CanCompleteTask}");
         return true;
     }
 
@@ -565,6 +612,7 @@ public sealed class ProjectWorkWindowViewModel : ObservableObject, IDisposable
         return false;
     }
 
+    private const string PrepareBillTaskType = "PrepareBill";
     private const string PrepareQuoteCalculationTaskType = "PrepareQuoteCalculation";
     private const string PrepareQuoteDocumentTaskType = "PrepareQuoteDocument";
     private const string FollowQuoteApprovalTaskType = "FollowQuoteApproval";

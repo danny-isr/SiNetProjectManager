@@ -31,6 +31,10 @@ public sealed class ProjectWorkTaskFloatingHost(
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.TaskWindow",
+            $"OpenOrRebind START task={context.TaskId} type={context.TaskTypeCode} project={context.ProjectId}");
+
         var prepared = _coordinator.PrepareOpen(TaskSurfaceWindowKind.ProjectWork, context.TaskId);
         if (prepared is { IsLoaded: true } existingWindow)
         {
@@ -66,7 +70,13 @@ public sealed class ProjectWorkTaskFloatingHost(
         }
 
         var surface = _factory.Create();
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.TaskWindow",
+            $"ApplyContext START task={context.TaskId} type={context.TaskTypeCode} (before Window.Show)");
         var opened = await surface.ApplyContextAsync(context, cancellationToken).ConfigureAwait(true);
+        SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+            "ProjectWork.TaskWindow",
+            $"ApplyContext END opened={opened} task={context.TaskId}");
         if (!opened)
         {
             surface.Dispose();
@@ -111,10 +121,12 @@ public sealed class ProjectWorkTaskFloatingHost(
 
         // #region agent log
         WorkflowDebugTrace.Step("ProjectWork.TaskWindow",
-            $"create-float task={context.TaskId} project={context.ProjectId} topmost=False owner=MainWindow");
+            $"Show START task={context.TaskId} project={context.ProjectId} topmost=False owner=MainWindow");
         // #endregion
         host.Show();
         host.Activate();
+        WorkflowDebugTrace.Step("ProjectWork.TaskWindow",
+            $"Show END task={context.TaskId}");
         return true;
     }
 

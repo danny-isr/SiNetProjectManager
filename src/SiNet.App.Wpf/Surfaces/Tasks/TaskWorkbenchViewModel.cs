@@ -1061,9 +1061,15 @@ public class TaskWorkbenchViewModel : ObservableObject, IDisposable
         IsBusy = true;
         try
         {
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "TaskWorkbench.OpenTask",
+                $"START task={taskId}");
             opened = await _workSurfaceLauncher
                 .TryOpenFromTaskAsync(taskId, ct)
                 .ConfigureAwait(true);
+            SiNet.Application.Diagnostics.WorkflowDebugTrace.Step(
+                "TaskWorkbench.OpenTask",
+                $"END opened={opened} task={taskId}");
         }
         catch (Exception ex)
         {

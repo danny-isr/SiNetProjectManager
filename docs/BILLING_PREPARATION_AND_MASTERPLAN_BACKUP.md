@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 12.09.2026 (DEV closure: MonthlyRestore LastSyncTime stamp, sticky Save/Approve footer)  
+> **Updated:** 12.09.2026 (PrepareBill task shell opens without awaiting the project file tree)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -266,6 +266,8 @@ Valid failure state: active `BillingReviewDecision = PrepareBill` and no `Billin
 
 - Task complete → always `AwaitingMasterPlanConfirmation`.
 - The `PrepareBill` task opens the existing ProjectWork surface (`ReviewTaskInteractionRegistry`). Completion event is `Review.PrepareBillCompleted` (`ClosesAssociatedTask`, no TaskResult, no workflow advance). `SqlTaskCompletionService` calls `IBillingPreparationService.OnPrepareBillTaskCompletedByTaskIdAsync` **once** when that task actually closes. Unrelated task types and failed/non-closed completions do not call it.
+- **PrepareBill task-mode open:** ProjectWork is only the completion shell. Frozen `ProjectAssignment.Body` already holds the billing instructions. `ProjectWorkWindowViewModel.ApplyContextAsync` binds the task/project header and completion metadata and **does not** await `ProjectWorkTreeViewModel.LoadProjectAsync`. The floating window `Show()`s only after `ApplyContextAsync` returns, so a 90+ second project-tree scan must not delay the window. Other ProjectWork task types (MaterialChecklist, quote calc/document, PoliceSubmission, …) still load the tree before Show.
+- **Assignment is not the approver.** `CreatePrepareBillTaskAsync` assigns through `UserGroupCodes.OfficeManagement` (`TryResolveAssigneeFromGroup`). The manager who approved the request is not the executor. `MyTasks` shows only the current user's tasks. `TaskWorkbench.ViewOtherUsersTasks` is **Administrator-only**; Management does not get AllUsers as a workaround. The DEBUG role selector changes `SIUser.Role` only — it does not impersonate another Windows identity.
 - Stage auto-complete **only** if a **newer** `Db_Mp_SiEng` backup shows `BillLines.StepID` match **and** `StepProgress >= TargetCumulativeProgress` **and** evidence is newer than approval baseline. Old historical rows with the same % must not close the request. Progress **above** the approved target still confirms (`>=`).
 - Hourly auto-complete remains **BLOCKED**. Manager action «אשר שבוצע ב-MasterPlan» (Manual) is required for hourly (and for mixed, **all** components must be confirmed). Mixed requests stay `AwaitingMasterPlanConfirmation` until **both** the hourly Manual confirm **and** the stage NewerSnapshot confirm.
 

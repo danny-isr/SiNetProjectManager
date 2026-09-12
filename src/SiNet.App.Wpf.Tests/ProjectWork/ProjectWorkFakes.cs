@@ -93,6 +93,29 @@ internal sealed class FakeProjectFileQueryService : IProjectFileQueryService
 
     public FakeProjectFileQueryService(ProjectFileTreeDto? tree) => _tree = tree;
 
+    public int CallCount { get; private set; }
+
     public Task<ProjectFileTreeDto?> GetProjectFileTreeAsync(int projectId, CancellationToken cancellationToken = default)
-        => Task.FromResult(_tree);
+    {
+        CallCount++;
+        return Task.FromResult(_tree);
+    }
+}
+
+/// <summary>
+/// <see cref="IProjectFileQueryService"/> whose <see cref="GetProjectFileTreeAsync"/> never
+/// completes unless cancelled. Used to prove PrepareBill does not await the project tree.
+/// </summary>
+internal sealed class NeverCompletingProjectFileQueryService : IProjectFileQueryService
+{
+    public int CallCount { get; private set; }
+
+    public async Task<ProjectFileTreeDto?> GetProjectFileTreeAsync(
+        int projectId,
+        CancellationToken cancellationToken = default)
+    {
+        CallCount++;
+        await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+        return null;
+    }
 }
