@@ -8,6 +8,8 @@ namespace MasterPlan.SyncEngine;
 /// Claims one Incoming .bak (never *.partial), restores through the existing monthly pipeline
 /// without allow-older, then moves the file to Processed/Rejected. Desktop never RESTORE.
 /// </summary>
+public sealed record BackupInboxIntakeUpdate(int Status, string Message, string Path);
+
 public static class BackupInboxProcessor
 {
     public const string IncomingFolderName = "Incoming";
@@ -62,12 +64,29 @@ public static class BackupInboxProcessor
         return Path.Combine(serverRoot, relative);
     }
 
-    public static async Task<int> ProcessOneAsync(
+    public static Task<int> ProcessOneAsync(
         MonthlyBackupStagingOptions staging,
         MonthlyBackupRestoreService restore,
         string? siDataConnectionString,
         ILogger logger,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(restore);
+        return ProcessOneAsync(
+            staging,
+            (serverPath, _) => restore.RunMonthlyBackupRestoreAsync(serverPath, allowOlderOrEqualBackup: false),
+            siDataConnectionString,
+            logger,
+            cancellationToken);
+    }
+
+    public static async Task<int> ProcessOneAsync(
+        MonthlyBackupStagingOptions staging,
+        Func<string, CancellationToken, Task<MonthlyBackupResult>> restore,
+        string? siDataConnectionString,
+        ILogger logger,
+        CancellationToken cancellationToken = default,
+        IList<BackupInboxIntakeUpdate>? intakeUpdates = null)
     {
         ArgumentNullException.ThrowIfNull(staging);
         ArgumentNullException.ThrowIfNull(restore);
@@ -99,7 +118,8 @@ public static class BackupInboxProcessor
                 status: 2,
                 message: "ממתין לעיבוד",
                 processedAt: null,
-                cancellationToken)
+                cancellationToken,
+                intakeUpdates)
             .ConfigureAwait(false);
 
         var serverPath = ToServerRestorePath(claimed, staging);
@@ -110,8 +130,7 @@ public static class BackupInboxProcessor
 
         try
         {
-            var result = await restore.RunMonthlyBackupRestoreAsync(serverPath, allowOlderOrEqualBackup: false)
-                .ConfigureAwait(false);
+            var result = await restore(serverPath, cancellationToken).ConfigureAwait(false);
             if (!result.Success)
             {
                 throw new InvalidOperationException(result.ErrorMessage ?? "שחזור חודשי נכשל.");
@@ -125,7 +144,8 @@ public static class BackupInboxProcessor
                     status: 3,
                     message: "שוחזר בהצלחה",
                     processedAt: DateTime.UtcNow,
-                    cancellationToken)
+                    cancellationToken,
+                    intakeUpdates)
                 .ConfigureAwait(false);
             return 0;
         }
@@ -139,7 +159,8 @@ public static class BackupInboxProcessor
                     status: 4,
                     message: ex.Message,
                     processedAt: DateTime.UtcNow,
-                    cancellationToken)
+                    cancellationToken,
+                    intakeUpdates)
                 .ConfigureAwait(false);
             logger.LogWarning(ex, "Backup inbox skipped — not newer than last monthly restore.");
             return 0;
@@ -155,7 +176,8 @@ public static class BackupInboxProcessor
                     status: 5,
                     message: ex.Message,
                     processedAt: DateTime.UtcNow,
-                    cancellationToken)
+                    cancellationToken,
+                    intakeUpdates)
                 .ConfigureAwait(false);
             logger.LogError(ex, "Backup inbox restore failed.");
             return 1;
@@ -187,8 +209,10 @@ public static class BackupInboxProcessor
         int status,
         string message,
         DateTime? processedAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IList<BackupInboxIntakeUpdate>? intakeUpdates)
     {
+        intakeUpdates?.Add(new BackupInboxIntakeUpdate(status, message, path));
         if (string.IsNullOrWhiteSpace(siDataConnectionString))
             return;
 

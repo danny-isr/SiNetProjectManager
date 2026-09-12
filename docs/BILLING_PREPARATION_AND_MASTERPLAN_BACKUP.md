@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 12.09.2026 (whole-project financial summary on preparation editor; Request #2 still not approved)  
+> **Updated:** 12.09.2026 (DEV closure: Approve command proof, duplicate HoursReport block, PrepareBill completion event, backup Processed/Rejected tests)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -241,7 +241,7 @@ A7 confirmation is unchanged: newer snapshot `StepProgress >= TargetCumulativePr
 
 **Decision 2 — live bill amount (supersedes V1 BLOCKED, 11.09.2026).** Automatic amounts are allowed **only** from formulas proven against historical `Db_Mp_SiEng` bills (see §4.4 / §5.5 / §5.6). Do **not** compute `ContractValue * Percentage`. Preview is UI-only (no SQL write). Unknown pricing is never treated as ₪0.
 
-**Decision 3 — hourly scope is manager-defined.** Never show «שעות לא מחויבות» as a MasterPlan fact. Show **available/reportable** hours for an explicit SubContract + date range; resolve to concrete `HoursReportId`s on approve. SiNet may warn «already in preparation request #X»; never «already billed in MasterPlan».
+**Decision 3 — hourly scope is manager-defined.** Never show «שעות לא מחויבות» as a MasterPlan fact. Show **available/reportable** hours for an explicit SubContract + date range; resolve to concrete `HoursReportId`s on approve. SiNet may warn «already in preparation request #X» before Save; `SaveSelectionAsync` **blocks** when the same `HoursReportId` is already owned by another active or completed preparation request. Never «already billed in MasterPlan».
 
 **A4 WPF picker (10.09.2026, multi-select 10.09 evening; inline list 11.09.2026):** Tab «חשבונות להכנה», section **«רכיבי שעות»**. One UI scope = inclusive FromDate/ToDate + **one or more** FeeType=4 SubContracts. Checkbox list is **inline** (not a WPF `Popup`) so it stays in the visual/UIA tree. «בחר הכל» (all FeeType=4 for the project, not the filtered search), «נקה הכל», search (visibility only). Do not select all by default. Aggregate preview: selected count, matching report count, total normalized hours. Zero-report selected SubContracts block Save and are listed by name. Persistence is unchanged: one `BillingPreparationHoursLine` per SubContract; Save flattens the UI scope. Reload groups lines with identical dates and compatible confirmation state. Never «שעות לא מחויבות» / unbilled. Hourly still never auto-confirms.
 
@@ -263,8 +263,9 @@ Valid failure state: active `BillingReviewDecision = PrepareBill` and no `Billin
 **A7 confirmation:**
 
 - Task complete → always `AwaitingMasterPlanConfirmation`.
-- Stage auto-complete **only** if a **newer** `Db_Mp_SiEng` backup shows `BillLines.StepID` match **and** `StepProgress >= TargetCumulativeProgress` **and** evidence is newer than approval baseline. Old historical rows with the same % must not close the request.
-- Hourly auto-complete remains **BLOCKED**. Manager action «אשר שבוצע ב-MasterPlan» (Manual) is required for hourly (and for mixed, **all** components must be confirmed).
+- The `PrepareBill` task opens the existing ProjectWork surface (`ReviewTaskInteractionRegistry`). Completion event is `Review.PrepareBillCompleted` (`ClosesAssociatedTask`, no TaskResult, no workflow advance). `SqlTaskCompletionService` calls `IBillingPreparationService.OnPrepareBillTaskCompletedByTaskIdAsync` **once** when that task actually closes. Unrelated task types and failed/non-closed completions do not call it.
+- Stage auto-complete **only** if a **newer** `Db_Mp_SiEng` backup shows `BillLines.StepID` match **and** `StepProgress >= TargetCumulativeProgress` **and** evidence is newer than approval baseline. Old historical rows with the same % must not close the request. Progress **above** the approved target still confirms (`>=`).
+- Hourly auto-complete remains **BLOCKED**. Manager action «אשר שבוצע ב-MasterPlan» (Manual) is required for hourly (and for mixed, **all** components must be confirmed). Mixed requests stay `AwaitingMasterPlanConfirmation` until **both** the hourly Manual confirm **and** the stage NewerSnapshot confirm.
 
 ---
 
@@ -661,6 +662,8 @@ Server: MasterPlan.SyncEngine --process-backup-inbox
 ```
 
 Statuses: התקבל לתור / ממתין לעיבוד / שוחזר בהצלחה / דולג — הגיבוי אינו חדש יותר / נכשל. Provenance in SiData; **do not** store the `.bak` in SiData.
+
+Inbox file layout under the staging root: `Incoming` → claim to `Processing` → success `Processed` (intake Restored=3) or restore failure `Rejected` (SkippedNotNewer=4 / Failed=5). `*.partial` is never claimable. `--allow-older-backup` is never passed. The desktop source copy is not deleted.
 
 Existing admin monthly restore UI remains operator tooling (may still expose `--allow-older-backup`). Normal intake must not.
 

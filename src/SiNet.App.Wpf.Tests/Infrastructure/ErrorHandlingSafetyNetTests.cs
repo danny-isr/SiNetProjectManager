@@ -65,6 +65,31 @@ public sealed class ErrorHandlingSafetyNetTests
         var source = ReadRepoFile("src/SiNet.App.Wpf/Inbox/AsyncRelayCommand.cs");
         Assert.Contains("Application.Current?.Dispatcher", source, StringComparison.Ordinal);
         Assert.Contains("BeginInvoke(RaiseCanExecuteChangedCore", source, StringComparison.Ordinal);
+        Assert.Contains("await _execute().ConfigureAwait(true)", source, StringComparison.Ordinal);
+        Assert.Contains("AppErrorReporter.Report(ex, \"AsyncRelayCommand\")", source, StringComparison.Ordinal);
+        Assert.Contains("_isExecuting = false", source, StringComparison.Ordinal);
+        Assert.Contains("if (!CanExecute(parameter))", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AsyncRelayCommand_invokes_delegate_and_releases_executing_guard()
+    {
+        var ran = 0;
+        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var command = new AsyncRelayCommand(async () =>
+        {
+            ran++;
+            await hold.Task.ConfigureAwait(true);
+        });
+
+        command.Execute(null);
+        Assert.False(command.CanExecute(null));
+        hold.SetResult();
+        for (var i = 0; i < 40 && !command.CanExecute(null); i++)
+            await Task.Delay(25);
+
+        Assert.Equal(1, ran);
+        Assert.True(command.CanExecute(null));
     }
 
     [Fact]

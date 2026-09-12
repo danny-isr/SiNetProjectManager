@@ -490,6 +490,16 @@ public static class ReviewCompletionEventBehavior
                 NewProjectStatusCode: null,
                 RequestWorkflowAdvance: true,
                 ClosesAssociatedTask: true),
+
+            // PrepareBill — ad-hoc billing-instruction task created after manager approval.
+            // Not a workflow driving task: close the assignment and notify billing
+            // preparation. Empty AllowedTaskResultCodes (same as OUT.*).
+            new(ReviewCompletionEvents.PrepareBillCompleted,
+                new[] { TaskTypeCodes.PrepareBill },
+                Array.Empty<string>(),
+                NewProjectStatusCode: null,
+                RequestWorkflowAdvance: false,
+                ClosesAssociatedTask: true),
         };
 
         var d = new Dictionary<string, ReviewCompletionBehavior>(StringComparer.Ordinal);

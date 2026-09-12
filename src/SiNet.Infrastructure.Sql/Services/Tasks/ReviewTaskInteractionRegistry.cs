@@ -541,6 +541,20 @@ public static class ReviewTaskInteractionRegistry
                 AutoCloseOnCompletion: true,
                 RequiresUserConfirmation: false),
 
+            // PrepareBill — canonical «הכנת חשבון» task created only after billing
+            // preparation approval. Opens the existing ProjectWork surface. Completion
+            // is the explicit PrepareBillCompleted event (no TaskResult).
+            new(
+                TaskTypeCodes.PrepareBill,
+                TaskOpenMode.ProjectWork,
+                TaskComponentKeys.ProjectWork,
+                TaskWorkTargetEntityType.Project,
+                TaskLinkRole.Related,
+                TaskCompletionPolicy.ExplicitCompletionEvent,
+                Array.Empty<string>(),
+                AutoCloseOnCompletion: true,
+                RequiresUserConfirmation: false),
+
             // ─────────────────────────────────────────────────────────────
             // Opinion (OPN.*) interactions.
             // Added so every non-terminal Opinion stage task resolves via

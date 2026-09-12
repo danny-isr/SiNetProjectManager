@@ -95,4 +95,10 @@ public static class ReviewCompletionEvents
 
     /// <summary>OUT.MonitorPayments — outsource payments completed; closes MonitorOutsourcePayments.</summary>
     public const string OutsourcePaymentsCompleted            = "Review.OutsourcePaymentsCompleted";
+
+    /// <summary>
+    /// PrepareBill / «הכנת חשבון» — manager/employee finished the frozen billing
+    /// instructions in MasterPlan. Closes the associated task; does not write MasterPlan.
+    /// </summary>
+    public const string PrepareBillCompleted                 = "Review.PrepareBillCompleted";
 }

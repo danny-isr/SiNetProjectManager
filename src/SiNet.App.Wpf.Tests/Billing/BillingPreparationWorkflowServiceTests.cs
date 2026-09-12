@@ -297,6 +297,76 @@ public sealed class BillingPreparationWorkflowServiceTests
         Assert.Equal(BillingConfirmationMode.None, after.Stages[0].ConfirmationMode);
     }
 
+    [Fact]
+    public async Task Empty_selection_save_returns_waiting_for_selection()
+    {
+        _components.Load = SnapshotAvailable();
+        var ensured = await _service.EnsureFromPrepareBillAsync(5905, "2608", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [StageLine(0.25m, 0.50m)], []);
+        var cleared = await _service.SaveSelectionAsync(ensured.Request.Id, [], []);
+        Assert.Equal(BillingPreparationStatus.WaitingForSelection, cleared.Status);
+        Assert.Empty(cleared.Stages);
+        Assert.Empty(cleared.Hours);
+        Assert.False(cleared.ManualOverride);
+    }
+
+    [Fact]
+    public async Task Save_blocks_hours_report_owned_by_another_active_request()
+    {
+        _components.Load = SnapshotAvailable();
+        var first = await _service.EnsureFromPrepareBillAsync(5905, "2608", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(first.Request.Id, [], [HoursLine()]);
+        var second = await _service.EnsureFromPrepareBillAsync(5906, "2609", "אחר", "לקוח");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.SaveSelectionAsync(second.Request.Id, [], [HoursLine()]));
+        Assert.Contains("בקשת הכנה פעילה אחרת", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("11", ex.Message, StringComparison.Ordinal);
+        var stored = await _store.GetByIdAsync(second.Request.Id);
+        Assert.Empty(stored!.Hours);
+        Assert.Single((await _store.GetByIdAsync(first.Request.Id))!.Hours);
+    }
+
+    [Fact]
+    public async Task Mixed_hours_manual_then_newer_snapshot_at_target_completes()
+    {
+        await RunMixedCompletionAsync(newerObserved: 0.30m);
+    }
+
+    [Fact]
+    public async Task Mixed_hours_manual_then_newer_snapshot_above_target_completes()
+    {
+        await RunMixedCompletionAsync(newerObserved: 0.31m);
+    }
+
+    private async Task RunMixedCompletionAsync(decimal newerObserved)
+    {
+        _components.Load = Mixed7390Catalog(new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), 0.10m);
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        await _service.SaveSelectionAsync(ensured.Request.Id, [MixedStageLine()], [MixedHoursLine()]);
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
+        Assert.Equal(110_280m, approved.Request.PricingTotal);
+
+        var awaiting = await _service.OnPrepareBillTaskCompletedAsync(ensured.Request.Id);
+        Assert.Equal(BillingPreparationStatus.AwaitingMasterPlanConfirmation, awaiting.Status);
+        Assert.Equal(BillingConfirmationMode.None, awaiting.Stages[0].ConfirmationMode);
+        Assert.Equal(BillingConfirmationMode.None, awaiting.Hours[0].ConfirmationMode);
+
+        var hourly = await _service.ConfirmHourlyManuallyAsync(ensured.Request.Id, "בוצע ב-MP");
+        Assert.Equal(BillingConfirmationMode.Manual, hourly.Hours[0].ConfirmationMode);
+        Assert.NotNull(hourly.Hours[0].ConfirmedAtUtc);
+        Assert.Equal(7, hourly.Hours[0].ConfirmedByUserId);
+        Assert.Equal(BillingPreparationStatus.AwaitingMasterPlanConfirmation, hourly.Status);
+        Assert.Equal(BillingConfirmationMode.None, hourly.Stages[0].ConfirmationMode);
+        Assert.Equal(110_280m, hourly.PricingTotal);
+
+        _components.Load = Mixed7390Catalog(new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc), newerObserved);
+        var completed = await _service.ReevaluateStageConfirmationAsync(ensured.Request.Id);
+        Assert.Equal(BillingConfirmationMode.NewerSnapshot, completed.Stages[0].ConfirmationMode);
+        Assert.Equal(BillingPreparationStatus.Completed, completed.Status);
+        Assert.Equal(110_280m, completed.PricingTotal);
+    }
+
     private static BillingPreparationSnapshotLoad SnapshotAvailable(DateTime? backup = null) =>
         new(
             true,
@@ -329,6 +399,48 @@ public sealed class BillingPreparationWorkflowServiceTests
             new DateTime(2026, 8, 1), new DateTime(2026, 8, 31),
             1, 2.5m,
             [new BillingPreparationHourReportSnapshot(11, new DateTime(2026, 8, 1), 1, "A", 2.5m, 100, 1, "x")],
+            [],
+            new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+            BillingConfirmationMode.None, null, null, null);
+
+    private static BillingPreparationSnapshotLoad Mixed7390Catalog(DateTime backupUtc, decimal observed) =>
+        new(
+            true,
+            backupUtc,
+            "לקוח",
+            "1844",
+            "פרויקט",
+            [
+                new BillingPreparationStageDraft(
+                    7390, 3853, "פיקוח עליון על הביצוע", "תכנון פיזי", 0.25m,
+                    BillingStageProgressCalculator.Observe([observed]),
+                    observed,
+                    Included: false,
+                    MasterPlanSnapshotFeeTypeIds.FixedPrice,
+                    SubContractBillableAmount: 2_200_000m)
+            ],
+            [
+                new BillingHourlySubContractDraft(
+                    14317, "פיקוח עליון", MasterPlanSnapshotFeeTypeIds.WorkingHours, UniqueHourlyRate: 280m)
+            ],
+            [
+                new BillingHourReportFact(57875, 4608, 14317, 7390, new DateTime(2026, 6, 2), 1, "A", 1m, "x")
+            ]);
+
+    private static BillingPreparationStageLineSnapshot MixedStageLine() =>
+        new(
+            7390, 3853, "פיקוח עליון על הביצוע", "תכנון פיזי", 0.25m,
+            0.10m, 0.30m, 0.20m,
+            HasDataQualityFlag: false,
+            SnapshotTimestampUtc: new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+            BillingConfirmationMode.None, null, null, null);
+
+    private static BillingPreparationHoursLineSnapshot MixedHoursLine() =>
+        new(
+            14317, "פיקוח עליון",
+            new DateTime(2026, 6, 2), new DateTime(2026, 6, 2),
+            1, 1m,
+            [new BillingPreparationHourReportSnapshot(57875, new DateTime(2026, 6, 2), 1, "A", 1m, 14317, 7390, "x")],
             [],
             new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
             BillingConfirmationMode.None, null, null, null);

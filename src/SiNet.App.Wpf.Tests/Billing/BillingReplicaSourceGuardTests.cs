@@ -217,6 +217,12 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("AdditionAutomationId", view, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"{Binding AutomationId}\"", view, StringComparison.Ordinal);
         Assert.Contains("BillingDashboard.HourlySubContract.", hourlyChoice, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"BillingDashboard.ApprovePreparation\"", view, StringComparison.Ordinal);
+        var approveIdx = view.IndexOf("BillingDashboard.ApprovePreparation", StringComparison.Ordinal);
+        Assert.True(approveIdx >= 0);
+        var approveWindow = view[Math.Max(0, approveIdx - 450)..Math.Min(view.Length, approveIdx + 80)];
+        Assert.Contains("Command=\"{Binding ApprovePreparationCommand}\"", approveWindow, StringComparison.Ordinal);
+        Assert.Contains("ApproveAndCreateTaskAsync", vm, StringComparison.Ordinal);
         Assert.DoesNotContain("AutomationProperties.AutomationId=\"BillingDashboard.StageAddition\"", view, StringComparison.Ordinal);
         Assert.DoesNotContain("יעד מצטבר", view, StringComparison.Ordinal);
         Assert.DoesNotContain("0 ל-1", view, StringComparison.Ordinal);

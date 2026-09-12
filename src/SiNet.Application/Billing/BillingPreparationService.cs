@@ -163,6 +163,12 @@ public sealed class BillingPreparationService(
             ? []
             : await _store.FindHourReportIdsInOtherRequestsAsync(hourIds.Distinct().ToList(), request.Id, cancellationToken)
                 .ConfigureAwait(false);
+        if (overlapping.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "אותו דיווח שעות כבר שייך לבקשת הכנה פעילה אחרת: "
+                + string.Join(", ", overlapping));
+        }
         var overlapSet = overlapping.ToHashSet();
         var hoursWithWarnings = hours
             .Select(h =>
