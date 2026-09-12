@@ -246,8 +246,69 @@ public sealed class BillingPreparationLiveAmountTests
         Assert.Equal(2_200_000m * 0.25m * 0.20m, priced.Amount);
     }
 
-    private BillingDashboardViewModel CreateVm() =>
-        new(new UnusedDashboardRead(), preparation: _service);
+    [Fact]
+    public async Task Whole_project_summary_updates_live_and_discard_restores_without_db_write()
+    {
+        _components.Load = PricedCatalog();
+        await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        var vm = CreateVm(new Project1844DashboardRead(), prompts: new DiscardPrompts());
+        await vm.RefreshAsync();
+        await vm.RefreshPreparationAsync();
+
+        Assert.Equal("₪ 4,142,969.59", vm.ProjectTotalFeeText);
+        Assert.Equal("₪ 1,189,568.98", vm.ProjectBalanceBeforeText);
+        Assert.Equal("₪ 2,953,400.61", vm.ProjectAlreadyBilledText);
+        Assert.Equal("₪ 0", vm.ProjectCurrentBillText);
+        Assert.Equal("₪ 1,189,568.98", vm.ProjectBalanceAfterText);
+        Assert.True(vm.ShowProjectFinancialBar);
+        Assert.Equal("יתרה לפי snapshot MasterPlan מ־10/09/2026", vm.ProjectFinancialSourceText);
+        Assert.True(vm.ShowProjectFinancialHourlyNote);
+        Assert.Empty((await _store.GetByIdAsync(1))!.Stages);
+
+        vm.StageEdits.Single(s => s.MasterPlanStageId == 7390).AdditionPercent = 20m;
+        Assert.Equal("₪ 110,000", vm.ProjectCurrentBillText);
+        Assert.Equal("₪ 1,079,568.98", vm.ProjectBalanceAfterText);
+        Assert.Equal(110_000m, vm.ProjectAdditionBarShare);
+        Assert.Equal(1_079_568.98m, vm.ProjectRemainingBarShare);
+        Assert.True(vm.IsDirty);
+        Assert.Empty((await _store.GetByIdAsync(1))!.Stages);
+
+        vm.StageEdits.Single(s => s.MasterPlanStageId == 7390).AdditionPercent = 21m;
+        Assert.Equal("₪ 115,500", vm.ProjectCurrentBillText);
+        Assert.Equal("₪ 1,074,068.98", vm.ProjectBalanceAfterText);
+        Assert.Equal(115_500m, vm.ProjectAdditionBarShare);
+        Assert.True(vm.ProjectRemainingBarShare < 1_079_568.98m);
+        Assert.Empty((await _store.GetByIdAsync(1))!.Stages);
+
+        await vm.RefreshPreparationAsync();
+        Assert.Equal(0m, vm.StageEdits.Single(s => s.MasterPlanStageId == 7390).AdditionPercent);
+        Assert.Equal("₪ 0", vm.ProjectCurrentBillText);
+        Assert.Equal("₪ 1,189,568.98", vm.ProjectBalanceAfterText);
+        Assert.False(vm.IsDirty);
+        Assert.Empty((await _store.GetByIdAsync(1))!.Stages);
+    }
+
+    [Fact]
+    public async Task Whole_project_summary_stays_unavailable_when_dashboard_has_no_candidate()
+    {
+        _components.Load = PricedCatalog();
+        await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        var vm = CreateVm();
+        await vm.RefreshPreparationAsync();
+        vm.StageEdits.Single(s => s.MasterPlanStageId == 7390).AdditionPercent = 20m;
+
+        Assert.Equal(BillingProjectFinancialSummaryCalculator.UnavailableFee, vm.ProjectTotalFeeText);
+        Assert.Equal(BillingProjectFinancialSummaryCalculator.UnavailableBalance, vm.ProjectBalanceBeforeText);
+        Assert.Equal("₪ 110,000", vm.ProjectCurrentBillText);
+        Assert.Equal(BillingProjectFinancialSummaryCalculator.UnavailableBalance, vm.ProjectBalanceAfterText);
+        Assert.False(vm.ShowProjectFinancialBar);
+        Assert.DoesNotContain("₪ 0", vm.ProjectTotalFeeText, StringComparison.Ordinal);
+    }
+
+    private BillingDashboardViewModel CreateVm(
+        IBillingDashboardReadService? dashboard = null,
+        IBillingReviewPrompts? prompts = null) =>
+        new(dashboard ?? new UnusedDashboardRead(), preparation: _service, prompts: prompts);
 
     private static BillingPreparationSnapshotLoad PricedCatalog() =>
         new(
@@ -340,6 +401,71 @@ public sealed class BillingPreparationLiveAmountTests
             contractName,
             SubContractBillableAmount: billable,
             DiscountFraction: discount);
+    }
+
+    private sealed class DiscardPrompts : IBillingReviewPrompts
+    {
+        public bool ConfirmPrepareBill(string projectLabel) => true;
+
+        public BillingNotNowPromptResult? PromptNotNow(string projectLabel) => null;
+
+        public bool ConfirmClearDecision(string projectLabel) => true;
+
+        public BillingUnsavedEditsDecision ConfirmDiscardUnsavedPreparationEdits() =>
+            BillingUnsavedEditsDecision.Discard;
+    }
+
+    private sealed class Project1844DashboardRead : IBillingDashboardReadService
+    {
+        public Task<BillingDashboardResult> GetAsync(
+            BillingDashboardRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var snapshotDate = new DateTime(2026, 9, 10);
+            var fees = new BillingFeeTypeSummary(
+                [MasterPlanSnapshotFeeTypeIds.FixedPrice, MasterPlanSnapshotFeeTypeIds.WorkingHours],
+                [
+                    new BillingFeeTypeCount(MasterPlanSnapshotFeeTypeIds.FixedPrice, "מחיר קבוע", 29),
+                    new BillingFeeTypeCount(MasterPlanSnapshotFeeTypeIds.WorkingHours, "שעות עבודה", 3)
+                ],
+                BillingSnapshotFeeMix.Mixed);
+            var row = new BillingCandidateRow(
+                4608,
+                "1844",
+                "פרויקט",
+                "לקוח",
+                "פעיל",
+                4_142_969.59m,
+                new DateTime(2026, 9, 1),
+                10m, 10m, 10m, 10m, 3,
+                new DateTime(2026, 8, 31),
+                10,
+                13137,
+                "2857",
+                MasterPlanBillStatusIds.Submitted,
+                "הוגש",
+                294502.42m,
+                0,
+                2,
+                0,
+                2,
+                1_189_568.9787m,
+                391_942.4167m,
+                0m,
+                71.28m,
+                snapshotDate,
+                fees,
+                BillingCandidateState.ReviewNow,
+                "שעות אחרי חשבון");
+            return Task.FromResult(new BillingDashboardResult(
+                new BillingDashboardSummary(1, 0, null, 0m, snapshotDate, snapshotDate),
+                [row],
+                new BillingSourceFreshness(snapshotDate, snapshotDate, snapshotDate, snapshotDate, snapshotDate, null, snapshotDate, snapshotDate),
+                [],
+                ReplicaConnectionDiagnostics.Empty,
+                BillingReplicaFreshnessStatus.Healthy,
+                CandidatesBlocked: false));
+        }
     }
 
     private sealed class UnusedDashboardRead : IBillingDashboardReadService

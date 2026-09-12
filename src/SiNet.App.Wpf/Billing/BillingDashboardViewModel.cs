@@ -81,6 +81,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private int _suspendDirty;
     private bool _suppressSelectionGuard;
     private BillingLiveAmountSummary _liveAmount = new(0m, 0m, 0m, []);
+    private BillingProjectFinancialSummary _projectFinancial = BillingProjectFinancialSummaryCalculator.Empty;
 
     public BillingDashboardViewModel(
         IBillingDashboardReadService service,
@@ -287,6 +288,27 @@ public sealed class BillingDashboardViewModel : ObservableObject
         string.Join(
             Environment.NewLine,
             _liveAmount.Missing.Select(m => "⚠ " + m.Label + " — " + m.Reason));
+
+    public bool ShowProjectFinancialCard => HasSelectedPreparation;
+    internal BillingProjectFinancialSummary ProjectFinancial => _projectFinancial;
+    public string ProjectTotalFeeText => _projectFinancial.TotalFeeText;
+    public string ProjectBalanceBeforeText => _projectFinancial.BalanceBeforeText;
+    public string ProjectAlreadyBilledText => _projectFinancial.AlreadyBilledText;
+    public string ProjectCurrentBillText => _projectFinancial.CurrentBillText;
+    public string ProjectBalanceAfterText => _projectFinancial.BalanceAfterText;
+    public decimal ProjectObservedBarShare => _projectFinancial.ObservedBarShare;
+    public decimal ProjectAdditionBarShare => _projectFinancial.AdditionBarShare;
+    public decimal ProjectRemainingBarShare => _projectFinancial.RemainingBarShare;
+    public bool ShowProjectFinancialBar => _projectFinancial.ShowBar;
+    public bool ShowProjectFinancialBarUnavailable => _projectFinancial.ShowBarUnavailable;
+    public string ProjectFinancialBarUnavailableText => _projectFinancial.BarUnavailableReason ?? string.Empty;
+    public string ProjectFinancialSourceText => _projectFinancial.SourceLine;
+    public string ProjectFinancialExceedsText => _projectFinancial.ExceedsBalanceWarning ?? string.Empty;
+    public bool ShowProjectFinancialExceeds => _projectFinancial.ShowExceedsWarning;
+    public string ProjectFinancialHourlyNote => _projectFinancial.HourlyNote ?? string.Empty;
+    public bool ShowProjectFinancialHourlyNote => _projectFinancial.ShowHourlyNote;
+    public string ProjectFinancialInCreationNote => _projectFinancial.InCreationNote ?? string.Empty;
+    public bool ShowProjectFinancialInCreationNote => _projectFinancial.ShowInCreationNote;
 
     public string ManualOverrideReason
     {
@@ -654,6 +676,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowOperationalChrome));
             OnPropertyChanged(nameof(ShowEmptyFilterState));
             OnPropertyChanged(nameof(ShowEmptyServiceState));
+            RefreshPreparationAmount();
             return;
         }
 
@@ -667,6 +690,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         UiState = BillingDashboardUiState.Loaded;
         ApplyFilters();
         StatusMessage = $"נטענו {result.Candidates.Count} מועמדים מהשירות.";
+        RefreshPreparationAmount();
     }
 
     private void ApplyFilters()
@@ -1290,6 +1314,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
         if (SelectedPreparation is null)
         {
             _liveAmount = new BillingLiveAmountSummary(0m, 0m, 0m, []);
+            _projectFinancial = BillingProjectFinancialSummaryCalculator.Empty;
         }
         else
         {
@@ -1298,6 +1323,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
                 .Select(s => (s.ToPricingDraft(), s.RequestedDelta));
             var hours = HourlyScopeEdits.SelectMany(h => h.PricedHourItems());
             _liveAmount = BillingPreparationAmountCalculator.Summarize(stages, hours);
+            _projectFinancial = BuildProjectFinancial(_liveAmount);
         }
 
         OnPropertyChanged(nameof(LiveAmount));
@@ -1311,7 +1337,54 @@ public sealed class BillingDashboardViewModel : ObservableObject
         OnPropertyChanged(nameof(PreparationAmountMissingCountText));
         OnPropertyChanged(nameof(PreparationAmountMissingDetails));
         OnPropertyChanged(nameof(SelectedPreparationInstructions));
+        OnPropertyChanged(nameof(ShowProjectFinancialCard));
+        OnPropertyChanged(nameof(ProjectFinancial));
+        OnPropertyChanged(nameof(ProjectTotalFeeText));
+        OnPropertyChanged(nameof(ProjectBalanceBeforeText));
+        OnPropertyChanged(nameof(ProjectAlreadyBilledText));
+        OnPropertyChanged(nameof(ProjectCurrentBillText));
+        OnPropertyChanged(nameof(ProjectBalanceAfterText));
+        OnPropertyChanged(nameof(ProjectObservedBarShare));
+        OnPropertyChanged(nameof(ProjectAdditionBarShare));
+        OnPropertyChanged(nameof(ProjectRemainingBarShare));
+        OnPropertyChanged(nameof(ShowProjectFinancialBar));
+        OnPropertyChanged(nameof(ShowProjectFinancialBarUnavailable));
+        OnPropertyChanged(nameof(ProjectFinancialBarUnavailableText));
+        OnPropertyChanged(nameof(ProjectFinancialSourceText));
+        OnPropertyChanged(nameof(ProjectFinancialExceedsText));
+        OnPropertyChanged(nameof(ShowProjectFinancialExceeds));
+        OnPropertyChanged(nameof(ProjectFinancialHourlyNote));
+        OnPropertyChanged(nameof(ShowProjectFinancialHourlyNote));
+        OnPropertyChanged(nameof(ProjectFinancialInCreationNote));
+        OnPropertyChanged(nameof(ShowProjectFinancialInCreationNote));
         RaisePreparationCommands();
+    }
+
+    private BillingProjectFinancialSummary BuildProjectFinancial(BillingLiveAmountSummary live)
+    {
+        var candidate = FindSelectedProjectCandidate();
+        var snapshotDate = candidate?.SnapshotDate ?? _lastResult?.Summary.MonthlySnapshotDate;
+        return BillingProjectFinancialSummaryCalculator.Build(
+            totalFee: candidate?.CurrentFeeSum,
+            balanceBefore: candidate?.SnapshotBalance,
+            snapshotDate: snapshotDate,
+            feeMix: candidate?.SnapshotFeeTypes?.Mix,
+            billsInCreation: candidate?.BillsInCreation ?? 0,
+            currentBill: live.PricedTotal,
+            currentBillIsComplete: !live.IsPartial);
+    }
+
+    private BillingCandidateRow? FindSelectedProjectCandidate()
+    {
+        if (SelectedPreparation is null)
+            return null;
+
+        var id = SelectedPreparation.MasterPlanProjectId;
+        var fromLoaded = _allRows.FirstOrDefault(r => r.ProjectId == id);
+        if (fromLoaded is not null)
+            return fromLoaded.Source;
+
+        return _lastResult?.Candidates.FirstOrDefault(c => c.ProjectId == id);
     }
 
     private bool CanEditPreparation() =>

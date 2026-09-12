@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 11.09.2026 (recover approval when task exists but request TaskId persist failed)  
+> **Updated:** 12.09.2026 (whole-project financial summary on preparation editor; Request #2 still not approved)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -479,6 +479,43 @@ Historical FeeType=4 `BillLines` on 4608: `WorkingHourPrice × WorkingHourCount`
 | `Bills.CollectionSum` | Equals `Sum` on 4608, not `IncludeVat` |
 
 Preparation «סכום החשבון» uses **`Bills.Sum` semantics** (component total). Do not add VAT in the preview and do not label כולל/לפני מע"מ. Display whole shekels when the amount is whole; 2 decimals when agorot exist (historical Balances such as 9346.15).
+
+### 5.7 Whole-project financial summary — PROVEN (DEV `danny\SQLEXPRESS`, 12.09.2026)
+
+Read-only identity on monthly `Db_Mp_SiEng.dbo.ProjectsExtraData` plus Replica `MP_Projects` / `MP_Bills` and monthly `Bills` via `Contracts.ProjectID`. **Do not treat monthly Balance as a current Replica fact.**
+
+Proven on project **1844 / MasterPlan 4608** and a full scan of projects with `FeeSum <> 0`:
+
+| Claim | Evidence |
+| --- | --- |
+| Identity | `FeeSum = Balance + OpenBillSum + IntakeSum` on **1203 / 1203** monthly rows with non-zero `FeeSum` (0 failures, ₪0.05 tolerance). `FeeSum = Balance + OpenBillSum + ApprovedBillSum` fails on most rows (177 / 1203). |
+| Total project fee | Replica `MP_Projects.FeeSum` is the current total. On 4608 it equals monthly `ProjectsExtraData.FeeSum` (₪4,142,969.59 vs ₪4,142,969.5896). Across 1209 joined projects, **1207 match** and **2 lag** (2962 / 6982). Never copy monthly `ProjectsExtraData.FeeSum` onto current fee. |
+| `Balance` | Remaining contract fee **not** in `OpenBillSum` and **not** in `IntakeSum`. R01 already labels it «מאזן» and treats `FeeSum − Balance` as paid **including open**. This is the business value for «יתרה להגשה» **before a new bill that is not yet a MasterPlan submitted bill**. |
+| Submitted bills | Usually inside `OpenBillSum`. On 4608, two Status=2 bills sum **exactly** to `OpenBillSum` ₪391,942.4167. Across 1123 billed projects, `OpenBillSum` equals Status=2 `Bills.Sum` on 1047 (best raw match, not an identity). |
+| Approved Status=3 | **Not** what `Balance` subtracts. `ApprovedBillSum` is 0 on 4608 and equals Status=3 on 1122/1123 only because almost every project has no Status=3 and `ApprovedBillSum=0`. Closed bills (Status=4) go through `IntakeSum`, not `ApprovedBillSum`. |
+| Bills in creation (Status=1) | **Not** subtracted from `Balance`. Many Status=1 projects have `OpenBillSum=0` while `Bills.Sum` in ביצירה is positive (e.g. 3573 ₪149,637). Replica `BillsInCreation` is a separate current fact. |
+| Intakes vs closed bills | `IntakeSum` is the MasterPlan intake total used in the identity; it is **not** a raw sum of Status=4 `Bills.Sum` (917 / 1123 match). On 4608 closed bills ₪2,574,210.70 vs `IntakeSum` ₪2,561,458.19. |
+| 4608 fee mix | SubContracts include FeeType **3** (מחיר קבוע) and **4** (שעות). Project-level `FeeSum` still exists. Do not invent a separate finite hourly ceiling. |
+
+Safe live formulas for a **SiNet preparation that is not yet a MasterPlan submitted bill** (Request #2 on 1844 has no Status=1 bill):
+
+```text
+TotalFee            = Replica MP_Projects.FeeSum
+BalanceBefore       = monthly ProjectsExtraData.Balance
+AlreadyBilledBefore = TotalFee − BalanceBefore     (= OpenBillSum + IntakeSum)
+CurrentBill         = live preparation amount (Bills.Sum semantics)
+BalanceAfter        = BalanceBefore − CurrentBill
+```
+
+`AlreadyBilledBefore` includes submitted + intaken MasterPlan amounts. It does **not** mean “only approved”. It does **not** include this SiNet draft.
+
+Do **not** fake a 100% bar when any input is unknown, when the live amount is partial, when `TotalFee <= 0`, or when `BalanceAfter < 0` (current bill exceeds available balance). Unknown stays unknown — never coerce to 0.
+
+Snapshot caption: `יתרה לפי snapshot MasterPlan מ־{dd/MM/yyyy}` from Replica `Sync_State.MonthlyRestore` / candidate `SnapshotDate`. Example on this DEV box: MonthlyRestore `10/09/2026 18:22`. Replica Projects `LastUpdated` on 4608 is `02/09/2026` and must not be labelled as the Balance date.
+
+UI: card «מצב כספי לאחר החשבון» stays visible beside «סכום החשבון להכנה» while editing. Live, no Save, no DB write. Colors stay the stage language: green = already billed, blue = this bill, red = remaining after, purple = total fee / 100%.
+
+**Approval freeze (design only, no migration in this slice):** after this UI is accepted, a later approval round should consider persisting `TotalFeeAtApproval`, `BalanceBeforeAtApproval`, `CurrentBillAmount`, `BalanceAfterAtApproval`, and the monthly snapshot date on the approved task / freeze. That would be a new schema slice — do not add it here. Request #2 remains unapproved.
 
 Approved task instructions use **persisted freeze evidence** captured at the approval attempt — not a later live catalog. Live preview in the tab remains UI-only and is not written on typing/Save. Formula version: `MP-BILLING-1`.
 
