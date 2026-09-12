@@ -59,6 +59,7 @@ public sealed class GmailHistoryReloadPendingIntegrationTests
         Assert.True(gate.ReloadPending);
         Assert.Equal(300UL, detector.PendingHistoryId);
         Assert.Equal(100UL, detector.LastHistoryId);
+        Assert.False(historyReload.IsCompleted);
 
         firstMayFinish.TrySetResult();
         await Task.WhenAll(activeReload, historyReload).ConfigureAwait(false);

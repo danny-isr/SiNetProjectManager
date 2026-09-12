@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Projects;
 
@@ -34,31 +35,45 @@ internal sealed class EmailListGroupingCoordinator
 
     public void ApplyGrouping()
     {
-        var emailsView = _owner.EmailsView;
-        if (emailsView is null)
+        UiThread.Run(() =>
         {
-            return;
-        }
+            var emailsView = _owner.EmailsView;
+            if (emailsView is null)
+            {
+                return;
+            }
 
-        emailsView.GroupDescriptions.Clear();
-        emailsView.Refresh();
+            emailsView.GroupDescriptions.Clear();
+            emailsView.Refresh();
+        });
     }
 
     public void ClearDisplayGroups()
     {
-        _owner.SetProjectGroup(null);
-        _owner.DisplayGroups.Clear();
-        _owner.SetHasLabelGroups(false);
-        NotifyDisplayGroupProperties();
+        UiThread.Run(() =>
+        {
+            _owner.SetProjectGroup(null);
+            _owner.DisplayGroups.Clear();
+            _owner.SetHasLabelGroups(false);
+            NotifyDisplayGroupProperties();
+        });
     }
 
     public void ClearProjectGroup()
     {
-        _owner.GetProjectGroup()?.ClearEmails();
-        _owner.SetProjectGroup(null);
+        UiThread.Run(() =>
+        {
+            _owner.GetProjectGroup()?.ClearEmails();
+            _owner.SetProjectGroup(null);
+        });
     }
 
     public void RebuildDisplayGroups()
+    {
+        UiThread.Run(RebuildDisplayGroupsCore);
+    }
+
+    private void RebuildDisplayGroupsCore()
     {
         var expandedByLabelId = _owner.DisplayGroups
             .Where(static g => !g.IsProjectGroup)
@@ -118,8 +133,11 @@ internal sealed class EmailListGroupingCoordinator
 
         if (resetPaging)
         {
-            _owner.GetProjectGroup()?.ClearEmails();
-            _owner.GetProjectGroup()?.ResetPagingState();
+            UiThread.Run(() =>
+            {
+                _owner.GetProjectGroup()?.ClearEmails();
+                _owner.GetProjectGroup()?.ResetPagingState();
+            });
             await LoadProjectGroupPageAsync(_owner.GetProjectGroup()!, isInitialPage: true).ConfigureAwait(true);
         }
     }
@@ -162,10 +180,13 @@ internal sealed class EmailListGroupingCoordinator
                     .ConfigureAwait(true);
 
                 var rows = _display.ApplyClientRowFilters(await MapPageItemsAsync(page.Items).ConfigureAwait(true));
-                foreach (var row in rows)
+                UiThread.Run(() =>
                 {
-                    group.TryAddEmail(row);
-                }
+                    foreach (var row in rows)
+                    {
+                        group.TryAddEmail(row);
+                    }
+                });
 
                 group.NextPageToken = page.NextPageToken;
                 group.HasMore = page.HasNextPage;
@@ -249,10 +270,13 @@ internal sealed class EmailListGroupingCoordinator
                 .ConfigureAwait(true);
 
             var rows = await MapPageItemsAsync(page.Items).ConfigureAwait(true);
-            foreach (var row in rows)
+            UiThread.Run(() =>
             {
-                group.TryAddEmail(row);
-            }
+                foreach (var row in rows)
+                {
+                    group.TryAddEmail(row);
+                }
+            });
 
             group.NextPageToken = page.NextPageToken;
             group.HasMore = page.HasNextPage;

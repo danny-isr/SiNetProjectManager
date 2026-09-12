@@ -1,5 +1,6 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Shell;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.WorkSurfaces;
@@ -29,7 +30,9 @@ public sealed class EmailSurfaceHost(
         else
         {
             // Menu «מיילים»: leave task/FollowQuote mode and restore browse defaults.
-            _ = _viewModel!.ResetToDefaultBrowseAsync();
+            ObservedTask.Run(
+                _viewModel!.ResetToDefaultBrowseAsync(),
+                "Email.ResetToDefaultBrowse");
         }
 
         _contentHost.NavigateTo(_view);

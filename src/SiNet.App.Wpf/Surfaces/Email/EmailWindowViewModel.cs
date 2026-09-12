@@ -308,8 +308,16 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             }
         }
 
-        _ = ProjectSelector.InitializeAsync();
-        _ = AutoRefreshOnOpenAsync();
+        ObservedTask.Run(
+            ProjectSelector.InitializeAsync(),
+            "Email.ProjectSelector.Initialize");
+        ObservedTask.Run(
+            AutoRefreshOnOpenAsync(),
+            "Email.AutoRefreshOnOpen",
+            ex => UiThread.Run(() =>
+            {
+                StatusMessage = AppErrorReporter.FormatUserMessage(ex, "Email");
+            }));
 
         RefreshCommand = EmailList.RefreshPageCommand;
         SearchCommand = EmailList.ApplyFiltersCommand;
@@ -554,7 +562,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
 
         _historyPollCts = new CancellationTokenSource();
         var token = _historyPollCts.Token;
-        _historyPollLoop = Task.Run(() => HistoryPollLoopAsync(token), token);
+        _historyPollLoop = ObservedTask.Run(
+            Task.Run(() => HistoryPollLoopAsync(token), token),
+            "Email.HistoryPollLoop");
     }
 
     private void StopHistoryPolling()
@@ -596,7 +606,6 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
                                 await UiThread.RunAsync(async () =>
                                 {
                                     await EmailList.RefreshPageCoreAsync().ConfigureAwait(true);
-                                    return true;
                                 }).ConfigureAwait(false);
                             },
                             onSuccessfulReload: _historyDetector.CommitPendingCheckpoint,
@@ -607,7 +616,6 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
                         await UiThread.RunAsync(async () =>
                         {
                             await RequestMailboxReloadAsync(establishHistoryBaseline: true).ConfigureAwait(true);
-                            return true;
                         }).ConfigureAwait(false);
                         break;
 
@@ -1143,30 +1151,31 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     {
         // ProjectChanged may fire off the UI thread; ObservableCollection / CollectionView
         // mutations in ApplyProjectContext must stay on the dispatcher (FollowQuote open path).
-        _ = UiThread.RunAsync(async () =>
-        {
-            UpdateActiveProjectDisplay(e.Project);
-            EmailDetail.UpdateActiveProjectDisplay(e.Project);
-
-            if (!IsConnected)
+        ObservedTask.Run(
+            UiThread.RunAsync(async () =>
             {
-                StatusMessage = e.Project is null
-                    ? "לא נבחר פרויקט — מציג כל המיילים לאחר רענון."
-                    : "הפרויקט הוחלף. התחבר ל-Google.";
-            }
-            else
-            {
-                StatusMessage = e.Project is null
-                    ? "לא נבחר פרויקט — מצב כל המיילים."
-                    : $"פרויקט נבחר: {e.Project.ProjectNumber} — {e.Project.ProjectName}";
-            }
+                UpdateActiveProjectDisplay(e.Project);
+                EmailDetail.UpdateActiveProjectDisplay(e.Project);
 
-            (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                if (!IsConnected)
+                {
+                    StatusMessage = e.Project is null
+                        ? "לא נבחר פרויקט — מציג כל המיילים לאחר רענון."
+                        : "הפרויקט הוחלף. התחבר ל-Google.";
+                }
+                else
+                {
+                    StatusMessage = e.Project is null
+                        ? "לא נבחר פרויקט — מצב כל המיילים."
+                        : $"פרויקט נבחר: {e.Project.ProjectNumber} — {e.Project.ProjectName}";
+                }
 
-            await SafeApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
-            return true;
-        });
+                (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (SearchCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+
+                await SafeApplyProjectContextFromWorkbenchAsync().ConfigureAwait(true);
+            }),
+            "Email.OnCurrentProjectChanged");
     }
 
     private async Task ApplyProjectContextFromWorkbenchAsync()
@@ -1229,7 +1238,10 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             else
             {
                 StatusMessage = "החיבור ל-Google זמין — טוען מיילים…";
-                _ = AutoRefreshOnOpenAsync();
+                ObservedTask.Run(
+                    AutoRefreshOnOpenAsync(),
+                    "Email.AutoRefreshOnAuth",
+                    ex => StatusMessage = AppErrorReporter.FormatUserMessage(ex, "Email"));
             }
 
             (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

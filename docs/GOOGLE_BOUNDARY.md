@@ -2,7 +2,7 @@
 
 > **Status:** Active -- ProjectWork Drive + MasterPlan Reports Sheets (S3, 2026-07-28)
 > **Date:** 28.07.2026
-> **Updated:** 07.08.2026 (As-Is -- desktop host vs V2 reference; §2.1 wording)
+> **Updated:** 12.09.2026 (HF-001 Email WPF UI-thread ownership)
 > **Scope:** Current code truth for Google/Gmail/Drive/Sheets across App.Wpf (production desktop) and V2 reference host.
 > **Working branches:** `release` + `development` -- see [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) §3. `SiWorkNet10` deprecated.
 
@@ -132,6 +132,15 @@ Verified wiring:
 - Therefore, in the standalone harness, native Gmail sign-in is vault-first, with
   `Gmail:ClientSecretsPath` acting only as fallback when a usable provider-backed path is not
   available.
+
+### 3.3.1 Email WPF UI-thread ownership (HF-001)
+
+WPF-bound email collections and properties (`Emails`, `FlatDisplayEmails`, `DisplayGroups`,
+`AvailableLabels`, group `Emails`, selection, command state, `IsBusy` / load status) are
+**UI-thread owned**. Background work may call Gmail, inspect History, and wait on timers, but it
+must marshal mutations through `UiThread` (inline when already on the dispatcher).
+`MailboxReloadOrchestrator` stays context-neutral and coalesces in-flight reloads; external callers
+wait for the follow-up pass. Do not use `BindingOperations.EnableCollectionSynchronization`.
 
 ### 3.4 Auth/session ownership
 

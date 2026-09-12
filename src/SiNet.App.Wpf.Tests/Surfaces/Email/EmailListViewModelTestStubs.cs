@@ -154,6 +154,25 @@ internal static partial class EmailListViewModelTestFixtures
             Task.CompletedTask;
     }
 
+    internal sealed class RaisingCurrentProjectContext : ICurrentProjectContext
+    {
+        public ProjectSummaryDto? CurrentProject { get; private set; }
+
+        public event EventHandler<ProjectChangedEventArgs>? CurrentProjectChanged;
+
+        public void Raise(ProjectSummaryDto? project)
+        {
+            CurrentProject = project;
+            CurrentProjectChanged?.Invoke(this, new ProjectChangedEventArgs(project));
+        }
+
+        public Task SetCurrentProjectAsync(ProjectSummaryDto? project, CancellationToken cancellationToken = default)
+        {
+            Raise(project);
+            return Task.CompletedTask;
+        }
+    }
+
     internal sealed class StubCurrentUser(int userId) : ICurrentUserContext
     {
         public int? UserId { get; } = userId;

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using SiNet.App.Wpf.Infrastructure;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Email;
 using SiNet.Application.Projects;
@@ -86,10 +87,22 @@ internal sealed class EmailListRowDisplayCoordinator
 
     public void RebindSelectedEmail(EmailListRow updated)
     {
-        _owner.SyncSelectedEmailInstance(updated);
+        UiThread.Run(() => _owner.SyncSelectedEmailInstance(updated));
     }
 
     public bool TrySelectByInboxCorrelation(
+        string? messageUniqueId,
+        string? internetMessageId,
+        string? subject,
+        string? fromAddress)
+    {
+        var selected = false;
+        UiThread.Run(() => selected = TrySelectByInboxCorrelationCore(
+            messageUniqueId, internetMessageId, subject, fromAddress));
+        return selected;
+    }
+
+    private bool TrySelectByInboxCorrelationCore(
         string? messageUniqueId,
         string? internetMessageId,
         string? subject,
@@ -121,6 +134,13 @@ internal sealed class EmailListRowDisplayCoordinator
     {
         ArgumentNullException.ThrowIfNull(row);
 
+        EmailListRow? selected = null;
+        UiThread.Run(() => selected = InjectAndSelectTaskRowCore(row, inboxMessageId));
+        return selected!;
+    }
+
+    private EmailListRow InjectAndSelectTaskRowCore(EmailListRow row, int inboxMessageId)
+    {
         var withInbox = inboxMessageId > 0 && row.InboxMessageId != inboxMessageId
             ? row with { InboxMessageId = inboxMessageId }
             : row;
@@ -141,7 +161,7 @@ internal sealed class EmailListRowDisplayCoordinator
 
         _owner.SelectedEmail = FindRowById(withInbox.Id) ?? withInbox;
         _owner.NotifyUnreadDisplayProperties();
-        return _owner.SelectedEmail;
+        return _owner.SelectedEmail!;
     }
 
     private (EmailListRow? Match, string MatchedBy) FindByInboxCorrelation(
@@ -205,6 +225,14 @@ internal sealed class EmailListRowDisplayCoordinator
         IReadOnlyList<EmailListRow> rows,
         string? preserveSelectionId = null,
         bool skipDisplayRebuild = false)
+    {
+        UiThread.Run(() => ReplaceRowsCore(rows, preserveSelectionId, skipDisplayRebuild));
+    }
+
+    private void ReplaceRowsCore(
+        IReadOnlyList<EmailListRow> rows,
+        string? preserveSelectionId,
+        bool skipDisplayRebuild)
     {
         _owner.Emails.Clear();
         foreach (var row in rows)
@@ -281,6 +309,11 @@ internal sealed class EmailListRowDisplayCoordinator
     }
 
     public void RefreshRowBackgrounds()
+    {
+        UiThread.Run(RefreshRowBackgroundsCore);
+    }
+
+    private void RefreshRowBackgroundsCore()
     {
         if (_owner.Emails.Count == 0)
         {
@@ -555,15 +588,5 @@ internal sealed class EmailListRowDisplayCoordinator
         }
     }
 
-    private static void RunOnUiThread(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        dispatcher.Invoke(action);
-    }
+    private static void RunOnUiThread(Action action) => UiThread.Run(action);
 }

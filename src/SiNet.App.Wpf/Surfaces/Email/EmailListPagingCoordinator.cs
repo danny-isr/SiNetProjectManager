@@ -136,7 +136,9 @@ internal sealed class EmailListPagingCoordinator
                 _owner.SetLoadWarning(enrichmentWarning);
             }
 
-            _ = _owner.SyncThreadMappingsFromPageAsync(page.Items);
+            _ = ObservedTask.Run(
+                _owner.SyncThreadMappingsFromPageAsync(page.Items),
+                "Email.SyncThreadMappingsFromPage");
 
             rows = _display.ApplyClientRowFilters(rows);
 
@@ -278,11 +280,14 @@ internal sealed class EmailListPagingCoordinator
         {
             await _owner.TrySyncProjectLabelNamesAsync().ConfigureAwait(true);
             var labels = await _owner.EmailGateway.GetMailboxLabelsAsync().ConfigureAwait(true);
-            _owner.AvailableLabels.Clear();
-            foreach (var label in labels)
+            UiThread.Run(() =>
             {
-                _owner.AvailableLabels.Add(label);
-            }
+                _owner.AvailableLabels.Clear();
+                foreach (var label in labels)
+                {
+                    _owner.AvailableLabels.Add(label);
+                }
+            });
         }
         catch
         {
@@ -381,39 +386,42 @@ internal sealed class EmailListPagingCoordinator
 
     public void ClearEmailState()
     {
-        _owner.PageTokenStack.Clear();
-        _owner.SetNextPageToken(null);
-        _owner.SetLastUsedPageToken(null);
-        _owner.SetCurrentPageNumber(1);
-        _owner.SetDisplayedCount(0);
-        _owner.SetHasNextPage(false);
-        _owner.NotifyHasPreviousPageChanged();
+        UiThread.Run(() =>
+        {
+            _owner.PageTokenStack.Clear();
+            _owner.SetNextPageToken(null);
+            _owner.SetLastUsedPageToken(null);
+            _owner.SetCurrentPageNumber(1);
+            _owner.SetDisplayedCount(0);
+            _owner.SetHasNextPage(false);
+            _owner.NotifyHasPreviousPageChanged();
 
-        _owner.SearchText = string.Empty;
-        _owner.AddressFilter = string.Empty;
-        _owner.SubjectFilter = string.Empty;
-        _owner.SelectedLabel = null;
-        _owner.SelectedMailboxScope = EmailMailboxScope.Inbox;
-        _owner.SetSelectedMailboxCategory(EmailMailboxCategory.All);
-        _owner.SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
-        _owner.FollowQuoteThreadFilter = null;
-        _owner.SetGroupByLabel(true);
-        _grouping.ClearProjectGroup();
-        _grouping.ClearDisplayGroups();
-        _owner.SetMailboxUnreadTotal(0);
-        _owner.SetMailboxUnreadIsExact(true);
-        _owner.SetLastLoadedGmailQuery(null);
-        _owner.SetLastUnreadQuerySignature(null);
+            _owner.SearchText = string.Empty;
+            _owner.AddressFilter = string.Empty;
+            _owner.SubjectFilter = string.Empty;
+            _owner.SelectedLabel = null;
+            _owner.SelectedMailboxScope = EmailMailboxScope.Inbox;
+            _owner.SetSelectedMailboxCategory(EmailMailboxCategory.All);
+            _owner.SelectedProjectLinkFilter = EmailProjectLinkFilter.All;
+            _owner.FollowQuoteThreadFilter = null;
+            _owner.SetGroupByLabel(true);
+            _grouping.ClearProjectGroup();
+            _grouping.ClearDisplayGroups();
+            _owner.SetMailboxUnreadTotal(0);
+            _owner.SetMailboxUnreadIsExact(true);
+            _owner.SetLastLoadedGmailQuery(null);
+            _owner.SetLastUnreadQuerySignature(null);
 
-        _owner.AvailableLabels.Clear();
-        _owner.FlatDisplayEmails.Clear();
+            _owner.AvailableLabels.Clear();
+            _owner.FlatDisplayEmails.Clear();
 
-        _owner.SetLoadWarning(null);
-        _owner.SetLoadError(null);
-        _owner.SetLoadState(EmailListLoadState.Idle);
+            _owner.SetLoadWarning(null);
+            _owner.SetLoadError(null);
+            _owner.SetLoadState(EmailListLoadState.Idle);
 
-        _owner.SelectedEmail = null;
-        _display.ReplaceRows([]);
+            _owner.SelectedEmail = null;
+            _display.ReplaceRows([]);
+        });
     }
 
     public Task RefreshAccountProfileAsync() => RefreshGmailAccountStatusAsync();

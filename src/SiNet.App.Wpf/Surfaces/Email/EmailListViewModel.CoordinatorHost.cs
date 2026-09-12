@@ -11,6 +11,19 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 
 public sealed partial class EmailListViewModel
 {
+    internal void ReplaceRowsForTests(
+        IReadOnlyList<EmailListRow> rows,
+        string? preserveSelectionId = null,
+        bool skipDisplayRebuild = false) =>
+        _display.ReplaceRows(rows, preserveSelectionId, skipDisplayRebuild);
+
+    internal void RefreshRowBackgroundsForTests() => _display.RefreshRowBackgrounds();
+
+    internal Task LoadLabelsForTestsAsync() => _paging.LoadLabelsAsync();
+
+    internal EmailListRow InjectAndSelectTaskRowForTests(EmailListRow row, int inboxMessageId) =>
+        _display.InjectAndSelectTaskRow(row, inboxMessageId);
+
     internal void ClearAccSessionStateForTests() => _accHandler?.ClearSessionStateForTests();
     internal Task FileEmailToProjectForTestsAsync(EmailListRow? row) => _filing.FileEmailToProjectAsync(row);
     internal Task FileEmailToThreadProjectForTestsAsync(EmailListRow? row) => _filing.FileEmailToThreadProjectAsync(row);
@@ -77,11 +90,11 @@ public sealed partial class EmailListViewModel
     internal void SetUnreadOnly(bool value) => UnreadOnly = value;
     internal void SetSelectedMailboxScope(EmailMailboxScope value) => SelectedMailboxScope = value;
     internal void SetSelectedMailboxCategory(EmailMailboxCategory value) => SelectedMailboxCategory = value;
-    internal void SetIsBusy(bool value) => IsBusy = value;
-    internal void SetLoadState(EmailListLoadState value) => LoadState = value;
-    internal void SetLoadWarning(string? value) => LoadWarning = value;
-    internal void SetLoadError(string? value) => LoadError = value;
-    internal void SetStatusMessage(string value) => StatusMessage = value;
+    internal void SetIsBusy(bool value) => UiThread.Run(() => IsBusy = value);
+    internal void SetLoadState(EmailListLoadState value) => UiThread.Run(() => LoadState = value);
+    internal void SetLoadWarning(string? value) => UiThread.Run(() => LoadWarning = value);
+    internal void SetLoadError(string? value) => UiThread.Run(() => LoadError = value);
+    internal void SetStatusMessage(string value) => UiThread.Run(() => StatusMessage = value);
     internal void SetCurrentPageNumber(int value) => CurrentPageNumber = value;
     internal void SetDisplayedCount(int value) => DisplayedCount = value;
     internal void SetHasNextPage(bool value) => HasNextPage = value;
@@ -133,6 +146,11 @@ public sealed partial class EmailListViewModel
     }
 
     internal void RaiseCommandStates()
+    {
+        UiThread.Run(RaiseCommandStatesCore);
+    }
+
+    private void RaiseCommandStatesCore()
     {
         (LoadFirstPageCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (LoadNextPageCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

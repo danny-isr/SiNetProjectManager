@@ -223,8 +223,11 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         {
             _currentProject.CurrentProjectChanged += (_, _) =>
             {
-                _display.RefreshRowBackgrounds();
-                RaiseCommandStates();
+                UiThread.Run(() =>
+                {
+                    _display.RefreshRowBackgrounds();
+                    RaiseCommandStates();
+                });
             };
         }
 
@@ -1229,7 +1232,9 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
 
     private void OnAuthStateChanged(bool isAuthenticated)
     {
-        UiThread.Run(() => _ = _paging.HandleAuthStateChangedOnUiThreadAsync(isAuthenticated));
+        UiThread.Run(() => ObservedTask.Run(
+            _paging.HandleAuthStateChangedOnUiThreadAsync(isAuthenticated),
+            "Email.AuthStateChanged"));
     }
 
     private void NotifyDisplayModeProperties()
