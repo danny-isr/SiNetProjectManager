@@ -64,7 +64,7 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
     public bool IsExpanded
     {
         get => _isExpanded;
-        set => SetField(ref _isExpanded, value);
+        set => UiThread.Run(() => SetField(ref _isExpanded, value));
     }
 
     public bool IsLoading
@@ -72,12 +72,15 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         get => _isLoading;
         internal set
         {
-            if (SetField(ref _isLoading, value))
+            UiThread.Run(() =>
             {
-                NotifyHeaderChanged();
-                (LoadMoreForLabelCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-                (LoadAllForLabelCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            }
+                if (SetField(ref _isLoading, value))
+                {
+                    NotifyHeaderChangedCore();
+                    (LoadMoreForLabelCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                    (LoadAllForLabelCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                }
+            });
         }
     }
 
@@ -86,11 +89,14 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         get => _hasLoadedAll;
         internal set
         {
-            if (SetField(ref _hasLoadedAll, value))
+            UiThread.Run(() =>
             {
-                NotifyHeaderChanged();
-                (LoadMoreForLabelCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            }
+                if (SetField(ref _hasLoadedAll, value))
+                {
+                    NotifyHeaderChangedCore();
+                    (LoadMoreForLabelCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                }
+            });
         }
     }
 
@@ -101,18 +107,21 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         get => _hasMore;
         internal set
         {
-            if (SetField(ref _hasMore, value))
+            UiThread.Run(() =>
             {
-                NotifyHeaderChanged();
-                (LoadMoreForLabelCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            }
+                if (SetField(ref _hasMore, value))
+                {
+                    NotifyHeaderChangedCore();
+                    (LoadMoreForLabelCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                }
+            });
         }
     }
 
     public string? NextPageToken
     {
         get => _nextPageToken;
-        internal set => _nextPageToken = value;
+        internal set => UiThread.Run(() => _nextPageToken = value);
     }
 
     public string? ErrorMessage
@@ -120,10 +129,13 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         get => _errorMessage;
         internal set
         {
-            if (SetField(ref _errorMessage, value))
+            UiThread.Run(() =>
             {
-                OnPropertyChanged(nameof(ShowGroupError));
-            }
+                if (SetField(ref _errorMessage, value))
+                {
+                    OnPropertyChanged(nameof(ShowGroupError));
+                }
+            });
         }
     }
 
@@ -168,14 +180,19 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
 
     internal bool TryAddEmail(EmailListRow row)
     {
-        if (!_seenMessageIds.Add(row.Id))
+        var added = false;
+        UiThread.Run(() =>
         {
-            return false;
-        }
+            if (!_seenMessageIds.Add(row.Id))
+            {
+                return;
+            }
 
-        Emails.Add(row);
-        NotifyHeaderChanged();
-        return true;
+            Emails.Add(row);
+            NotifyHeaderChangedCore();
+            added = true;
+        });
+        return added;
     }
 
     internal bool RemoveEmailById(string messageId)
@@ -186,62 +203,80 @@ public sealed class EmailLabelGroupViewModel : ObservableObject
         }
 
         var removed = false;
-        for (var index = Emails.Count - 1; index >= 0; index--)
+        UiThread.Run(() =>
         {
-            if (string.Equals(Emails[index].Id, messageId, StringComparison.Ordinal))
+            for (var index = Emails.Count - 1; index >= 0; index--)
             {
-                Emails.RemoveAt(index);
+                if (string.Equals(Emails[index].Id, messageId, StringComparison.Ordinal))
+                {
+                    Emails.RemoveAt(index);
+                    removed = true;
+                }
+            }
+
+            if (_seenMessageIds.Remove(messageId))
+            {
                 removed = true;
             }
-        }
 
-        if (_seenMessageIds.Remove(messageId))
-        {
-            removed = true;
-        }
-
-        if (removed)
-        {
-            NotifyHeaderChanged();
-        }
-
+            if (removed)
+            {
+                NotifyHeaderChangedCore();
+            }
+        });
         return removed;
     }
 
     internal void ResetPagingState()
     {
-        if (IsProjectGroup)
+        UiThread.Run(() =>
         {
-            return;
-        }
+            if (IsProjectGroup)
+            {
+                return;
+            }
 
-        _nextPageToken = null;
-        _hasMore = true;
-        _hasLoadedAll = false;
-        _errorMessage = null;
-        OnPropertyChanged(nameof(ErrorMessage));
-        OnPropertyChanged(nameof(ShowGroupError));
-        NotifyHeaderChanged();
-    }
-
-    internal void ClearEmails()
-    {
-        Emails.Clear();
-        _seenMessageIds.Clear();
-        ResetPagingState();
-        if (IsProjectGroup)
-        {
             _nextPageToken = null;
             _hasMore = true;
             _hasLoadedAll = false;
             _errorMessage = null;
             OnPropertyChanged(nameof(ErrorMessage));
             OnPropertyChanged(nameof(ShowGroupError));
-            NotifyHeaderChanged();
-        }
+            NotifyHeaderChangedCore();
+        });
     }
 
-    internal void NotifyHeaderChanged()
+    internal void ClearEmails()
+    {
+        UiThread.Run(() =>
+        {
+            Emails.Clear();
+            _seenMessageIds.Clear();
+            if (!IsProjectGroup)
+            {
+                _nextPageToken = null;
+                _hasMore = true;
+                _hasLoadedAll = false;
+                _errorMessage = null;
+                OnPropertyChanged(nameof(ErrorMessage));
+                OnPropertyChanged(nameof(ShowGroupError));
+                NotifyHeaderChangedCore();
+                return;
+            }
+
+            _nextPageToken = null;
+            _hasMore = true;
+            _hasLoadedAll = false;
+            _errorMessage = null;
+            OnPropertyChanged(nameof(ErrorMessage));
+            OnPropertyChanged(nameof(ShowGroupError));
+            NotifyHeaderChangedCore();
+        });
+    }
+
+    internal void NotifyHeaderChanged() => UiThread.Run(NotifyHeaderChangedCore);
+
+    private void NotifyHeaderChangedCore()
     {
         OnPropertyChanged(nameof(LoadedCount));
         OnPropertyChanged(nameof(HeaderStatus));

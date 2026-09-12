@@ -86,25 +86,28 @@ internal sealed class EmailListPagingCoordinator
 
         try
         {
-            string? requestToken;
-            if (resetStack)
+            string? requestToken = null;
+            UiThread.Run(() =>
             {
-                _owner.PageTokenStack.Clear();
-                _owner.SetCurrentPageNumber(1);
-                requestToken = null;
-            }
-            else if (useNextToken)
-            {
-                _owner.PageTokenStack.Push(_owner.LastUsedPageToken);
-                _owner.SetCurrentPageNumber(_owner.CurrentPageNumber + 1);
-                requestToken = _owner.NextPageToken;
-            }
-            else
-            {
-                requestToken = explicitToken;
-            }
+                if (resetStack)
+                {
+                    _owner.PageTokenStack.Clear();
+                    _owner.SetCurrentPageNumber(1);
+                    requestToken = null;
+                }
+                else if (useNextToken)
+                {
+                    _owner.PageTokenStack.Push(_owner.LastUsedPageToken);
+                    _owner.SetCurrentPageNumber(_owner.CurrentPageNumber + 1);
+                    requestToken = _owner.NextPageToken;
+                }
+                else
+                {
+                    requestToken = explicitToken;
+                }
 
-            _owner.SetLastUsedPageToken(requestToken);
+                _owner.SetLastUsedPageToken(requestToken);
+            });
 
             var query = BuildQuery();
             _owner.SetLastLoadedGmailQuery(EmailMailboxQueryComposer.BuildSearchQuery(query));
@@ -119,22 +122,10 @@ internal sealed class EmailListPagingCoordinator
             var page = await pageTask.ConfigureAwait(true);
             var unreadCount = await unreadTask.ConfigureAwait(true);
 
-            if (refreshUnreadTotal)
-            {
-                ApplyMailboxUnreadCount(unreadCount);
-            }
-
-            _owner.SetNextPageToken(page.NextPageToken);
-            _owner.SetHasNextPage(page.HasNextPage);
-
             var (rows, enrichmentWarning) = await EmailListRowMapper.MapSummariesAsync(
                 page.Items,
                 _owner.ThreadLinkQuery,
                 () => _owner.GetCurrentProject()).ConfigureAwait(true);
-            if (!string.IsNullOrWhiteSpace(enrichmentWarning))
-            {
-                _owner.SetLoadWarning(enrichmentWarning);
-            }
 
             _ = ObservedTask.Run(
                 _owner.SyncThreadMappingsFromPageAsync(page.Items),
@@ -142,27 +133,42 @@ internal sealed class EmailListPagingCoordinator
 
             rows = _display.ApplyClientRowFilters(rows);
 
-            _display.ReplaceRows(rows, previousSelectionId, skipDisplayRebuild);
-            _owner.SetDisplayedCount(rows.Count);
-            _owner.NotifyPageInfoChanged();
-            _owner.NotifyHasPreviousPageChanged();
-
-            if (rows.Count == 0)
+            UiThread.Run(() =>
             {
-                _owner.SetLoadState(EmailListLoadState.NoResults);
-                _owner.SetStatusMessage("לא נמצאו מיילים לפי הסינון הנוכחי.");
-            }
-            else
-            {
-                _owner.SetLoadState(string.IsNullOrWhiteSpace(_owner.LoadWarning)
-                    ? EmailListLoadState.Loaded
-                    : EmailListLoadState.PartialFailure);
-                _owner.SetStatusMessage($"נטענו {rows.Count} מיילים (עמוד {_owner.CurrentPageNumber}).");
-                if (_owner.ShowSparsePageWarning)
+                if (refreshUnreadTotal)
                 {
-                    _owner.SetStatusMessage(_owner.StatusMessage + " סינון שיוך פעיל — ייתכן פחות מ-50 תוצאות בדף.");
+                    ApplyMailboxUnreadCount(unreadCount);
                 }
-            }
+
+                _owner.SetNextPageToken(page.NextPageToken);
+                _owner.SetHasNextPage(page.HasNextPage);
+                if (!string.IsNullOrWhiteSpace(enrichmentWarning))
+                {
+                    _owner.SetLoadWarning(enrichmentWarning);
+                }
+
+                _display.ReplaceRows(rows, previousSelectionId, skipDisplayRebuild);
+                _owner.SetDisplayedCount(rows.Count);
+                _owner.NotifyPageInfoChanged();
+                _owner.NotifyHasPreviousPageChanged();
+
+                if (rows.Count == 0)
+                {
+                    _owner.SetLoadState(EmailListLoadState.NoResults);
+                    _owner.SetStatusMessage("לא נמצאו מיילים לפי הסינון הנוכחי.");
+                }
+                else
+                {
+                    _owner.SetLoadState(string.IsNullOrWhiteSpace(_owner.LoadWarning)
+                        ? EmailListLoadState.Loaded
+                        : EmailListLoadState.PartialFailure);
+                    _owner.SetStatusMessage($"נטענו {rows.Count} מיילים (עמוד {_owner.CurrentPageNumber}).");
+                    if (_owner.ShowSparsePageWarning)
+                    {
+                        _owner.SetStatusMessage(_owner.StatusMessage + " סינון שיוך פעיל — ייתכן פחות מ-50 תוצאות בדף.");
+                    }
+                }
+            });
         }
         catch (Exception ex)
         {

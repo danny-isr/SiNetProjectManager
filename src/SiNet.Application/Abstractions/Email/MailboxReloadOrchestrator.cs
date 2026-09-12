@@ -10,13 +10,15 @@ namespace SiNet.Application.Abstractions.Email;
 /// <para>
 /// Single-flight: the first caller always runs. A caller that arrives while busy never completes
 /// until the follow-up pass that includes the latest coalesced request has finished (or faulted).
-/// At most one follow-up runs per busy period (latest reload/success callbacks win).
+/// At most one follow-up runs per busy period. The latest request replaces the coalesced reload and
+/// success callback as one pair; a null success callback clears the previous one.
+/// Nested <see cref="RequestAsync"/> on the <b>same</b> instance does not wait for the follow-up
+/// TCS (avoids deadlock). Owner-pass identity is instance-scoped and does not leak to other gates.
 /// </para>
 /// </remarks>
 public sealed class MailboxReloadOrchestrator
 {
-    private static readonly AsyncLocal<bool> OwnerPass = new();
-
+    private readonly AsyncLocal<bool> _ownerPass = new();
     private readonly object _lock = new();
     private int _reloadPending;
     private bool _loopRunning;
@@ -43,7 +45,7 @@ public sealed class MailboxReloadOrchestrator
     /// <summary>
     /// Runs <paramref name="reloadAsync"/> now, or coalesces it as the latest follow-up if busy.
     /// After the active run completes, executes at most one coalesced follow-up using the
-    /// <b>latest</b> reload/success callbacks registered while busy.
+    /// <b>latest</b> reload/success callback pair registered while busy.
     /// </summary>
     public Task RequestAsync(
         Func<CancellationToken, Task> reloadAsync,
@@ -57,18 +59,14 @@ public sealed class MailboxReloadOrchestrator
             if (_loopRunning)
             {
                 _coalescedReload = reloadAsync;
-                if (onSuccessfulReload is not null)
-                {
-                    _coalescedSuccess = onSuccessfulReload;
-                }
-
+                _coalescedSuccess = onSuccessfulReload;
                 _coalescedToken = cancellationToken;
                 Volatile.Write(ref _reloadPending, 1);
                 _coalesceWaiters ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                // Nested RequestAsync from inside an in-flight pass must not wait for the
-                // follow-up TCS — that would deadlock the owner. External callers still wait.
-                if (OwnerPass.Value)
+                // Nested RequestAsync from inside an in-flight pass on this instance must not wait
+                // for the follow-up TCS — that would deadlock the owner. External callers still wait.
+                if (_ownerPass.Value)
                 {
                     return Task.CompletedTask;
                 }
@@ -92,7 +90,7 @@ public sealed class MailboxReloadOrchestrator
         var currentToken = cancellationToken;
         TaskCompletionSource? passWaiters = null;
         Exception? ownerError = null;
-        OwnerPass.Value = true;
+        _ownerPass.Value = true;
 
         try
         {
@@ -134,7 +132,7 @@ public sealed class MailboxReloadOrchestrator
 
                     Volatile.Write(ref _reloadPending, 0);
                     currentReload = _coalescedReload ?? currentReload;
-                    currentSuccess = _coalescedSuccess ?? currentSuccess;
+                    currentSuccess = _coalescedSuccess;
                     currentToken = _coalescedToken;
                     _coalescedReload = null;
                     _coalescedSuccess = null;
@@ -161,7 +159,7 @@ public sealed class MailboxReloadOrchestrator
         }
         finally
         {
-            OwnerPass.Value = false;
+            _ownerPass.Value = false;
         }
     }
 }

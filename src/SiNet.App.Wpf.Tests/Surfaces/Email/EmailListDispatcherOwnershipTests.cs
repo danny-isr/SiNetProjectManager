@@ -1,5 +1,9 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows.Data;
+using System.Windows.Input;
 using SiNet.App.Wpf.Infrastructure;
 using SiNet.App.Wpf.Surfaces.Email;
 using SiNet.Application.Abstractions.Email;
@@ -278,6 +282,79 @@ public sealed class EmailListDispatcherOwnershipTests
             CollectionViewSource.GetDefaultView(sut.Emails)!.Refresh();
         });
 
+    [Fact]
+    public Task Coalesced_follow_up_starts_off_dispatcher_and_notifies_on_dispatcher() =>
+        WpfStaTestHost.RunAsync(async () =>
+        {
+            var gateway = new BarrierPagingGateway();
+            var gate = new MailboxReloadOrchestrator();
+            var sut = CreateList(gateway, reload: gate);
+            var offDispatcher = new ConcurrentBag<string>();
+
+            void Probe(object? sender, PropertyChangedEventArgs e)
+            {
+                var dispatcher = UiThread.Dispatcher;
+                if (dispatcher is not null && !dispatcher.CheckAccess())
+                {
+                    offDispatcher.Add($"{sender?.GetType().Name}.{e.PropertyName}");
+                }
+            }
+
+            void ProbeCanExecute(object? sender, EventArgs e)
+            {
+                var dispatcher = UiThread.Dispatcher;
+                if (dispatcher is not null && !dispatcher.CheckAccess())
+                {
+                    offDispatcher.Add($"{sender?.GetType().Name}.CanExecuteChanged");
+                }
+            }
+
+            sut.PropertyChanged += Probe;
+            sut.DisplayGroups.CollectionChanged += (_, args) =>
+            {
+                if (args.Action == NotifyCollectionChangedAction.Add && args.NewItems is not null)
+                {
+                    foreach (var item in args.NewItems)
+                    {
+                        if (item is EmailLabelGroupViewModel group)
+                        {
+                            group.PropertyChanged += Probe;
+                        }
+                    }
+                }
+            };
+            ((ICommand)sut.LoadNextPageCommand).CanExecuteChanged += ProbeCanExecute;
+            ((ICommand)sut.LoadPreviousPageCommand).CanExecuteChanged += ProbeCanExecute;
+            ((ICommand)sut.RefreshPageCommand).CanExecuteChanged += ProbeCanExecute;
+
+            var first = sut.ApplyProjectContextAsync(new EmailListProjectContext(1, "1", "A", "1 — A"));
+            await WaitUntilAsync(() => gateway.Calls >= 1);
+            var second = sut.RefreshPageAsync();
+            Assert.False(second.IsCompleted);
+
+            var released = 0;
+            while (released < 8 && (!first.IsCompleted || !second.IsCompleted))
+            {
+                gateway.ReleaseOne();
+                released++;
+                await Task.Delay(15).ConfigureAwait(true);
+            }
+
+            await first.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+            await second.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+
+            Assert.Contains(false, gateway.CallOnDispatcher);
+            Assert.Empty(offDispatcher);
+            Assert.Equal(1, sut.CurrentPageNumber);
+            Assert.True(sut.HasNextPage);
+            Assert.True(sut.DisplayedCount > 0);
+            Assert.False(string.IsNullOrWhiteSpace(sut.PageInfo));
+            Assert.NotNull(sut.ActiveProjectGroup);
+            Assert.False(sut.ActiveProjectGroup!.IsLoading);
+            Assert.False(sut.IsBusy);
+            Assert.False(gate.IsBusy);
+        });
+
     private static EmailListViewModel CreateList(
         IEmailGateway? gateway = null,
         ICurrentProjectContext? project = null,
@@ -326,9 +403,21 @@ public sealed class EmailListDispatcherOwnershipTests
     private sealed class BarrierPagingGateway : EmailListViewModelTestFixtures.PagingEmailGateway
     {
         private readonly SemaphoreSlim _release = new(0, 10);
+        private readonly List<bool> _callOnDispatcher = [];
         private int _calls;
 
         public int Calls => _calls;
+
+        public IReadOnlyList<bool> CallOnDispatcher
+        {
+            get
+            {
+                lock (_callOnDispatcher)
+                {
+                    return [.. _callOnDispatcher];
+                }
+            }
+        }
 
         public void ReleaseOne() => _release.Release();
 
@@ -337,6 +426,12 @@ public sealed class EmailListDispatcherOwnershipTests
             string? pageToken = null,
             CancellationToken cancellationToken = default)
         {
+            var onDispatcher = UiThread.Dispatcher?.CheckAccess() == true;
+            lock (_callOnDispatcher)
+            {
+                _callOnDispatcher.Add(onDispatcher);
+            }
+
             Interlocked.Increment(ref _calls);
             await _release.WaitAsync(cancellationToken).ConfigureAwait(false);
             return await base.GetMailboxPageAsync(query, pageToken, cancellationToken).ConfigureAwait(false);

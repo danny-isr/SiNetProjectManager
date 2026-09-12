@@ -74,15 +74,21 @@ public sealed partial class EmailListViewModel
 
     internal void SetProjectGroup(EmailLabelGroupViewModel? group)
     {
-        _projectGroup = group;
-        OnPropertyChanged(nameof(ActiveProjectGroup));
-        OnPropertyChanged(nameof(ShowProjectGroupAboveFlat));
+        UiThread.Run(() =>
+        {
+            _projectGroup = group;
+            OnPropertyChanged(nameof(ActiveProjectGroup));
+            OnPropertyChanged(nameof(ShowProjectGroupAboveFlat));
+        });
     }
 
     internal void SetHasLabelGroups(bool value)
     {
-        _hasLabelGroups = value;
-        NotifyDisplayGroupPropertiesChanged();
+        UiThread.Run(() =>
+        {
+            _hasLabelGroups = value;
+            NotifyDisplayGroupPropertiesChangedCore();
+        });
     }
 
     internal void SetGroupByLabel(bool value) => GroupByLabel = value;
@@ -95,13 +101,13 @@ public sealed partial class EmailListViewModel
     internal void SetLoadWarning(string? value) => UiThread.Run(() => LoadWarning = value);
     internal void SetLoadError(string? value) => UiThread.Run(() => LoadError = value);
     internal void SetStatusMessage(string value) => UiThread.Run(() => StatusMessage = value);
-    internal void SetCurrentPageNumber(int value) => CurrentPageNumber = value;
-    internal void SetDisplayedCount(int value) => DisplayedCount = value;
-    internal void SetHasNextPage(bool value) => HasNextPage = value;
+    internal void SetCurrentPageNumber(int value) => UiThread.Run(() => CurrentPageNumber = value);
+    internal void SetDisplayedCount(int value) => UiThread.Run(() => DisplayedCount = value);
+    internal void SetHasNextPage(bool value) => UiThread.Run(() => HasNextPage = value);
     internal void SetNextPageToken(string? value) => _nextPageToken = value;
     internal void SetLastUsedPageToken(string? value) => _lastUsedPageToken = value;
-    internal void SetMailboxUnreadTotal(int value) => MailboxUnreadTotal = value;
-    internal void SetMailboxUnreadIsExact(bool value) => MailboxUnreadIsExact = value;
+    internal void SetMailboxUnreadTotal(int value) => UiThread.Run(() => MailboxUnreadTotal = value);
+    internal void SetMailboxUnreadIsExact(bool value) => UiThread.Run(() => MailboxUnreadIsExact = value);
     internal void SetLastLoadedGmailQuery(string? value) => _lastLoadedGmailQuery = value;
     internal void SetLastUnreadQuerySignature(string? value) => _lastUnreadQuerySignature = value;
     internal void SetLastActionDiagnostics(string value) => _lastActionDiagnostics = value;
@@ -110,22 +116,33 @@ public sealed partial class EmailListViewModel
 
     internal void NotifyUnreadDisplayProperties()
     {
-        OnPropertyChanged(nameof(UnreadInCurrentPage));
-        OnPropertyChanged(nameof(UnreadCountDisplay));
-        OnPropertyChanged(nameof(ShowUnreadCount));
-        OnPropertyChanged(nameof(ShowUnreadFilterActive));
-        OnPropertyChanged(nameof(MailboxDiagnostics));
+        UiThread.Run(() =>
+        {
+            OnPropertyChanged(nameof(UnreadInCurrentPage));
+            OnPropertyChanged(nameof(UnreadCountDisplay));
+            OnPropertyChanged(nameof(ShowUnreadCount));
+            OnPropertyChanged(nameof(ShowUnreadFilterActive));
+            OnPropertyChanged(nameof(MailboxDiagnostics));
+        });
     }
 
-    internal void NotifyPageInfoChanged() => OnPropertyChanged(nameof(PageInfo));
+    internal void NotifyPageInfoChanged() => UiThread.Run(() => OnPropertyChanged(nameof(PageInfo)));
 
     internal void NotifyHasPreviousPageChanged()
     {
-        OnPropertyChanged(nameof(HasPreviousPage));
-        (LoadPreviousPageCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        UiThread.Run(() =>
+        {
+            OnPropertyChanged(nameof(HasPreviousPage));
+            (LoadPreviousPageCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        });
     }
 
     internal void NotifyDisplayGroupPropertiesChanged()
+    {
+        UiThread.Run(NotifyDisplayGroupPropertiesChangedCore);
+    }
+
+    private void NotifyDisplayGroupPropertiesChangedCore()
     {
         OnPropertyChanged(nameof(HasLabelGroups));
         OnPropertyChanged(nameof(ShowLabelGroups));
