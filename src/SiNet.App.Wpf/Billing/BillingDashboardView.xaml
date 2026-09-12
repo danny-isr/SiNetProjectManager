@@ -958,18 +958,65 @@
                                 </StackPanel>
                             </Border>
                         </Grid>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <Border DockPanel.Dock="Bottom"
+                                Padding="10,8"
+                                Margin="0,8,0,0"
+                                BorderBrush="{DynamicResource SiBorderBrush}"
+                                BorderThickness="1,1,1,0"
+                                Background="{DynamicResource SiSurfaceBrush}"
+                                AutomationProperties.AutomationId="BillingDashboard.PreparationActions">
+                            <StackPanel>
+                                <TextBlock Text="{Binding SelectedPreparationStatusText}"
+                                           Style="{StaticResource DetailValueStyle}" />
+                                <TextBlock Text="{Binding DirtyBannerText}"
+                                           Foreground="{DynamicResource SiWarningBrush}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,8"
+                                           Visibility="{Binding ShowDirtyBanner, Converter={StaticResource BoolToVis}}"
+                                           AutomationProperties.AutomationId="BillingDashboard.DirtyBanner" />
+                                <TextBox AcceptsReturn="True"
+                                         Height="48"
+                                         Margin="0,0,0,8"
+                                         Text="{Binding ManualOverrideReason, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="סיבה לטיפול ידני ללא בקרת שלבים" />
+                                <WrapPanel>
+                                    <Button Content="שמור בחירה"
+                                            Command="{Binding SavePreparationCommand}"
+                                            Style="{DynamicResource SiSecondaryButtonStyle}"
+                                            Padding="10,6"
+                                            Margin="0,0,8,0"
+                                            AutomationProperties.AutomationId="BillingDashboard.SavePreparation" />
+                                    <Button Content="אשר טיפול ידני ללא בקרת שלבים"
+                                            Command="{Binding ManualOverrideCommand}"
+                                            Style="{DynamicResource SiSecondaryButtonStyle}"
+                                            Padding="10,6"
+                                            Margin="0,0,8,0" />
+                                    <Button Content="אשר והעבר להכנת חשבון"
+                                            Command="{Binding ApprovePreparationCommand}"
+                                            Style="{DynamicResource SiPrimaryButtonStyle}"
+                                            Padding="10,6"
+                                            Margin="0,0,8,0"
+                                            AutomationProperties.AutomationId="BillingDashboard.ApprovePreparation" />
+                                </WrapPanel>
+                                <StackPanel Visibility="{Binding CanConfirmHourlyVisible, Converter={StaticResource BoolToVis}}"
+                                            Margin="0,8,0,0">
+                                    <TextBlock Text="אישור שעות אחרי MasterPlan"
+                                               Style="{StaticResource SectionHeaderStyle}" />
+                                    <TextBox Text="{Binding HourlyConfirmNote, UpdateSourceTrigger=PropertyChanged}"
+                                             Margin="0,0,0,8" />
+                                    <Button Content="אשר שבוצע ב-MasterPlan"
+                                            Command="{Binding ConfirmHourlyCommand}"
+                                            Style="{DynamicResource SiPrimaryButtonStyle}"
+                                            Padding="10,6"
+                                            HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      AutomationProperties.AutomationId="BillingDashboard.PreparationEditorScroll">
                         <StackPanel>
                             <TextBlock Text="בקשת הכנה"
                                        Style="{StaticResource SectionHeaderStyle}" />
-                            <TextBlock Text="{Binding DirtyBannerText}"
-                                       Foreground="{DynamicResource SiWarningBrush}"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,8"
-                                       Visibility="{Binding ShowDirtyBanner, Converter={StaticResource BoolToVis}}"
-                                       AutomationProperties.AutomationId="BillingDashboard.DirtyBanner" />
-                            <TextBlock Text="{Binding SelectedPreparationStatusText}"
-                                       Style="{StaticResource DetailValueStyle}" />
                             <TextBlock Text="ממתין לנתוני MasterPlan מהגיבוי החודשי."
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,8"
@@ -1172,41 +1219,6 @@
                                     Margin="0,0,0,8"
                                     HorizontalAlignment="Right"
                                     AutomationProperties.AutomationId="BillingDashboard.AddHourlyScope" />
-                            <TextBox AcceptsReturn="True"
-                                     Height="60"
-                                     Margin="0,0,0,8"
-                                     Text="{Binding ManualOverrideReason, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="סיבה לטיפול ידני ללא בקרת שלבים" />
-                            <WrapPanel>
-                                <Button Content="שמור בחירה"
-                                        Command="{Binding SavePreparationCommand}"
-                                        Style="{DynamicResource SiSecondaryButtonStyle}"
-                                        Padding="10,6"
-                                        Margin="0,0,8,8"
-                                        AutomationProperties.AutomationId="BillingDashboard.SavePreparation" />
-                                <Button Content="אשר טיפול ידני ללא בקרת שלבים"
-                                        Command="{Binding ManualOverrideCommand}"
-                                        Style="{DynamicResource SiSecondaryButtonStyle}"
-                                        Padding="10,6"
-                                        Margin="0,0,8,8" />
-                                <Button Content="אשר והעבר להכנת חשבון"
-                                        Command="{Binding ApprovePreparationCommand}"
-                                        Style="{DynamicResource SiPrimaryButtonStyle}"
-                                        Padding="10,6"
-                                        Margin="0,0,8,8"
-                                        AutomationProperties.AutomationId="BillingDashboard.ApprovePreparation" />
-                            </WrapPanel>
-                            <StackPanel Visibility="{Binding CanConfirmHourlyVisible, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="אישור שעות אחרי MasterPlan"
-                                           Style="{StaticResource SectionHeaderStyle}" />
-                                <TextBox Text="{Binding HourlyConfirmNote, UpdateSourceTrigger=PropertyChanged}"
-                                         Margin="0,0,0,8" />
-                                <Button Content="אשר שבוצע ב-MasterPlan"
-                                        Command="{Binding ConfirmHourlyCommand}"
-                                        Style="{DynamicResource SiPrimaryButtonStyle}"
-                                        Padding="10,6"
-                                        HorizontalAlignment="Left" />
-                            </StackPanel>
                             <TextBlock Text="{Binding SelectedPreparationInstructions}"
                                        TextWrapping="Wrap"
                                        Margin="0,12,0,0"

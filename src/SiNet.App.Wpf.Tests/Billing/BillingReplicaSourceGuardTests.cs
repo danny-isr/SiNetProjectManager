@@ -108,6 +108,43 @@ public sealed class BillingReplicaSourceGuardTests
     }
 
     [Fact]
+    public void Preparation_backup_stamp_loads_monthly_restore_last_sync_time()
+    {
+        var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Billing/SqlBillingPreparationComponentSource.cs");
+        var stampStart = source.IndexOf(
+            "private async Task<DateTime?> TryLoadBackupStampAsync",
+            StringComparison.Ordinal);
+        Assert.True(stampStart >= 0);
+        var stampEnd = source.IndexOf("LoadFixedPricesAsync", stampStart, StringComparison.Ordinal);
+        Assert.True(stampEnd > stampStart);
+        var stamp = source[stampStart..stampEnd];
+
+        Assert.Contains("SELECT TOP (1) LastSyncTime", stamp, StringComparison.Ordinal);
+        Assert.Contains("FROM dbo.Sync_State", stamp, StringComparison.Ordinal);
+        Assert.Contains("WHERE EntityName = N'MonthlyRestore'", stamp, StringComparison.Ordinal);
+        Assert.Contains("ORDER BY LastSyncTime DESC", stamp, StringComparison.Ordinal);
+        Assert.Contains("catch (SqlException", stamp, StringComparison.Ordinal);
+        Assert.Contains("LogError", stamp, StringComparison.Ordinal);
+        Assert.Contains("Failed to load MonthlyRestore LastSyncTime", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT TOP (1) LastSync\n", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT TOP (1) LastSync\r", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("ORDER BY LastSync DESC", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("N'Projects'", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("N'Bills'", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("N'Intakes'", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("N'ProjectHours'", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("N'ProjectHoursExtended'", stamp, StringComparison.Ordinal);
+        Assert.DoesNotContain("DateTime.UtcNow", stamp, StringComparison.Ordinal);
+
+        Assert.Contains("var backupUtc = await TryLoadBackupStampAsync", source, StringComparison.Ordinal);
+        var loadReturn = source.IndexOf("return new BillingPreparationSnapshotLoad(", StringComparison.Ordinal);
+        Assert.True(loadReturn >= 0);
+        var loadWindow = source[loadReturn..Math.Min(source.Length, loadReturn + 160)];
+        Assert.Contains("snapshotAvailable", loadWindow, StringComparison.Ordinal);
+        Assert.Contains("backupUtc", loadWindow, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Monthly_enrichment_reads_snapshot_db_not_replica_current_facts()
     {
         var source = ReadRepoFile("src/SiNet.Infrastructure.Sql/Services/Billing/MonthlyBillingEnrichmentDataSource.cs");
@@ -268,6 +305,51 @@ public sealed class BillingReplicaSourceGuardTests
     }
 
     [Fact]
+    public void Preparation_save_and_approve_actions_are_outside_the_editor_scrollviewer()
+    {
+        var view = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingDashboardView.xaml");
+        var vm = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingDashboardViewModel.cs");
+
+        Assert.Equal(1, CountOccurrences(view, "AutomationProperties.AutomationId=\"BillingDashboard.SavePreparation\""));
+        Assert.Equal(1, CountOccurrences(view, "AutomationProperties.AutomationId=\"BillingDashboard.ApprovePreparation\""));
+        Assert.Equal(1, CountOccurrences(view, "AutomationProperties.AutomationId=\"BillingDashboard.PreparationActions\""));
+        Assert.Equal(1, CountOccurrences(view, "AutomationProperties.AutomationId=\"BillingDashboard.PreparationEditorScroll\""));
+
+        var actionsIdx = view.IndexOf("BillingDashboard.PreparationActions", StringComparison.Ordinal);
+        var saveIdx = view.IndexOf("BillingDashboard.SavePreparation", StringComparison.Ordinal);
+        var approveIdx = view.IndexOf("BillingDashboard.ApprovePreparation", StringComparison.Ordinal);
+        var scrollIdx = view.IndexOf("BillingDashboard.PreparationEditorScroll", StringComparison.Ordinal);
+        Assert.True(actionsIdx >= 0 && saveIdx >= 0 && approveIdx >= 0 && scrollIdx >= 0);
+        Assert.True(actionsIdx < scrollIdx);
+        Assert.True(saveIdx < scrollIdx);
+        Assert.True(approveIdx < scrollIdx);
+
+        var footerStart = view.LastIndexOf("<Border", actionsIdx, StringComparison.Ordinal);
+        Assert.True(footerStart >= 0 && footerStart < actionsIdx);
+
+        var scrollEnd = view.IndexOf("</ScrollViewer>", scrollIdx, StringComparison.Ordinal);
+        Assert.True(scrollEnd > scrollIdx);
+        var scrollInner = view[scrollIdx..scrollEnd];
+        Assert.DoesNotContain("BillingDashboard.SavePreparation", scrollInner, StringComparison.Ordinal);
+        Assert.DoesNotContain("BillingDashboard.ApprovePreparation", scrollInner, StringComparison.Ordinal);
+        Assert.DoesNotContain("SavePreparationCommand", scrollInner, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApprovePreparationCommand", scrollInner, StringComparison.Ordinal);
+
+        var footer = view[footerStart..scrollIdx];
+        Assert.Contains("DockPanel.Dock=\"Bottom\"", footer, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding SavePreparationCommand}\"", footer, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding ApprovePreparationCommand}\"", footer, StringComparison.Ordinal);
+        Assert.Contains("שמור בחירה", footer, StringComparison.Ordinal);
+        Assert.Contains("אשר והעבר להכנת חשבון", footer, StringComparison.Ordinal);
+
+        Assert.Contains("ApprovePreparationCommand", vm, StringComparison.Ordinal);
+        Assert.Contains("SavePreparationCommand", vm, StringComparison.Ordinal);
+        Assert.Contains("ApproveAndCreateTaskAsync", vm, StringComparison.Ordinal);
+        Assert.Contains("SaveSelectionAsync", vm, StringComparison.Ordinal);
+        Assert.DoesNotContain("Click=\"", view, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Healthy_visual_fixture_is_not_a_production_replica_bypass()
     {
         var fixture = ReadRepoFile("src/SiNet.App.Wpf/Billing/BillingDashboardHealthyVisualFixture.cs");
@@ -282,6 +364,19 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("GetRequiredService<IBillingDashboardReadService>()", di, StringComparison.Ordinal);
         Assert.Contains("GetRequiredService<IBillingPreparationService>()", di, StringComparison.Ordinal);
         Assert.Contains("SqlBillingDashboardReadService", billingSql, StringComparison.Ordinal);
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = haystack.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+
+        return count;
     }
 
     private static string ReadRepoFile(string relativePath)

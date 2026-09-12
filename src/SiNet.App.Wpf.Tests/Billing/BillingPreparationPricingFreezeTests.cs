@@ -370,6 +370,43 @@ public sealed class BillingPreparationPricingFreezeTests
     }
 
     [Fact]
+    public async Task Catalog_latest_backup_allows_approval_when_request_snapshot_is_null()
+    {
+        var monthlyRestore = new DateTime(2026, 9, 10, 18, 22, 7, 930, DateTimeKind.Utc);
+        _components.Load = CompleteCatalog() with { LatestBackupUtc = monthlyRestore };
+        var ensured = await _service.EnsureFromPrepareBillAsync(4608, "1844", "פרויקט", "לקוח");
+        var saved = await _service.SaveSelectionAsync(ensured.Request.Id, [Stage7390()], [Hours14317()]);
+        await _store.UpdateAsync(saved with { SnapshotTimestampUtc = null, LatestMasterPlanBackupUtc = null });
+        var approved = await _service.ApproveAndCreateTaskAsync(ensured.Request.Id);
+        Assert.Equal(monthlyRestore, approved.Request.PricingSourceSnapshotUtc);
+        Assert.Equal(BillingPreparationStatus.TaskOpen, approved.Request.Status);
+        Assert.True(BillingPreparationPricingFreeze.HasFreeze(approved.Request));
+    }
+
+    [Fact]
+    public void ResolveSourceSnapshotUtc_prefers_catalog_monthly_restore_stamp()
+    {
+        var monthlyRestore = new DateTime(2026, 9, 10, 18, 22, 7, 930, DateTimeKind.Utc);
+        var catalog = CompleteCatalog() with { LatestBackupUtc = monthlyRestore };
+        var request = EmptyRequest() with
+        {
+            SnapshotTimestampUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        };
+        Assert.Equal(monthlyRestore, BillingPreparationPricingFreeze.ResolveSourceSnapshotUtc(catalog, request));
+    }
+
+    [Fact]
+    public void ResolveSourceSnapshotUtc_does_not_substitute_unrelated_or_invented_stamps()
+    {
+        var catalog = CompleteCatalog() with { LatestBackupUtc = null };
+        var request = EmptyRequest() with { SnapshotTimestampUtc = null };
+        Assert.Null(BillingPreparationPricingFreeze.ResolveSourceSnapshotUtc(catalog, request));
+        Assert.Equal(
+            BillingPreparationPricingFreeze.MissingSourceSnapshotMessage,
+            "לא ניתן לאשר את החשבון כי לא נמצא תאריך הגיבוי של MasterPlan שממנו נטענו נתוני התמחור. יש לבדוק את נתוני ה-MonthlyRestore.");
+    }
+
+    [Fact]
     public async Task New_freeze_falls_back_to_request_snapshot_timestamp()
     {
         _components.Load = CompleteCatalog() with { LatestBackupUtc = null };

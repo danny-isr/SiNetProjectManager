@@ -17,7 +17,7 @@ public static class BillingPreparationPricingFreeze
 {
     public const string NotReadyForApprovalMessage = "הבקשה אינה במצב מוכן לאישור.";
     public const string MissingSourceSnapshotMessage =
-        "לא ניתן לאשר — לא ניתן לזהות את snapshot המקור של נתוני התמחור.";
+        "לא ניתן לאשר את החשבון כי לא נמצא תאריך הגיבוי של MasterPlan שממנו נטענו נתוני התמחור. יש לבדוק את נתוני ה-MonthlyRestore.";
     public const string IncompleteFreezeMessage = "לא ניתן לאשר — ראיות התמחור השמורות אינן שלמות.";
 
     /// <summary>

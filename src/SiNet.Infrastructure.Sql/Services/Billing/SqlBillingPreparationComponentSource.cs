@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 using SiNet.Application.Billing;
 using SiNet.Application.Identity;
 using SiNet.Infrastructure.Sql.Services.MasterPlan;
@@ -11,10 +12,12 @@ namespace SiNet.Infrastructure.Sql.Services.Billing;
 /// Observed stage progress is MAX(StepProgress) over bill statuses 2/3/4 — never SUM.
 /// </summary>
 public sealed class SqlBillingPreparationComponentSource(
-    IMasterPlanEmployeeConnectionProvider connectionProvider) : IBillingPreparationComponentSource
+    IMasterPlanEmployeeConnectionProvider connectionProvider,
+    ILogger<SqlBillingPreparationComponentSource>? logger = null) : IBillingPreparationComponentSource
 {
     private readonly IMasterPlanEmployeeConnectionProvider _connectionProvider =
         connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
+    private readonly ILogger<SqlBillingPreparationComponentSource>? _logger = logger;
 
     public async Task<BillingPreparationSnapshotLoad> LoadAsync(
         int masterPlanProjectId,
@@ -316,17 +319,20 @@ public sealed class SqlBillingPreparationComponentSource(
 
             const string sql =
                 """
-                SELECT TOP (1) LastSync
+                SELECT TOP (1) LastSyncTime
                 FROM dbo.Sync_State
                 WHERE EntityName = N'MonthlyRestore'
-                ORDER BY LastSync DESC
+                ORDER BY LastSyncTime DESC
                 """;
             await using var cmd = new SqlCommand(sql, replicaConn);
             var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             return value is DateTime dt ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : null;
         }
-        catch (SqlException)
+        catch (SqlException ex)
         {
+            _logger?.LogError(
+                ex,
+                "Failed to load MonthlyRestore LastSyncTime from Replica Sync_State.");
             return null;
         }
     }

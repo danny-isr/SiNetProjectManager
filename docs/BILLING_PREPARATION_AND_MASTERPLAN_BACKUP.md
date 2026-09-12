@@ -2,7 +2,7 @@
 
 > **Title:** Billing Preparation workflow and MasterPlan backup intake  
 > **Date:** 09.09.2026  
-> **Updated:** 12.09.2026 (DEV closure: Approve command proof, duplicate HoursReport block, PrepareBill completion event, backup Processed/Rejected tests)  
+> **Updated:** 12.09.2026 (DEV closure: MonthlyRestore LastSyncTime stamp, sticky Save/Approve footer)  
 > **Status:** Active. A0 accepted. Application + SQL + UI + SyncEngine inbox mode implemented on `development`. EF migrations are operator-owned (not applied in this slice). A4 hourly scope is manager-selected in «חשבונות להכנה»; never labelled as unbilled truth.  
 > **Scope:** New System WPF (`SiNet.App.Wpf`) + `MasterPlan.SyncEngine --process-backup-inbox`. No PROD publish. No `release` merge.  
 > **Related:** [`BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md`](./BILLING_CONTROL_CENTER_V1_IMPLEMENTATION_PLAN.md), [`DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md`](./DEV_PLAN_MASTERPLAN_MONTHLY_CAPTURE.md), [`NATIVE_EMAIL_ACC_INGEST.md`](./NATIVE_EMAIL_ACC_INGEST.md)
@@ -198,6 +198,8 @@ Search box above the hierarchy (`חיפוש תת חוזה או שלב`, Automati
 - Contract match → show that Contract hierarchy
 
 Search must not change `Included`, `AdditionPercent`, persistence, or summary math. Matching groups expand while search is active; clearing search restores the normal hierarchy.
+
+Save (`שמור בחירה`, AutomationId `BillingDashboard.SavePreparation`) and Approve (`אשר והעבר להכנת חשבון`, AutomationId `BillingDashboard.ApprovePreparation`) sit in a **non-scrolling** footer (`BillingDashboard.PreparationActions`, `DockPanel.Dock="Bottom"`) **outside** the preparation editor `ScrollViewer` (`BillingDashboard.PreparationEditorScroll`). The stage/hour editor scrolls; the footer must stay visible at a normal Billing window height (~860px). Commands and AutomationIds stay unchanged. Do not duplicate the buttons.
 
 ### Unsaved edits and refresh
 
@@ -529,7 +531,7 @@ Capture order on Approve:
    - Unrelated open PrepareBill (no matching marker): keep the existing block «כבר קיימת משימת הכנת חשבון פתוחה לפרויקט.»
    - Closed/completed task with a matching marker is **not** adopted.
 3. Load the current MasterPlan pricing catalog only when capturing a **new** freeze (no matching recoverable task).
-4. Resolve `PricingSourceSnapshotUtc` = catalog `LatestBackupUtc` otherwise the request `SnapshotTimestampUtc`. If both are NULL, block with «לא ניתן לאשר — לא ניתן לזהות את snapshot המקור של נתוני התמחור.» Do not persist an anonymous freeze.
+4. Resolve `PricingSourceSnapshotUtc` = catalog `LatestBackupUtc` (Replica `Sync_State.LastSyncTime` for **`MonthlyRestore` only**) otherwise the request `SnapshotTimestampUtc`. If both are NULL, block with «לא ניתן לאשר את החשבון כי לא נמצא תאריך הגיבוי של MasterPlan שממנו נטענו נתוני התמחור. יש לבדוק את נתוני ה-MonthlyRestore.» Do not persist an anonymous freeze. Do not substitute Projects/Bills/Hours `LastSyncTime`. Do not invent `DateTime.UtcNow`.
 5. Calculate line evidence for those **saved** lines (`FixedPrices.Sum × (1 − discount) × persisted Weight × Delta`; hours = persisted `TotalHours ×` unique rate `× (1 − discount)`).
 6. Persist nullable freeze columns on the request and lines **while status stays ReadyForApproval**. A freeze is valid only when metadata is coherent (`PricingFrozenAtUtc`, `PricingSourceSnapshotUtc`, `MP-BILLING-1`, totals, `PricingIsPartial`, and each selected line has amount XOR unavailable-reason). Incomplete freeze is not auto-repaired.
 7. If `PricingIsPartial` and there is no `ManualOverride`, **block** before task creation. Unknown amounts stay `NULL` (never 0).
