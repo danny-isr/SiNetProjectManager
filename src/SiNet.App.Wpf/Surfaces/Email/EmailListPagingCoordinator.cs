@@ -285,6 +285,18 @@ internal sealed class EmailListPagingCoordinator
         try
         {
             await _owner.TrySyncProjectLabelNamesAsync().ConfigureAwait(true);
+            await RefreshAvailableLabelsAsync().ConfigureAwait(true);
+        }
+        catch
+        {
+            _owner.SetLoadWarning("רשימת labels לא נטענה.");
+        }
+    }
+
+    public async Task RefreshAvailableLabelsAsync()
+    {
+        try
+        {
             var labels = await _owner.EmailGateway.GetMailboxLabelsAsync().ConfigureAwait(true);
             UiThread.Run(() =>
             {

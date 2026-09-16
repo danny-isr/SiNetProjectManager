@@ -50,6 +50,7 @@ During FileQuoteMaterial QA (2026-07), a proposed fix treated SQL `ProjectId` as
 - Label predicate: `src/SiNet.Application/Email/EmailGmailLabelNames.cs`
 - Number extract: `EmailProjectLabelParser.TryExtractProjectIdFromDisplaySegment` (maps to `Project.Number`)
 - Row mapping: `EmailListRowMapper` → `IsFiledToProject` from Gmail `labelNames`
+- Label map consistency: [`EMAIL_GMAIL_LABEL_CATALOG.md`](./EMAIL_GMAIL_LABEL_CATALOG.md) — shared catalog invalidates on create/rename/delete and self-heals unknown LabelIds (never treat SQL as filed)
 - Filing order: `SqlEmailFilingService` — Gmail attach first, SQL sync best-effort, compensate by removing label if SQL fails
 - Move gate: `EmailDetailViewModel` passes `_selectedEmail.IsFiledToProject` into eligibility
 - ACC move: `NativeEmailMoveToProjectExecutor` verifies ACC; Move/Lock attributes are SoT for “already moved”

@@ -38,16 +38,20 @@ public sealed class GmailEmailGateway : IEmailGateway
         "id,threadId,labelIds,snippet,internalDate,payload(headers)";
     private const int SummaryFetchConcurrency = 10;
 
-    private IReadOnlyDictionary<string, Label>? _cachedLabelMap;
-    private GmailService? _cachedLabelMapService;
-
     private readonly GmailClientProvider _provider;
     private readonly IAppLogger _logger;
+    private readonly IGmailLabelCatalog _catalog;
 
     public GmailEmailGateway(GmailClientProvider provider, IAppLogger logger)
+        : this(provider, logger, catalog: null)
+    {
+    }
+
+    internal GmailEmailGateway(GmailClientProvider provider, IAppLogger logger, IGmailLabelCatalog? catalog)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _catalog = catalog ?? new GmailLabelCatalog(new GmailApiLabelDirectory(provider, logger), logger);
     }
 
     public async Task<IReadOnlyList<EmailSummary>> GetProjectEmailsAsync(
@@ -191,7 +195,6 @@ public sealed class GmailEmailGateway : IEmailGateway
         var summaries = await FetchSummariesParallelAsync(
             gmail,
             listResponse.Messages,
-            labelMap,
             cancellationToken).ConfigureAwait(false);
 
         var hasNext = !string.IsNullOrEmpty(listResponse.NextPageToken);
@@ -388,7 +391,7 @@ public sealed class GmailEmailGateway : IEmailGateway
     {
         var summaries = new List<EmailSummary>();
         var seenMessageIds = new HashSet<string>(StringComparer.Ordinal);
-        var labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
+        _ = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
 
         foreach (var labelId in labelIds)
         {
@@ -435,7 +438,6 @@ public sealed class GmailEmailGateway : IEmailGateway
                 var pageSummaries = await FetchSummariesParallelAsync(
                     gmail,
                     newMessages,
-                    labelMap,
                     cancellationToken).ConfigureAwait(false);
                 summaries.AddRange(pageSummaries);
 
@@ -462,8 +464,7 @@ public sealed class GmailEmailGateway : IEmailGateway
             return null;
         }
 
-        var labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
-        return await TryGetSummaryAsync(gmail, messageId, labelMap, cancellationToken).ConfigureAwait(false);
+        return await TryGetSummaryAsync(gmail, messageId, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default)
@@ -562,7 +563,6 @@ public sealed class GmailEmailGateway : IEmailGateway
     private async Task<EmailSummary?> TryGetSummaryAsync(
         GmailService gmail,
         string messageId,
-        IReadOnlyDictionary<string, Label>? labelMap,
         CancellationToken cancellationToken)
     {
         try
@@ -580,12 +580,10 @@ public sealed class GmailEmailGateway : IEmailGateway
                 $"Messages.Get(metadata '{messageId}')",
                 cancellationToken,
                 onDiagnostic: diagnostic => LogRetryDiagnostic(diagnostic, "(none)", null, "Messages.Get", 1)).ConfigureAwait(false);
-            if (labelMap is null)
-            {
-                labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
-            }
-
-            return Map(message, labelMap);
+            var resolved = await _catalog
+                .ResolveForMessageAsync(message.Id, message.LabelIds, cancellationToken)
+                .ConfigureAwait(false);
+            return Map(message, ToGoogleLabelMap(resolved));
         }
         catch (OperationCanceledException)
         {
@@ -601,7 +599,6 @@ public sealed class GmailEmailGateway : IEmailGateway
     private async Task<IReadOnlyList<EmailSummary>> FetchSummariesParallelAsync(
         GmailService gmail,
         IList<Message> messages,
-        IReadOnlyDictionary<string, Label> labelMap,
         CancellationToken cancellationToken)
     {
         var messageIds = messages
@@ -621,7 +618,7 @@ public sealed class GmailEmailGateway : IEmailGateway
             await concurrencyGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                return await TryGetSummaryAsync(gmail, messageId, labelMap, cancellationToken).ConfigureAwait(false);
+                return await TryGetSummaryAsync(gmail, messageId, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -733,24 +730,34 @@ public sealed class GmailEmailGateway : IEmailGateway
         GmailService gmail,
         CancellationToken cancellationToken)
     {
-        if (_cachedLabelMap is not null && ReferenceEquals(_cachedLabelMapService, gmail))
+        _ = gmail;
+        var map = await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+        return ToGoogleLabelMap(map);
+    }
+
+    internal static IReadOnlyDictionary<string, Label> ToGoogleLabelMap(
+        IReadOnlyDictionary<string, GmailLabelRecord> map)
+    {
+        var labels = new Dictionary<string, Label>(map.Count, StringComparer.Ordinal);
+        foreach (var (id, record) in map)
         {
-            return _cachedLabelMap;
+            labels[id] = new Label
+            {
+                Id = record.Id,
+                Name = record.Name,
+                Type = record.Type,
+                MessagesUnread = record.MessagesUnread,
+                Color = record.BackgroundColor is null && record.TextColor is null
+                    ? null
+                    : new LabelColor
+                    {
+                        BackgroundColor = record.BackgroundColor,
+                        TextColor = record.TextColor
+                    }
+            };
         }
 
-        var labels = await GmailRetry.ExecuteAsync(
-            ct => gmail.Users.Labels.List("me").ExecuteAsync(ct),
-            _logger,
-            "Labels.List(label map)",
-            cancellationToken).ConfigureAwait(false);
-        var labelMap = labels.Labels?
-                   .Where(static label => !string.IsNullOrWhiteSpace(label.Id))
-                   .ToDictionary(static label => label.Id!, static label => label, StringComparer.Ordinal)
-               ?? new Dictionary<string, Label>(StringComparer.Ordinal);
-
-        _cachedLabelMap = labelMap;
-        _cachedLabelMapService = gmail;
-        return labelMap;
+        return labels;
     }
 
     private IReadOnlyList<string> ResolveProjectLabelIds(
@@ -855,7 +862,7 @@ public sealed class GmailEmailGateway : IEmailGateway
             .ToList();
     }
 
-    private static IReadOnlyList<string> ResolveLabelNames(
+    internal static IReadOnlyList<string> ResolveLabelNames(
         Message message,
         IReadOnlyDictionary<string, Label>? labelMap)
     {

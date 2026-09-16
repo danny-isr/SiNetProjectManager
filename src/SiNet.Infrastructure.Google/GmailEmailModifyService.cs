@@ -6,15 +6,31 @@ using SiNet.Application.Abstractions.Logging;
 namespace SiNet.Infrastructure.Google;
 
 /// <summary>Native Gmail label modify implementation for project filing and triage labels.</summary>
-public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLogger logger) : IEmailGmailModifyService
+public sealed class GmailEmailModifyService : IEmailGmailModifyService
 {
     internal const string PendingLabelName = "OfficeSystem_Pending";
     internal const string PersonalLabelName = "OfficeSystem_Personal";
     internal const string IrrelevantLabelName = "OfficeSystem_Irrelevant";
     internal const string FyiLabelName = "OfficeSystem_Fyi";
 
-    private readonly GmailClientProvider _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-    private readonly IAppLogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly GmailClientProvider _provider;
+    private readonly IAppLogger _logger;
+    private readonly IGmailLabelCatalog _catalog;
+
+    public GmailEmailModifyService(GmailClientProvider provider, IAppLogger logger)
+        : this(provider, logger, catalog: null)
+    {
+    }
+
+    internal GmailEmailModifyService(
+        GmailClientProvider provider,
+        IAppLogger logger,
+        IGmailLabelCatalog? catalog)
+    {
+        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _catalog = catalog ?? new GmailLabelCatalog(new GmailApiLabelDirectory(provider, logger), logger);
+    }
 
     public string RootLabel => _provider.RootLabel;
 
@@ -30,6 +46,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
         var existing = GmailLabelIdempotency.FindExactByName(labels.Labels, fullPath);
         if (!string.IsNullOrWhiteSpace(existing?.Id))
         {
+            _catalog.NotifyCreated(existing.Id, existing.Name ?? fullPath);
             return existing.Id;
         }
 
@@ -45,12 +62,15 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
                 MessageListVisibility = "show",
             }, "me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
 
-            return created.Id ?? throw new InvalidOperationException($"Failed to create Gmail label '{fullPath}'.");
+            var createdId = created.Id ?? throw new InvalidOperationException($"Failed to create Gmail label '{fullPath}'.");
+            _catalog.NotifyCreated(createdId, created.Name ?? fullPath);
+            return createdId;
         }
         catch (Exception ex) when (GmailLabelIdempotency.IsLabelExistsOrConflicts(ex))
         {
             var relisted = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
             var resolved = GmailLabelIdempotency.ResolveIntendedAfterConflict(relisted.Labels, fullPath);
+            _catalog.NotifyCreated(resolved.Id!, resolved.Name ?? fullPath);
             return resolved.Id!;
         }
     }
@@ -193,6 +213,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
         await gmail.Users.Labels.Update(update, "me", labelId)
             .ExecuteAsync(cancellationToken)
             .ConfigureAwait(false);
+        _catalog.NotifyRenamed(labelId, newFullPath.Trim());
     }
 
     public async Task DeleteLabelAsync(
@@ -205,6 +226,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
         await gmail.Users.Labels.Delete("me", labelId)
             .ExecuteAsync(cancellationToken)
             .ConfigureAwait(false);
+        _catalog.NotifyDeleted(labelId);
     }
 
     public async Task<IReadOnlyList<string>> ListMessageIdsByLabelAsync(
@@ -269,6 +291,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
             label => string.Equals(label.Name, labelName, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrWhiteSpace(existing?.Id))
         {
+            _catalog.NotifyCreated(existing.Id, existing.Name ?? labelName);
             return existing.Id;
         }
 
@@ -279,7 +302,9 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
             MessageListVisibility = "show",
         }, "me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
 
-        return created.Id ?? throw new InvalidOperationException($"Failed to create Gmail status label '{labelName}'.");
+        var createdId = created.Id ?? throw new InvalidOperationException($"Failed to create Gmail status label '{labelName}'.");
+        _catalog.NotifyCreated(createdId, created.Name ?? labelName);
+        return createdId;
     }
 
     private async Task ModifyMessageLabelsAsync(
@@ -300,7 +325,7 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
             .ConfigureAwait(false);
     }
 
-    private static async Task EnsureParentLabelExistsAsync(
+    private async Task EnsureParentLabelExistsAsync(
         GmailService gmail,
         ListLabelsResponse existingLabels,
         string labelName,
@@ -323,11 +348,15 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
 
             existingLabels.Labels ??= [];
             existingLabels.Labels.Add(created);
+            if (!string.IsNullOrWhiteSpace(created.Id))
+                _catalog.NotifyCreated(created.Id, created.Name ?? labelName);
         }
         catch (Exception ex) when (GmailLabelIdempotency.IsLabelExistsOrConflicts(ex))
         {
             var relisted = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
             var resolved = GmailLabelIdempotency.ResolveIntendedAfterConflict(relisted.Labels, labelName);
+            if (!string.IsNullOrWhiteSpace(resolved.Id))
+                _catalog.NotifyCreated(resolved.Id, resolved.Name ?? labelName);
             existingLabels.Labels = relisted.Labels;
             if (existingLabels.Labels?.Any(l => l.Id == resolved.Id) != true)
             {
@@ -339,10 +368,17 @@ public sealed class GmailEmailModifyService(GmailClientProvider provider, IAppLo
 
     private async Task<GmailService> RequireServiceAsync(CancellationToken cancellationToken)
     {
+        var authenticatedBefore = _provider.IsSignedIn;
         var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (_provider.IsSignedIn != authenticatedBefore)
+        {
+            _logger.Warn(
+                $"[GmailAuth] GmailModify auth-changed before={authenticatedBefore} after={_provider.IsSignedIn} session={_provider.SessionIdentity}");
+        }
+
         if (gmail is null)
         {
-            _logger.Warn("[GmailModify] Gmail session unavailable.");
+            _logger.Warn($"[GmailModify] Gmail session unavailable. session={_provider.SessionIdentity} authenticated={_provider.IsSignedIn}");
             throw new InvalidOperationException("Gmail session unavailable.");
         }
 

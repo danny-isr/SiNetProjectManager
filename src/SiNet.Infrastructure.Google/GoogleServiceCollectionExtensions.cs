@@ -53,7 +53,12 @@ public static class GoogleServiceCollectionExtensions
             sp.GetRequiredService<GmailOptions>(),
             sp.GetRequiredService<IAppLogger>(),
             sp.GetService<IGoogleClientSecretsPathProvider>()));
-        services.AddSingleton<IEmailGateway, GmailEmailGateway>();
+        services.AddSingleton<IGmailLabelDirectory, GmailApiLabelDirectory>();
+        services.AddSingleton<IGmailLabelCatalog, GmailLabelCatalog>();
+        services.AddSingleton<IEmailGateway>(sp => new GmailEmailGateway(
+            sp.GetRequiredService<GmailClientProvider>(),
+            sp.GetRequiredService<IAppLogger>(),
+            sp.GetRequiredService<IGmailLabelCatalog>()));
         services.AddSingleton<IGmailHistoryApi, GmailHistoryApi>();
         services.AddSingleton<IGmailMailboxChangeDetector, GmailMailboxChangeDetector>();
         services.AddSingleton<MailboxReloadOrchestrator>();
@@ -65,7 +70,10 @@ public static class GoogleServiceCollectionExtensions
         // Native Gmail send over the same provider singleton. Requires the GmailSend scope; until a
         // user re-consents, SendAsync reports RequiresConsent rather than throwing.
         services.AddSingleton<IEmailSender, GmailEmailSender>();
-        services.AddSingleton<GmailEmailModifyService>();
+        services.AddSingleton(sp => new GmailEmailModifyService(
+            sp.GetRequiredService<GmailClientProvider>(),
+            sp.GetRequiredService<IAppLogger>(),
+            sp.GetRequiredService<IGmailLabelCatalog>()));
         services.AddSingleton<IEmailGmailModifyService>(sp =>
         {
             var inner = sp.GetRequiredService<GmailEmailModifyService>();

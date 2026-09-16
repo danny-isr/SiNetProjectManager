@@ -98,6 +98,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`PROJECT_CONTEXT_MIGRATION.md`](./PROJECT_CONTEXT_MIGRATION.md) | Project context migration notes |
 | [`TASK_MODEL_RULES.md`](./TASK_MODEL_RULES.md) | Task model rules |
 | [`EMAIL_ACC_SOURCE_OF_TRUTH.md`](./EMAIL_ACC_SOURCE_OF_TRUTH.md) | Gmail label / ACC / DB truth |
+| [`EMAIL_GMAIL_LABEL_CATALOG.md`](./EMAIL_GMAIL_LABEL_CATALOG.md) | Shared Gmail label map: invalidate + unknown-id self-heal |
 | [`FILEMATERIAL_MOVETOPROJECT.md`](./FILEMATERIAL_MOVETOPROJECT.md) | **FileMaterial / MoveToProject** — six decisions Target (canonical) |
 | [`EMAIL_LIST_MIGRATION.md`](./EMAIL_LIST_MIGRATION.md) | Email list migration |
 | [`GMAIL_MAILBOX_VIEW_AND_HISTORY.md`](./GMAIL_MAILBOX_VIEW_AND_HISTORY.md) | Mailbox Scope/Category/Unread prefs + History lightweight detection (New System) |

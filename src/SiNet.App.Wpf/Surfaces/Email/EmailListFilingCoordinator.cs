@@ -169,6 +169,7 @@ internal sealed class EmailListFilingCoordinator
 
         if (result is { IsFiledToProject: true })
         {
+            await _paging.RefreshAvailableLabelsAsync().ConfigureAwait(true);
             _owner.StartAccIngestAfterProjectFile(result);
         }
 
@@ -232,6 +233,7 @@ internal sealed class EmailListFilingCoordinator
 
         if (_display.FindRowById(row.Id) is { IsFiledToProject: true } filed)
         {
+            await _paging.RefreshAvailableLabelsAsync().ConfigureAwait(true);
             _owner.StartAccIngestAfterProjectFile(filed);
         }
     }
@@ -553,6 +555,8 @@ internal sealed class EmailListFilingCoordinator
         var summary = await _owner.EmailGateway.GetByIdAsync(row.Id).ConfigureAwait(true);
         if (summary is null)
         {
+            Debug.WriteLine(
+                $"[GmailLabels] messageId={row.Id} threadId={row.ThreadId} threadUniqueId={row.ThreadUniqueId ?? "(none)"} action=post-write-read summary=null");
             return null;
         }
 
@@ -560,7 +564,14 @@ internal sealed class EmailListFilingCoordinator
             [summary],
             _owner.ThreadLinkQuery,
             () => _owner.GetCurrentProject()).ConfigureAwait(true);
-        return rows.Count > 0 ? rows[0] : null;
+        var mapped = rows.Count > 0 ? rows[0] : null;
+        Debug.WriteLine(
+            $"[GmailLabels] messageId={row.Id} threadId={row.ThreadId} threadUniqueId={row.ThreadUniqueId ?? "(none)"} " +
+            $"expectedProjectLabelPath={row.FiledProjectLabelPath ?? "(none)"} " +
+            $"resolvedProjectLabelPath={mapped?.FiledProjectLabelPath ?? EmailGmailLabelNames.FindProjectLabelPath(summary.LabelNames) ?? "(none)"} " +
+            $"IsFiledToProject={(mapped?.IsFiledToProject == true ? "true" : "false")} " +
+            $"labelNames={string.Join('|', summary.LabelNames ?? [])}");
+        return mapped;
     }
 
     private bool CanExecuteWriteAction(EmailListRow? row) =>
