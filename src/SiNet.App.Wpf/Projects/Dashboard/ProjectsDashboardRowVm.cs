@@ -11,12 +11,15 @@ public sealed class ProjectsDashboardRowVm
     {
         ArgumentNullException.ThrowIfNull(dto);
         Dto = dto;
+        ProjectNumberSortKey = ProjectNumberSort.ToSortKey(dto.ProjectNumberValue);
     }
 
     public ProjectDashboardRowDto Dto { get; }
 
     public int ProjectId => Dto.ProjectId;
     public string ProjectNumber => Dto.ProjectNumber;
+    /// <summary>Precomputed numeric key for number-column sorting (empty/legacy → <see cref="long.MinValue"/>).</summary>
+    public long ProjectNumberSortKey { get; }
     /// <summary>Numeric value used by the DataGrid for number-column sorting.</summary>
     public float ProjectNumberValue => Dto.ProjectNumberValue ?? float.MinValue;
     public string ProjectName => Dto.ProjectName;

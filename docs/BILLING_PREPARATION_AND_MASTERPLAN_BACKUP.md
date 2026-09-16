@@ -159,6 +159,8 @@ Completed 100% stages stay **hidden from the editable list** but **still count**
 
 When `WeightsSumApproximatelyToOne == false`, SubContract totals are labelled as totals **according to the defined payment stages** (`כבר חויב לפי שלבים`, `תוספת לפי שלבים`, `לאחר החשבון לפי שלבים`, `נותר לפי שלבים`, plus `משקל שלבים מוגדר: X%`). A valid ~100% group keeps the shorter labels (`כבר חויב` / `תוספת בחשבון הזה` / `לאחר החשבון` / `נותר`). Never present a non-100% remainder as if it were a normalized whole-SubContract percentage.
 
+Each of those four percents also shows the matching NIS amount on the same line (`80% · ₪ 176,000`) when `BillingPreparationAmountCalculator.StageAddition` can price it (`FixedPrices.Sum × (1 − discount) × stage weight × progress`). After = already + this-bill addition. Remaining = SubContract priced total − after. Hourly FeeType=4 stays on the hours path. If the basis is missing or indexation is unpriced, keep the percent and omit the money — never invent `percent × FeeSum`. Live typing updates both percent and money; discard/reload restores both from the persisted selection. No extra DB columns.
+
 ### Color language (product-fixed theme resources)
 
 | Resource | Meaning | Typical color |

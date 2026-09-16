@@ -337,7 +337,11 @@ public sealed class EmailAccPipelineTests
         Assert.Contains("WpfEmailBodyPdfRenderer", wpfDi, StringComparison.Ordinal);
         Assert.Contains("IsEligibleForAccIngest", handler, StringComparison.Ordinal);
         Assert.Contains("IsEligibleForAccIngest", gates, StringComparison.Ordinal);
+        var filingCoordinator = ReadRepoFile("src/SiNet.App.Wpf/Surfaces/Email/EmailListFilingCoordinator.cs");
         Assert.Contains("TryIngestAfterProjectFileAsync", listVm, StringComparison.Ordinal);
+        Assert.Contains("StartAccIngestAfterProjectFile", listVm, StringComparison.Ordinal);
+        Assert.Contains("StartAccIngestAfterProjectFile", filingCoordinator, StringComparison.Ordinal);
+        Assert.DoesNotContain("await _owner.TryIngestAfterProjectFileAsync", filingCoordinator, StringComparison.Ordinal);
         Assert.Contains("N4.3", n4Doc, StringComparison.Ordinal);
         Assert.Contains("Slice N5", n4Doc, StringComparison.Ordinal);
     }

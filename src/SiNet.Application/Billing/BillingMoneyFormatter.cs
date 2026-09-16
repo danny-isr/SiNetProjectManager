@@ -14,4 +14,12 @@ public static class BillingMoneyFormatter
             return "₪ " + decimal.Truncate(rounded).ToString("#,0", CultureInfo.InvariantCulture);
         return "₪ " + rounded.ToString("#,0.00", CultureInfo.InvariantCulture);
     }
+
+    public static string AppendToPercentLabel(string label, BillingPricedValue value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (string.IsNullOrWhiteSpace(label) || !value.IsPriced)
+            return label;
+        return label + " · " + FormatShekels(value.Amount!.Value);
+    }
 }

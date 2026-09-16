@@ -9,7 +9,8 @@ public sealed record FileEmailToProjectCommand(
     string? GmailThreadId = null,
     string? InternetMessageId = null,
     int? TaskId = null,
-    string? TaskResultCode = null);
+    string? TaskResultCode = null,
+    string? ThreadUniqueId = null);
 
 /// <summary>Command to remove project filing from an inbox message.</summary>
 public sealed record UnfileEmailCommand(

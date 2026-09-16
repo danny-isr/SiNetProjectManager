@@ -8,6 +8,9 @@ public static class BillingDashboardFormatters
     public const string EmDash = "—";
     public const string UnknownSnapshotDate = "תאריך snapshot לא ידוע";
     public const string BlockedHeadline = "נתוני MasterPlan אינם עדכניים ולכן לא מוצגות המלצות לחיוב.";
+    public const string StaleReplicaWarning = "ה-Replica אינו מעודכן. הנתונים עלולים להיות ישנים.";
+    public const string CheckAnywayLabel = "בדוק בכל מקרה";
+    public const string StaleOverrideBanner = "הבדיקה מתבצעת על Replica לא מעודכן";
     public const string ReceivedThisMonthLabel = "תקבולים החודש — כלל החברה";
     public const string CurrentBalanceForbiddenLabel = "יתרה נוכחית";
 

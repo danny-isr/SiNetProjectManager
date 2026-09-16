@@ -53,6 +53,8 @@ public sealed class BillingDashboardViewModelTests
         Assert.Empty(vm.Rows);
         Assert.Equal(string.Empty, vm.StatusMessage);
         Assert.Equal(BillingDashboardFormatters.BlockedHeadline, vm.BlockedHeadline);
+        Assert.False(vm.ShowCheckAnywayButton);
+        Assert.False(vm.ShowStaleOverrideBanner);
         Assert.DoesNotContain("אין פרויקטים לחיוב", vm.StatusMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("אין פרויקטים לחיוב", vm.EmptyListMessage, StringComparison.Ordinal);
         Assert.Equal(BillingDashboardFormatters.EmDash, vm.ReviewNowCountText);

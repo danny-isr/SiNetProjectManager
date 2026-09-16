@@ -10,7 +10,7 @@
 
 | Concern | Source of truth | Database role |
 | --- | --- | --- |
-| Mailbox “email filed to project” (`IsFiledToProject`, File / Unfile / Move gate, **list badge «משויך»**) | **Gmail project label** under `פרויקטים_משרד/...` (`EmailGmailLabelNames.IsProjectLabel`) | Best-effort mirror after Gmail label attach — **not** proof of filing |
+| Mailbox “email filed to project” (`IsFiledToProject`, File / Unfile / Move gate, **list badge «משויך»**) | **Gmail project label** under `פרויקטים_משרד/...` (`EmailGmailLabelNames.IsProjectLabel`) | Best-effort mirror after Gmail label attach — **not** proof of filing. A DEV-029 historical **prediction** is measurement only and must never set `IsFiledToProject`. |
 | Physical file present in ACC / Inbox | **ACC** item / version / folder (reconcile / browse / download) | `AccItemId` etc. are **cache/helper only** |
 | Inbox tag / move / lock metadata on an ACC item | **ACC custom attributes** | DB mirror is helper only |
 

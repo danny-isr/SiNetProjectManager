@@ -95,7 +95,13 @@ internal sealed class EmailListFilingCoordinator
     public Task<EmailListRow?> FileEmailToProjectAsync(EmailListRow? row) =>
         FileEmailToProjectAsync(row, targetProject: null);
 
-    public async Task<EmailListRow?> FileEmailToProjectAsync(EmailListRow? row, ProjectSummaryDto? targetProject)
+    public Task<EmailListRow?> FileEmailToProjectAsync(EmailListRow? row, ProjectSummaryDto? targetProject) =>
+        FileEmailToProjectAsync(row, targetProject, ownBusy: true);
+
+    public async Task<EmailListRow?> FileEmailToProjectAsync(
+        EmailListRow? row,
+        ProjectSummaryDto? targetProject,
+        bool ownBusy)
     {
         if (row is null)
         {
@@ -143,7 +149,8 @@ internal sealed class EmailListFilingCoordinator
                     row.Id,
                     row.InboxMessageId,
                     row.ThreadId,
-                    row.InternetMessageId)).ConfigureAwait(true);
+                    row.InternetMessageId,
+                    ThreadUniqueId: row.ThreadUniqueId)).ConfigureAwait(true);
                 return (result.Succeeded, result.ErrorMessage ?? "שיוך לפרויקט נכשל.");
             },
             onSuccessLocalUpdate: async currentRow =>
@@ -151,7 +158,8 @@ internal sealed class EmailListFilingCoordinator
                 filedRow = await RefreshRowAfterFileAsync(currentRow, project).ConfigureAwait(true);
                 return filedRow;
             },
-            failureMessagePrefix: "שיוך לפרויקט נכשל").ConfigureAwait(true);
+            failureMessagePrefix: "שיוך לפרויקט נכשל",
+            ownBusy: ownBusy).ConfigureAwait(true);
 
         var result = filedRow is { IsFiledToProject: true }
             ? filedRow
@@ -161,7 +169,7 @@ internal sealed class EmailListFilingCoordinator
 
         if (result is { IsFiledToProject: true })
         {
-            await _owner.TryIngestAfterProjectFileAsync(result).ConfigureAwait(true);
+            _owner.StartAccIngestAfterProjectFile(result);
         }
 
         return result;
@@ -215,7 +223,8 @@ internal sealed class EmailListFilingCoordinator
                     row.Id,
                     row.InboxMessageId,
                     row.ThreadId,
-                    row.InternetMessageId)).ConfigureAwait(true);
+                    row.InternetMessageId,
+                    ThreadUniqueId: row.ThreadUniqueId)).ConfigureAwait(true);
                 return (result.Succeeded, result.ErrorMessage ?? "שיוך לפרויקט השרשור נכשל.");
             },
             onSuccessLocalUpdate: currentRow => RefreshRowAfterThreadFileAsync(currentRow, threadProject),
@@ -223,7 +232,7 @@ internal sealed class EmailListFilingCoordinator
 
         if (_display.FindRowById(row.Id) is { IsFiledToProject: true } filed)
         {
-            await _owner.TryIngestAfterProjectFileAsync(filed).ConfigureAwait(true);
+            _owner.StartAccIngestAfterProjectFile(filed);
         }
     }
 
@@ -341,15 +350,19 @@ internal sealed class EmailListFilingCoordinator
         Func<Task<(bool Succeeded, string? ErrorMessage)>> serviceCall,
         Func<EmailListRow, Task<EmailListRow?>> onSuccessLocalUpdate,
         string failureMessagePrefix,
-        bool removeRowOnSuccess = false)
+        bool removeRowOnSuccess = false,
+        bool ownBusy = true)
     {
-        if (_owner.IsRowActionBusy(row.Id))
+        if (ownBusy && _owner.IsRowActionBusy(row.Id))
         {
             _owner.SetLoadWarning("פעולה כבר רצה על מייל זה.");
             return;
         }
 
-        _owner.AddBusyRowId(row.Id);
+        if (ownBusy)
+        {
+            _owner.AddBusyRowId(row.Id);
+        }
         var totalSw = Stopwatch.StartNew();
         long serviceMs = 0;
         long localUpdateMs = 0;
@@ -358,7 +371,11 @@ internal sealed class EmailListFilingCoordinator
         try
         {
             _owner.SetStatusMessage(startingStatusMessage);
-            _display.SetRowActionState(_display.FindRowById(row.Id) ?? row, busy: true, statusText: rowStatusText);
+            _display.SetRowActionState(
+                _display.FindRowById(row.Id) ?? row,
+                busy: true,
+                statusText: rowStatusText,
+                errorText: null);
             _owner.RaiseCommandStates();
 
             var serviceSw = Stopwatch.StartNew();
@@ -367,9 +384,10 @@ internal sealed class EmailListFilingCoordinator
 
             if (!succeeded)
             {
-                _owner.SetLoadWarning(errorMessage ?? $"{failureMessagePrefix}.");
+                var userMessage = EmailFilingUserMessages.Sanitize(errorMessage ?? failureMessagePrefix);
+                _owner.SetLoadWarning(userMessage);
                 var current = _display.FindRowById(row.Id) ?? row;
-                _display.SetRowActionState(current, busy: false, statusText: null, errorText: _owner.LoadWarning);
+                _display.SetRowActionState(current, busy: false, statusText: null, errorText: userMessage);
                 return;
             }
 
@@ -409,13 +427,18 @@ internal sealed class EmailListFilingCoordinator
         }
         catch (Exception ex)
         {
-            _owner.SetLoadWarning($"{failureMessagePrefix}: {ex.Message}");
+            var userMessage = EmailFilingUserMessages.FromException(ex);
+            _owner.SetLoadWarning(userMessage);
             var current = _display.FindRowById(row.Id) ?? row;
-            _display.SetRowActionState(current, busy: false, statusText: null, errorText: _owner.LoadWarning);
+            _display.SetRowActionState(current, busy: false, statusText: null, errorText: userMessage);
         }
         finally
         {
-            _owner.RemoveBusyRowId(row.Id);
+            if (ownBusy)
+            {
+                _owner.RemoveBusyRowId(row.Id);
+            }
+
             _owner.SetLastActionDiagnostics(
                 $"total={totalSw.ElapsedMilliseconds}ms service={serviceMs}ms localUpdate={localUpdateMs}ms refresh={refreshMs}ms");
             Debug.WriteLine($"[PERF] EmailAction row={row.Id} {_owner.LastActionDiagnostics}");
@@ -428,7 +451,7 @@ internal sealed class EmailListFilingCoordinator
         var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
         if (refreshed is null || !refreshed.IsFiledToProject)
         {
-            return EmailListRowMapper.BuildOptimisticFiledRow(row, project);
+            return EmailListRowMapper.BuildOptimisticFiledRow(row, project, () => _owner.GetCurrentProject());
         }
 
         return refreshed with
@@ -439,7 +462,11 @@ internal sealed class EmailListFilingCoordinator
             ProjectDisplay = $"{project.ProjectNumber} — {project.ProjectName}",
             AssignedProjectName = $"{project.ProjectNumber} — {project.ProjectName}",
             IsFiledToProject = true,
-            IsFiledToSameProject = true,
+            IsFiledToSameProject = EmailListRowMapper.IsFiledToSameProjectForMapping(
+                true,
+                project.ProjectId,
+                refreshed.FiledProjectLabelPath,
+                () => _owner.GetCurrentProject()),
             IsAssigned = true,
             ProjectLinkState = EmailProjectLinkState.Linked,
             FiledProjectLabelPath = refreshed.FiledProjectLabelPath
@@ -451,7 +478,7 @@ internal sealed class EmailListFilingCoordinator
     {
         var refreshed = await RefreshRowFromGmailAsync(row).ConfigureAwait(true);
         var updated = refreshed is null
-            ? EmailListRowMapper.BuildOptimisticFiledRow(row, project)
+            ? EmailListRowMapper.BuildOptimisticFiledRow(row, project, () => _owner.GetCurrentProject())
             : refreshed with
             {
                 ProjectId = project.ProjectId,

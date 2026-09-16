@@ -366,9 +366,10 @@ internal sealed class EmailListRowDisplayCoordinator
         {
             IsActionBusy = busy,
             ActionStatusText = busy ? statusText : null,
-            ActionErrorText = busy ? errorText : null,
+            ActionErrorText = errorText,
         };
         ReplaceRowInDisplay(updated);
+        _owner.NotifyVisibleRowUpdated(updated);
     }
 
     private void ReplaceRowInDisplayCore(EmailListRow updated)
@@ -452,6 +453,7 @@ internal sealed class EmailListRowDisplayCoordinator
         _rebuildDisplayGroups();
         RebindSelectionAfterMutation(updated.Id);
         _owner.RaiseCommandStates();
+        _owner.NotifyVisibleRowUpdated(updated);
     }
 
     private void UpdateEmailInSourceCollection(EmailListRow updated)

@@ -47,12 +47,24 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock Text="{Binding Subject}"
-                           FontWeight="Bold"
-                           FontFamily="{DynamicResource SiFontFamily}"
-                           FontSize="{DynamicResource SiTextNormalFontSize}"
-                           Foreground="{DynamicResource SiForegroundBrush}"
-                           TextWrapping="Wrap" />
+                <TextBox Text="{Binding Subject, Mode=OneWay}"
+                         IsReadOnly="True"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="0"
+                         FontWeight="Bold"
+                         FontFamily="{DynamicResource SiFontFamily}"
+                         FontSize="{DynamicResource SiTextNormalFontSize}"
+                         Foreground="{DynamicResource SiForegroundBrush}"
+                         TextWrapping="Wrap"
+                         IsReadOnlyCaretVisible="True"
+                         AutomationProperties.AutomationId="Email.Viewer.Subject">
+                    <TextBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="העתק כותרת" Command="Copy" />
+                        </ContextMenu>
+                    </TextBox.ContextMenu>
+                </TextBox>
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                     <TextBlock Text="{Binding Sender}"
                                Foreground="{DynamicResource SiSecondaryBrush}"

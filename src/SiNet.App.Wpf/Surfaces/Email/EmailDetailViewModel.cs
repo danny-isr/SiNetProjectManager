@@ -547,7 +547,8 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         else if (_filingProjectPicker is { IsAvailable: true })
         {
             // Prefer explicit picker so filing never depends on (or mutates) the shell active project.
-            var picked = await _filingProjectPicker.PickProjectAsync().ConfigureAwait(true);
+            var picked = await _filingProjectPicker.PickProjectAsync(_selectedEmail.Subject)
+                .ConfigureAwait(true);
             if (picked is null)
             {
                 SetStatus("שיוך בוטל.");
@@ -569,15 +570,35 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         }
 
         var selectedId = _selectedEmail.Id;
+        var loadVersion = _selectedEmailLoadVersion;
 
-        // TEMP WF-DEBUG
+        // Only Gmail project-label filing counts as "משויך". Background queue keeps the UI free.
         WorkflowDebugTrace.Step(
             "Email.File",
-            $"start gmailFiled={_selectedEmail.IsFiledToProject} target={project.ProjectId} inbox={_selectedEmail.InboxMessageId?.ToString() ?? "(none)"}");
+            $"enqueue gmailFiled={_selectedEmail.IsFiledToProject} target={project.ProjectId} inbox={_selectedEmail.InboxMessageId?.ToString() ?? "(none)"}");
 
-        // Only Gmail project-label filing counts as "משויך". Capture the returned row so we
-        // do not depend on list filters that may hide the message after the label is applied.
+        if (_workSurfaceContext is { ProjectId: > 0 })
+        {
+            await RunBoundFilingAsync(selectedId, loadVersion, project).ConfigureAwait(true);
+            return;
+        }
+
+        _emailList.EnqueueFileToProject(_selectedEmail, project);
+        SetStatus("השיוך בתור — אפשר להמשיך למייל הבא.");
+        if (IsCurrentSelection(selectedId, loadVersion))
+        {
+            RefreshActionBarState();
+        }
+    }
+
+    private async Task RunBoundFilingAsync(string selectedId, int loadVersion, ProjectSummaryDto project)
+    {
         var filedRow = await _emailList.FileEmailToProjectAsync(_selectedEmail, project).ConfigureAwait(true);
+        if (!IsCurrentSelection(selectedId, loadVersion))
+        {
+            return;
+        }
+
         _selectedEmail = filedRow
                          ?? _emailList.FindRowById(selectedId)
                          ?? _selectedEmail;
@@ -585,10 +606,6 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         if (_selectedEmail is null || !_selectedEmail.IsFiledToProject)
         {
             var warning = _emailList.LoadWarning;
-            // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step(
-                "Email.File",
-                $"FAILED — no Gmail project label on row. warning={warning ?? "(none)"}");
             SetStatus(string.IsNullOrWhiteSpace(warning)
                 ? "שיוך המייל לפרויקט נכשל (תווית Gmail לא עודכנה)."
                 : warning);
@@ -599,11 +616,6 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // TEMP WF-DEBUG
-        WorkflowDebugTrace.Step(
-            "Email.File",
-            $"ok — Gmail filed label={_selectedEmail.FiledProjectLabelPath ?? "(path pending)"}");
-
         OnPropertyChanged(nameof(HasSelectedEmail));
         SyncViewerHeader();
         await RefreshInboxAttachmentsAsync().ConfigureAwait(true);
@@ -612,21 +624,31 @@ public sealed class EmailDetailViewModel : ObservableObject, IDisposable
         await RefreshWorkflowContextAsync().ConfigureAwait(true);
         RefreshActionBarState();
 
-        // Filing task UX: assign (Gmail label) + move in one click.
         if (_moveToProjectService?.IsAvailable == true
             && _selectedEmail.InboxMessageId is > 0
             && string.IsNullOrWhiteSpace(ActionBar.MoveBlockReason))
         {
-            // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step("Email.File", "auto-move after Gmail label");
             await MoveSelectedEmailToProjectAsync().ConfigureAwait(true);
         }
-        else
+    }
+
+    public void ApplyVisibleRowPatch(EmailListRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (_selectedEmail is null
+            || !string.Equals(_selectedEmail.Id, row.Id, StringComparison.Ordinal))
         {
-            // TEMP WF-DEBUG
-            WorkflowDebugTrace.Step(
-                "Email.File",
-                $"auto-move skipped: moveAvail={_moveToProjectService?.IsAvailable == true} inbox={_selectedEmail.InboxMessageId?.ToString() ?? "(none)"} block={ActionBar.MoveBlockReason ?? "(none)"}");
+            return;
+        }
+
+        _selectedEmail = row;
+        OnPropertyChanged(nameof(HasSelectedEmail));
+        SyncViewerHeader();
+        RefreshActionBarState();
+        if (row.IsFiledToProject && _workSurfaceContext is { ProjectId: > 0 })
+        {
+            _ = RefreshMoveEligibilityThenActionBarAsync();
+            _ = RefreshWorkflowContextAsync();
         }
     }
 

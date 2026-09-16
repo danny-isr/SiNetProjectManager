@@ -5,6 +5,13 @@ public sealed record BillingPricedValue(decimal? Amount, string? UnavailableReas
     public bool IsPriced => Amount is not null && string.IsNullOrWhiteSpace(UnavailableReason);
 }
 
+public sealed record BillingSubContractMoneySummary(
+    BillingPricedValue AlreadyBilled,
+    BillingPricedValue CurrentAddition,
+    BillingPricedValue AfterAccount,
+    BillingPricedValue Remaining,
+    BillingPricedValue SubcontractTotal);
+
 public sealed record BillingLiveAmountMissing(string Label, string Reason);
 
 public sealed record BillingLiveAmountSummary(
@@ -39,6 +46,34 @@ public static class BillingPreparationAmountCalculator
         return new BillingPricedValue(
             decimal.Round(net * draft.StageWeightWithinSubContract * deltaFraction, 4, MidpointRounding.AwayFromZero),
             null);
+    }
+
+    /// <summary>
+    /// Money for the four SubContract progress buckets. Uses <see cref="StageAddition"/>
+    /// (FixedPrices × discount × stage weight × progress). Never invents a percent × FeeSum path.
+    /// After = already + addition. Remaining = subcontract total − after.
+    /// </summary>
+    public static BillingSubContractMoneySummary SubContractProgressAmounts(
+        IReadOnlyList<BillingPreparationStageDraft> stages,
+        IReadOnlyDictionary<int, decimal> additionFractionsByStageId)
+    {
+        ArgumentNullException.ThrowIfNull(stages);
+        ArgumentNullException.ThrowIfNull(additionFractionsByStageId);
+
+        var already = SumPriced(stages, additionFractionsByStageId, Bucket.Already);
+        var addition = SumPriced(stages, additionFractionsByStageId, Bucket.Addition);
+        var total = SumPriced(stages, additionFractionsByStageId, Bucket.Total);
+        var after = already.IsPriced && addition.IsPriced
+            ? new BillingPricedValue(
+                decimal.Round(already.Amount!.Value + addition.Amount!.Value, 4, MidpointRounding.AwayFromZero),
+                null)
+            : FirstUnpriced(already, addition);
+        var remaining = total.IsPriced && after.IsPriced
+            ? new BillingPricedValue(
+                decimal.Round(total.Amount!.Value - after.Amount!.Value, 4, MidpointRounding.AwayFromZero),
+                null)
+            : FirstUnpriced(total, after);
+        return new BillingSubContractMoneySummary(already, addition, after, remaining, total);
     }
 
     public static BillingPricedValue Hourly(BillingHourlySubContractDraft draft, decimal hours)
@@ -104,4 +139,55 @@ public static class BillingPreparationAmountCalculator
             decimal.Round(stageTotal + hoursTotal, 4, MidpointRounding.AwayFromZero),
             missing);
     }
+
+    private enum Bucket
+    {
+        Already,
+        Addition,
+        Total
+    }
+
+    private static BillingPricedValue SumPriced(
+        IReadOnlyList<BillingPreparationStageDraft> stages,
+        IReadOnlyDictionary<int, decimal> additionFractionsByStageId,
+        Bucket bucket)
+    {
+        decimal sum = 0m;
+        string? unavailable = null;
+        foreach (var stage in stages)
+        {
+            additionFractionsByStageId.TryGetValue(stage.MasterPlanStageId, out var requestedAdd);
+            BillingSubContractStageGroupBuilder.ResolveProgressFractions(
+                stage.Observed.Value ?? 0m,
+                requestedAdd,
+                out var addFrac,
+                out _,
+                out _);
+            var fraction = bucket switch
+            {
+                Bucket.Already => stage.Observed.Value ?? 0m,
+                Bucket.Addition => addFrac,
+                _ => 1m
+            };
+            var priced = StageAddition(stage, fraction);
+            if (!priced.IsPriced)
+            {
+                unavailable ??= priced.UnavailableReason ?? "לא נמצא בסיס תמחור";
+                continue;
+            }
+
+            sum += priced.Amount!.Value;
+        }
+
+        if (unavailable is not null)
+            return new BillingPricedValue(null, unavailable);
+        return new BillingPricedValue(decimal.Round(sum, 4, MidpointRounding.AwayFromZero), null);
+    }
+
+    private static BillingPricedValue FirstUnpriced(BillingPricedValue left, BillingPricedValue right) =>
+        !left.IsPriced
+            ? left
+            : !right.IsPriced
+                ? right
+                : left;
 }

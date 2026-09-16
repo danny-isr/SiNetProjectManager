@@ -113,17 +113,8 @@ public static class BillingSubContractStageGroupBuilder
         foreach (var stage in group.SummaryStages)
         {
             var observedFrac = stage.Observed.Value ?? 0m;
-            additionFractionsByStageId.TryGetValue(stage.MasterPlanStageId, out var addFrac);
-            if (addFrac < 0m)
-                addFrac = 0m;
-            var afterFrac = observedFrac + addFrac;
-            var remainingFrac = 1m - afterFrac;
-            if (afterFrac > BillingStageProgressCalculator.ScaleMax)
-            {
-                afterFrac = observedFrac;
-                remainingFrac = 1m - observedFrac;
-                addFrac = 0m;
-            }
+            additionFractionsByStageId.TryGetValue(stage.MasterPlanStageId, out var requestedAdd);
+            ResolveProgressFractions(observedFrac, requestedAdd, out var addFrac, out var afterFrac, out var remainingFrac);
 
             observed += BillingStageContributionCalculator.SubContractContributionPercent(
                 stage.StageWeightWithinSubContract, observedFrac);
@@ -143,6 +134,28 @@ public static class BillingSubContractStageGroupBuilder
             group.ValidWeightSum * 100m,
             group.WeightsSumApproximatelyToOne,
             group.IsPartialBecauseOfDataQuality);
+    }
+
+    /// <summary>
+    /// Same overflow clamp as the weighted percent summary: invalid after-100% additions
+    /// do not enter «תוספת» / «לאחר» / «נותר».
+    /// </summary>
+    public static void ResolveProgressFractions(
+        decimal observedFrac,
+        decimal requestedAdditionFrac,
+        out decimal additionFrac,
+        out decimal afterFrac,
+        out decimal remainingFrac)
+    {
+        additionFrac = requestedAdditionFrac < 0m ? 0m : requestedAdditionFrac;
+        afterFrac = observedFrac + additionFrac;
+        remainingFrac = 1m - afterFrac;
+        if (afterFrac > BillingStageProgressCalculator.ScaleMax)
+        {
+            afterFrac = observedFrac;
+            remainingFrac = 1m - observedFrac;
+            additionFrac = 0m;
+        }
     }
 
     public static string FormatWeightSumWarning(decimal validWeightSumPercent) =>

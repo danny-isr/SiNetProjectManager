@@ -48,6 +48,18 @@ public interface IEmailGateway
         string? pageToken = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Read-only Gmail <c>messages.list</c> of ids for an explicit <paramref name="gmailQuery"/>.
+    /// Does not apply Email List scope/category/unread defaults. A failure must not look like
+    /// an empty success. Default: not implemented.
+    /// </summary>
+    Task<GmailMessageIdPage> ListMessageIdsByQueryAsync(
+        string gmailQuery,
+        string? pageToken = null,
+        int pageSize = 500,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(GmailMessageIdPage.Failed("ListMessageIdsByQueryAsync is not available."));
+
     /// <summary>Lists SiNet-relevant Gmail labels for filter dropdowns (read-only).</summary>
     Task<IReadOnlyList<GmailLabelInfo>> GetMailboxLabelsAsync(CancellationToken cancellationToken = default);
 

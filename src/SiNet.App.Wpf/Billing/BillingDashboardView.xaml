@@ -175,11 +175,6 @@
                             <TextBlock Text="{Binding AdditionSummaryText}"
                                        Foreground="{DynamicResource BillingAdditionBrush}"
                                        Margin="0,0,10,2" />
-                            <TextBlock Text="{Binding AdditionMoneyText}"
-                                       Foreground="{DynamicResource BillingAdditionBrush}"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,10,2"
-                                       Visibility="{Binding ShowAdditionMoney, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Text="{Binding AfterSummaryText}"
                                        FontWeight="SemiBold"
                                        Margin="0,0,10,2" />
@@ -269,6 +264,21 @@
                                Visibility="{Binding ShowHeaderStatusMessage, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </DockPanel>
+
+            <!-- Stale override: candidates shown, Replica still not treated as fresh -->
+            <Border DockPanel.Dock="Top"
+                    Margin="0,0,0,10"
+                    Padding="12,10"
+                    Background="{DynamicResource SiDangerSurfaceBrush}"
+                    BorderBrush="{DynamicResource SiDangerBrush}"
+                    BorderThickness="1"
+                    Visibility="{Binding ShowStaleOverrideBanner, Converter={StaticResource BoolToVis}}"
+                    AutomationProperties.AutomationId="BillingDashboard.StaleOverrideBanner">
+                <TextBlock Text="{Binding StaleOverrideBannerText}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SiDangerBrush}"
+                           FontWeight="SemiBold" />
+            </Border>
 
             <!-- Warning banner: freshness Warning; candidates may still show -->
             <Border DockPanel.Dock="Top"
@@ -418,6 +428,22 @@
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource SiDangerBrush}"
                                Margin="0,0,0,10" />
+                    <TextBlock Text="{Binding StaleReplicaWarningText}"
+                               Style="{DynamicResource SiTextNormalStyle}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SiDangerBrush}"
+                               Margin="0,0,0,10"
+                               Visibility="{Binding ShowStaleReplicaWarning, Converter={StaticResource BoolToVis}}"
+                               AutomationProperties.AutomationId="BillingDashboard.StaleReplicaWarning" />
+                    <Button Content="{Binding CheckAnywayLabel}"
+                            Command="{Binding CheckAnywayCommand}"
+                            Style="{DynamicResource SiSecondaryButtonStyle}"
+                            Padding="16,8"
+                            Margin="0,0,0,12"
+                            HorizontalAlignment="Right"
+                            Visibility="{Binding ShowCheckAnywayButton, Converter={StaticResource BoolToVis}}"
+                            AutomationProperties.AutomationId="BillingDashboard.CheckAnyway" />
                     <TextBlock Text="התוצאות חסומות בגלל עדכניות הנתונים. אין כאן רשימת מועמדים ריקה."
                                Style="{DynamicResource SiTextSmallStyle}"
                                TextWrapping="Wrap"

@@ -162,7 +162,7 @@ public sealed class SqlEmailFilingService(
             _logger.Error(
                 $"[EmailFiling] outcome=Failed op=FileToProject gmailMsg={command.GmailMessageId} project={command.TargetProjectId} detail={ex.Message}",
                 ex);
-            return new EmailFilingResult(false, ex.Message);
+            return new EmailFilingResult(false, EmailFilingUserMessages.FromException(ex));
         }
     }
 
@@ -286,17 +286,20 @@ public sealed class SqlEmailFilingService(
             .ConfigureAwait(false);
 
         var gmailThreadId = command.GmailThreadId ?? inbox?.GmailThreadId;
-        if (!string.IsNullOrWhiteSpace(gmailThreadId) && !string.IsNullOrWhiteSpace(inbox?.ThreadUniqueId))
+        var threadUniqueId = !string.IsNullOrWhiteSpace(command.ThreadUniqueId)
+            ? command.ThreadUniqueId.Trim()
+            : inbox?.ThreadUniqueId;
+        if (!string.IsNullOrWhiteSpace(threadUniqueId))
         {
             var mapping = await db.ThreadStatusMappings
-                .FirstOrDefaultAsync(m => m.ThreadUniqueId == inbox.ThreadUniqueId, cancellationToken)
+                .FirstOrDefaultAsync(m => m.ThreadUniqueId == threadUniqueId, cancellationToken)
                 .ConfigureAwait(false);
 
             if (mapping is null)
             {
                 db.ThreadStatusMappings.Add(new ThreadStatusMapping
                 {
-                    ThreadUniqueId = inbox.ThreadUniqueId,
+                    ThreadUniqueId = threadUniqueId,
                     ThreadId = gmailThreadId,
                     ProjectId = targetProjectId,
                     Status = ThreadMappingStatus.Assigned,
@@ -307,7 +310,11 @@ public sealed class SqlEmailFilingService(
             {
                 mapping.ProjectId = targetProjectId;
                 mapping.Status = ThreadMappingStatus.Assigned;
-                mapping.ThreadId = gmailThreadId;
+                if (!string.IsNullOrWhiteSpace(gmailThreadId))
+                {
+                    mapping.ThreadId = gmailThreadId;
+                }
+
                 mapping.LastUpdated = DateTime.UtcNow;
             }
 
@@ -323,7 +330,12 @@ public sealed class SqlEmailFilingService(
                         .SetProperty(message => message.ProjectId, targetProjectId)
                         .SetProperty(
                             message => message.GmailThreadId,
-                            message => message.GmailThreadId ?? gmailThreadId),
+                            message => message.GmailThreadId ?? gmailThreadId)
+                        .SetProperty(
+                            message => message.ThreadUniqueId,
+                            message => string.IsNullOrWhiteSpace(message.ThreadUniqueId)
+                                ? threadUniqueId
+                                : message.ThreadUniqueId),
                     cancellationToken)
                 .ConfigureAwait(false);
         }

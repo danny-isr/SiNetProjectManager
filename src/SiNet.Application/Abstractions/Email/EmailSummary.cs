@@ -19,7 +19,9 @@ public sealed record EmailSummary(
     IReadOnlyList<string>? LabelNames = null,
     IReadOnlyList<EmailLabelChip>? LabelChips = null,
     string? PrimaryLabel = null,
-    bool IsUnread = false)
+    bool IsUnread = false,
+    string? References = null,
+    string? InReplyTo = null)
 {
     public bool HasAttachments => AttachmentCount > 0;
 }

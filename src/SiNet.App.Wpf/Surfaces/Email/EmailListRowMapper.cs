@@ -18,6 +18,8 @@ internal static class EmailListRowMapper
             new Dictionary<string, EmailProjectLinkInfo>(StringComparer.OrdinalIgnoreCase);
         IReadOnlyDictionary<string, EmailProjectLinkInfo> threadLinkStates =
             new Dictionary<string, EmailProjectLinkInfo>(StringComparer.OrdinalIgnoreCase);
+        IReadOnlyDictionary<string, EmailProjectLinkInfo> uniqueLinkStates =
+            new Dictionary<string, EmailProjectLinkInfo>(StringComparer.Ordinal);
         string? enrichmentWarning = null;
         if (threadLinkQuery is not null)
         {
@@ -31,31 +33,52 @@ internal static class EmailListRowMapper
                 .Where(static id => !string.IsNullOrWhiteSpace(id))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            var uniqueIds = summaries
+                .Select(TryComputeThreadUniqueId)
+                .Where(static id => !string.IsNullOrWhiteSpace(id))
+                .Select(static id => id!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
             try
             {
+                var tasks = new List<Task>();
                 Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>>? messageLinkTask = null;
                 Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>>? threadLinkTask = null;
+                Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>>? uniqueLinkTask = null;
                 if (ids.Count > 0)
                 {
                     messageLinkTask = threadLinkQuery.GetLinkStatesByInternetMessageIdsAsync(ids);
+                    tasks.Add(messageLinkTask);
                 }
                 if (threadIds.Count > 0)
                 {
                     threadLinkTask = threadLinkQuery.GetLinkStatesByGmailThreadIdsAsync(threadIds);
+                    tasks.Add(threadLinkTask);
                 }
-                if (messageLinkTask is not null && threadLinkTask is not null)
+                if (uniqueIds.Count > 0)
                 {
-                    await Task.WhenAll(messageLinkTask, threadLinkTask).ConfigureAwait(true);
+                    uniqueLinkTask = threadLinkQuery.GetLinkStatesByThreadUniqueIdsAsync(uniqueIds);
+                    tasks.Add(uniqueLinkTask);
+                }
+
+                if (tasks.Count > 0)
+                {
+                    await Task.WhenAll(tasks).ConfigureAwait(true);
+                }
+
+                if (messageLinkTask is not null)
+                {
                     messageLinkStates = await messageLinkTask.ConfigureAwait(true);
+                }
+
+                if (threadLinkTask is not null)
+                {
                     threadLinkStates = await threadLinkTask.ConfigureAwait(true);
                 }
-                else if (messageLinkTask is not null)
+
+                if (uniqueLinkTask is not null)
                 {
-                    messageLinkStates = await messageLinkTask.ConfigureAwait(true);
-                }
-                else if (threadLinkTask is not null)
-                {
-                    threadLinkStates = await threadLinkTask.ConfigureAwait(true);
+                    uniqueLinkStates = await uniqueLinkTask.ConfigureAwait(true);
                 }
             }
             catch
@@ -66,7 +89,7 @@ internal static class EmailListRowMapper
         var rows = new List<EmailListRow>(summaries.Count);
         foreach (var summary in summaries)
         {
-            rows.Add(ToEmailListRow(summary, messageLinkStates, threadLinkStates, getCurrentProject));
+            rows.Add(ToEmailListRow(summary, messageLinkStates, threadLinkStates, getCurrentProject, uniqueLinkStates));
         }
         return (rows, enrichmentWarning);
     }
@@ -74,7 +97,8 @@ internal static class EmailListRowMapper
         EmailSummary summary,
         IReadOnlyDictionary<string, EmailProjectLinkInfo> messageLinkStates,
         IReadOnlyDictionary<string, EmailProjectLinkInfo> threadLinkStates,
-        Func<ProjectSummaryDto?> getCurrentProject)
+        Func<ProjectSummaryDto?> getCurrentProject,
+        IReadOnlyDictionary<string, EmailProjectLinkInfo>? uniqueLinkStates = null)
     {
         EmailProjectLinkInfo? messageLink = null;
         if (!string.IsNullOrWhiteSpace(summary.InternetMessageId))
@@ -95,9 +119,18 @@ internal static class EmailListRowMapper
         var labelProject = EmailProjectLabelParser.TryParseProjectFromLabelPath(filedProjectLabelPath);
         var labelProjectId = labelProject?.ProjectId;
         var labelProjectName = labelProject?.ProjectDisplayName;
-        var threadProjectId = threadLink?.ThreadProjectId ?? messageLink?.ThreadProjectId;
-        var threadProjectName = threadLink?.ThreadProjectName ?? messageLink?.ThreadProjectName;
-        var hasThreadHistory = threadLink?.HasThreadHistory == true || messageLink?.HasThreadHistory == true;
+        var computedUniqueId = TryComputeThreadUniqueId(summary);
+        EmailProjectLinkInfo? uniqueLink = null;
+        if (!string.IsNullOrWhiteSpace(computedUniqueId))
+        {
+            uniqueLinkStates?.TryGetValue(computedUniqueId, out uniqueLink);
+        }
+
+        var threadProjectId = uniqueLink?.ThreadProjectId ?? threadLink?.ThreadProjectId ?? messageLink?.ThreadProjectId;
+        var threadProjectName = uniqueLink?.ThreadProjectName ?? threadLink?.ThreadProjectName ?? messageLink?.ThreadProjectName;
+        var hasThreadHistory = uniqueLink?.HasThreadHistory == true
+                               || threadLink?.HasThreadHistory == true
+                               || messageLink?.HasThreadHistory == true;
         var isFiledToProject = IsFiledToProject(summary.LabelNames);
         var isProjectMismatch = isFiledToProject
                                 && hasThreadHistory
@@ -167,7 +200,7 @@ internal static class EmailListRowMapper
             LabelChips: labelChips,
             ThreadId: summary.ThreadId,
             InboxMessageId: messageLink?.InboxMessageId,
-            ThreadUniqueId: messageLink?.ThreadUniqueId ?? threadLink?.ThreadUniqueId,
+            ThreadUniqueId: computedUniqueId ?? messageLink?.ThreadUniqueId ?? threadLink?.ThreadUniqueId ?? uniqueLink?.ThreadUniqueId,
             IsFiledToProject: isFiledToProject,
             IsFiledToSameProject: isFiledToSameProject,
             FiledProjectLabelPath: filedProjectLabelPath,
@@ -186,6 +219,20 @@ internal static class EmailListRowMapper
             IsProjectMismatch: isProjectMismatch,
             ShowLinkToThreadButton: showLinkToThreadButton);
     }
+    public static string? TryComputeThreadUniqueId(EmailSummary summary)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        if (string.IsNullOrWhiteSpace(summary.InternetMessageId))
+        {
+            return null;
+        }
+
+        return EmailMessageIdentity.GetThreadUniqueId(
+            summary.References,
+            summary.InReplyTo,
+            summary.InternetMessageId);
+    }
+
     public static bool IsFiledToSameProjectForMapping(
         bool isFiledToProject,
         int? linkedProjectId,
@@ -304,7 +351,10 @@ internal static class EmailListRowMapper
         }
         return linkedProjectId.HasValue ? "#C8E6C9" : "#E0E0E0";
     }
-    public static EmailListRow BuildOptimisticFiledRow(EmailListRow row, ProjectSummaryDto project)
+    public static EmailListRow BuildOptimisticFiledRow(
+        EmailListRow row,
+        ProjectSummaryDto project,
+        Func<ProjectSummaryDto?>? getCurrentProject = null)
     {
         var location = project.PlaceName ?? string.Empty;
         var projectLabelPath = $"{EmailGmailLabelNames.RootLabel}/{location}/{project.ProjectNumber} — {project.ProjectName}";
@@ -316,7 +366,11 @@ internal static class EmailListRowMapper
         var filed = row with
         {
             IsFiledToProject = true,
-            IsFiledToSameProject = true,
+            IsFiledToSameProject = IsFiledToSameProjectForMapping(
+                true,
+                project.ProjectId,
+                projectLabelPath,
+                getCurrentProject ?? (() => null)),
             IsAssigned = true,
             ProjectLinkState = EmailProjectLinkState.Linked,
             ProjectId = project.ProjectId,

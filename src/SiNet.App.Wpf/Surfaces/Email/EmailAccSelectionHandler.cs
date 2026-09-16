@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Net.Sockets;
+using SiNet.Application.Email;
 using SiNet.Application.Email.Acc;
 
 namespace SiNet.App.Wpf.Surfaces.Email;
@@ -255,18 +256,12 @@ internal sealed class EmailAccSelectionHandler
         }
         catch (Exception ex)
         {
-            var failed = row with
-            {
-                IsAccUploadBusy = false,
-                AccUploadStatusText = null,
-                IsAccStatusLoading = false,
-                AccStatusDisplay = ex.Message,
-                AccProcessingStatus = EmailAccProcessingStatus.Failed,
-            };
+            var failed = CreateAccPostProcessFailedRow(row);
+            _ = ex;
 
             if (isStillSelected())
             {
-                StatusMessageChanged?.Invoke(ex.Message);
+                StatusMessageChanged?.Invoke(EmailFilingUserMessages.AccFailed);
             }
 
             Patch(failed);
@@ -326,16 +321,9 @@ internal sealed class EmailAccSelectionHandler
         }
         catch (Exception ex)
         {
-            var failed = row with
-            {
-                IsAccUploadBusy = false,
-                AccUploadStatusText = null,
-                IsAccStatusLoading = false,
-                AccStatusDisplay = ex.Message,
-                AccProcessingStatus = EmailAccProcessingStatus.Failed,
-            };
-
-            StatusMessageChanged?.Invoke(ex.Message);
+            var failed = CreateAccPostProcessFailedRow(row);
+            _ = ex;
+            StatusMessageChanged?.Invoke(EmailFilingUserMessages.AccFailed);
             Patch(failed);
             return (failed, null);
         }
@@ -509,6 +497,21 @@ internal sealed class EmailAccSelectionHandler
         row with { IsAccUploadBusy = false, AccUploadStatusText = null };
 
     /// <summary>
+    internal static EmailListRow CreateAccPostProcessFailedRow(EmailListRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        return row with
+        {
+            IsAccUploadBusy = false,
+            AccUploadStatusText = null,
+            IsAccStatusLoading = false,
+            AccStatusDisplay = EmailFilingUserMessages.AccFailed,
+            AccProcessingStatus = EmailAccProcessingStatus.Failed,
+            ActionErrorText = EmailFilingUserMessages.AccFailed,
+            IsFiledToProject = row.IsFiledToProject,
+        };
+    }
+
     /// True for AccService unreachable / timed-out control-plane calls (operator-facing soft message).
     /// Selection cancellation is excluded so callers can rethrow <see cref="OperationCanceledException"/>.
     /// </summary>

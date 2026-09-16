@@ -1,5 +1,6 @@
 using System.Net;
 using Google;
+using Google.Apis.Requests;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Infrastructure.Google;
 using Xunit;
@@ -61,6 +62,37 @@ public sealed class GmailRetryTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, ex.HttpStatusCode);
         Assert.Equal(GmailRetry.MaxAttempts, attempts);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_retries_forbidden_rate_limit_reason()
+    {
+        var attempts = 0;
+        var result = await GmailRetry.ExecuteAsync(
+            _ =>
+            {
+                attempts++;
+                if (attempts == 1)
+                {
+                    throw new GoogleApiException("gmail", "quota")
+                    {
+                        HttpStatusCode = HttpStatusCode.Forbidden,
+                        Error = new RequestError
+                        {
+                            Errors = [new SingleError { Reason = "rateLimitExceeded" }],
+                        },
+                    };
+                }
+
+                return Task.FromResult(7);
+            },
+            new NullLogger(),
+            "test",
+            CancellationToken.None,
+            NoDelay);
+
+        Assert.Equal(7, result);
+        Assert.Equal(2, attempts);
     }
 
     [Fact]

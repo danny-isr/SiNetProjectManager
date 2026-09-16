@@ -183,6 +183,7 @@ public sealed partial class EmailListViewModel
         (AuditMailboxLabelsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (FileEmailToProjectCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (FileEmailToThreadProjectCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
+        (RetryBackgroundWorkCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (UnfileEmailCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (MarkAsPendingCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();
         (MarkAsPersonalCommand as AsyncRelayCommand<EmailListRow>)?.RaiseCanExecuteChanged();

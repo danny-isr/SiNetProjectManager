@@ -25,6 +25,11 @@ public sealed class SqlEmailThreadLinkQueryService(IDbContextFactory<SiNetSQLDbC
         CancellationToken cancellationToken = default) =>
         QueryByGmailThreadIdsAsync(gmailThreadIds, cancellationToken);
 
+    public Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> GetLinkStatesByThreadUniqueIdsAsync(
+        IReadOnlyList<string> threadUniqueIds,
+        CancellationToken cancellationToken = default) =>
+        QueryByThreadUniqueIdsAsync(threadUniqueIds, cancellationToken);
+
     private async Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> QueryByInternetMessageIdsAsync(
         IReadOnlyList<string> internetMessageIds,
         CancellationToken cancellationToken)
@@ -82,6 +87,63 @@ public sealed class SqlEmailThreadLinkQueryService(IDbContextFactory<SiNetSQLDbC
 
             AddKey(result, inbox.InternetMessageId, info);
             AddKey(result, inbox.MessageUniqueId, info);
+        }
+
+        return result;
+    }
+
+    private async Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> QueryByThreadUniqueIdsAsync(
+        IReadOnlyList<string> threadUniqueIds,
+        CancellationToken cancellationToken)
+    {
+        var uniqueIds = threadUniqueIds
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Select(static id => id.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (uniqueIds.Count == 0)
+        {
+            return new Dictionary<string, EmailProjectLinkInfo>(StringComparer.Ordinal);
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var threadMappings = await LoadThreadMappingsAsync(
+            db,
+            uniqueIds,
+            Array.Empty<string>(),
+            cancellationToken).ConfigureAwait(false);
+
+        var result = new Dictionary<string, EmailProjectLinkInfo>(StringComparer.Ordinal);
+        foreach (var uniqueId in uniqueIds)
+        {
+            var mapping = threadMappings.Mappings
+                .Where(row => string.Equals(row.ThreadUniqueId, uniqueId, StringComparison.Ordinal)
+                              && row.ProjectId > 0)
+                .OrderByDescending(static row => row.Status == ThreadMappingStatus.Assigned)
+                .FirstOrDefault();
+            if (mapping is null)
+            {
+                continue;
+            }
+
+            threadMappings.Projects.TryGetValue(mapping.ProjectId, out var project);
+            var display = BuildDisplayName(
+                project?.NameAndNumber,
+                project?.Number,
+                project?.Title);
+
+            result[uniqueId] = new EmailProjectLinkInfo(
+                IsLinked: true,
+                ProjectId: mapping.ProjectId,
+                ProjectNumber: project?.Number?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ProjectName: project?.Title,
+                DisplayName: display,
+                ThreadUniqueId: uniqueId,
+                GmailThreadId: mapping.GmailThreadId,
+                ThreadProjectId: mapping.ProjectId,
+                ThreadProjectName: display,
+                HasThreadHistory: true);
         }
 
         return result;

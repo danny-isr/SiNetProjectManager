@@ -41,6 +41,7 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("BillingCandidateEngine.BuildRows", source, StringComparison.Ordinal);
         Assert.Contains("BillingSnapshotEnrichmentApplier.Apply", source, StringComparison.Ordinal);
         Assert.Contains("BillingReplicaFreshnessEvaluator.Evaluate", source, StringComparison.Ordinal);
+        Assert.Contains("BillingReplicaFreshnessOverride.CanBypassAgeBlock", source, StringComparison.Ordinal);
         Assert.Contains("CandidatesBlocked", source, StringComparison.Ordinal);
         Assert.Contains("ProbeAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("SI-WIN-2K19", source, StringComparison.Ordinal);
@@ -209,6 +210,15 @@ public sealed class BillingReplicaSourceGuardTests
         var brushes = ReadRepoFile("src/SiNet.App.Wpf/Theme/BrushResources.xaml");
 
         Assert.Contains("IBillingDashboardReadService", vm, StringComparison.Ordinal);
+        Assert.Contains("CheckAnywayLabel", view, StringComparison.Ordinal);
+        Assert.Contains("בדוק בכל מקרה", formatters, StringComparison.Ordinal);
+        Assert.Contains("ה-Replica אינו מעודכן. הנתונים עלולים להיות ישנים.", formatters, StringComparison.Ordinal);
+        Assert.Contains("הבדיקה מתבצעת על Replica לא מעודכן", formatters, StringComparison.Ordinal);
+        Assert.Contains("BillingDashboard.CheckAnyway", view, StringComparison.Ordinal);
+        var di = ReadRepoFile("src/SiNet.App.Wpf/NewSystemWpfServiceCollectionExtensions.cs");
+        Assert.Contains("#if DEBUG", di, StringComparison.Ordinal);
+        Assert.Contains("staleReplicaOverrideAvailable: true", di, StringComparison.Ordinal);
+        Assert.Contains("staleReplicaOverrideAvailable: false", di, StringComparison.Ordinal);
         Assert.Contains("ContinuePrepareBillAsync", vm, StringComparison.Ordinal);
         Assert.Contains("EnsureFromPrepareBillAsync", vm, StringComparison.Ordinal);
         Assert.Contains("OperationErrorMessage", vm, StringComparison.Ordinal);
@@ -217,7 +227,9 @@ public sealed class BillingReplicaSourceGuardTests
         Assert.Contains("FindSelectedProjectCandidate", vm, StringComparison.Ordinal);
         Assert.Contains("CurrentFeeSum", vm, StringComparison.Ordinal);
         Assert.Contains("SnapshotBalance", vm, StringComparison.Ordinal);
-        Assert.Contains("new BillingDashboardRequest(ActiveOnly: ActiveOnly)", vm, StringComparison.Ordinal);
+        Assert.Contains("AllowStaleReplicaForCurrentCheck: allowStaleReplicaForCurrentCheck", vm, StringComparison.Ordinal);
+        Assert.Contains("staleReplicaOverrideAvailable", vm, StringComparison.Ordinal);
+        Assert.Contains("CheckAnywayAsync", vm, StringComparison.Ordinal);
         Assert.DoesNotContain("SqlConnection", vm, StringComparison.Ordinal);
         Assert.DoesNotContain("ProjectsExtraData", vm, StringComparison.Ordinal);
         Assert.DoesNotContain("BillingCandidateStateResolver", vm, StringComparison.Ordinal);

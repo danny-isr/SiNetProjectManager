@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using SiNet.App.Wpf.Shared.Projects;
+using SiNet.Application.Email;
 using SiNet.Application.Email.Detail;
 using SiNet.Application.Projects;
 using SiNet.Application.Settings;
@@ -24,7 +25,9 @@ internal sealed class WpfEmailFilingProjectPickerHost(
 
     public bool IsAvailable => true;
 
-    public Task<ProjectSummaryDto?> PickProjectAsync(CancellationToken cancellationToken = default)
+    public Task<ProjectSummaryDto?> PickProjectAsync(
+        string? initialSearchText = null,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -33,12 +36,12 @@ internal sealed class WpfEmailFilingProjectPickerHost(
             return Task.FromResult<ProjectSummaryDto?>(null);
 
         if (dispatcher.CheckAccess())
-            return Task.FromResult(ShowDialog());
+            return Task.FromResult(ShowDialog(initialSearchText));
 
-        return dispatcher.InvokeAsync(ShowDialog).Task;
+        return dispatcher.InvokeAsync(() => ShowDialog(initialSearchText)).Task;
     }
 
-    private ProjectSummaryDto? ShowDialog()
+    private ProjectSummaryDto? ShowDialog(string? initialSearchText)
     {
         var localContext = new InMemoryCurrentProjectContext();
         var selector = new ProjectSelectorViewModel(
@@ -47,6 +50,7 @@ internal sealed class WpfEmailFilingProjectPickerHost(
             localContext,
             appSettings: _appSettings);
         _ = selector.InitializeAsync();
+        ApplySubjectPrefill(selector, initialSearchText);
 
         var window = new Window
         {
@@ -103,6 +107,34 @@ internal sealed class WpfEmailFilingProjectPickerHost(
         window.ShowDialog();
         selector.Dispose();
         return window.DialogResult == true ? result : null;
+    }
+
+    private void ApplySubjectPrefill(ProjectSelectorViewModel selector, string? subject)
+    {
+        var cleaned = EmailFilingSubjectQuery.CleanSubject(subject);
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            return;
+        }
+
+        var search = EmailFilingSubjectQuery.BuildSearchText(
+            cleaned,
+            query =>
+            {
+                try
+                {
+                    return _projectQuery
+                        .SearchProjectsAsync(new ProjectSearchQuery(SearchText: query, MaxResults: 20))
+                        .GetAwaiter()
+                        .GetResult()
+                        .Count;
+                }
+                catch
+                {
+                    return 0;
+                }
+            });
+        selector.SearchText = string.IsNullOrWhiteSpace(search) ? cleaned : search;
     }
 
     private static UIElement CreateButtons(out Button okButton, out Button cancelButton)

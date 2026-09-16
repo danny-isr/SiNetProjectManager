@@ -42,5 +42,15 @@ public interface IEmailThreadLinkQueryService
 
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Global RFC <c>ThreadUniqueId</c> → project mapping. Does not require a local inbox row
+    /// or a matching mailbox Gmail thread id.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, EmailProjectLinkInfo>> GetLinkStatesByThreadUniqueIdsAsync(
+        IReadOnlyList<string> threadUniqueIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<string, EmailProjectLinkInfo>>(
+            new Dictionary<string, EmailProjectLinkInfo>(StringComparer.Ordinal));
+
 }
 

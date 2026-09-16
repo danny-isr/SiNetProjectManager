@@ -611,6 +611,8 @@ Age uses the **oldest** required `LastSyncTime` versus **now** (UTC). `AsOfDate`
 
 Blocked response: empty `Candidates`, zero current KPI counts, `CandidatesBlocked = true`, explicit `ReplicaFreshnessFatal` / table-missing warning. No MasterPlan DB fallback. No `MP_ProjectHours` union.
 
+**DEBUG / Development one-shot (does not weaken Production):** when age-stale blocks a current dashboard, the WPF surface may show «בדוק בכל מקרה». The button exists only when the host constructed `BillingDashboardViewModel` with `staleReplicaOverrideAvailable: true` (DEBUG DI only). Clicking it sends a **single** `BillingDashboardRequest.AllowStaleReplicaForCurrentCheck` token. The evaluator still reports `Stale`; `Sync_State` / freshness stamps are not rewritten; Replica is not refreshed; the next load/refresh starts blocked again. Structural fatals (missing tables / Sync_State) cannot be overridden. Release/Production keeps the button unregistered and the gate blocking.
+
 Historical requests exist so a later replay of `AsOfDate = 2026-09-06` is not rejected *because that date is in the past*. They are still blocked if the Replica cannot be probed (missing tables / Sync_State).
 
 ### Out of scope (B1.5)

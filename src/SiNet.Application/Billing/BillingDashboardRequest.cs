@@ -6,4 +6,5 @@ public sealed record BillingDashboardRequest(
     IReadOnlyList<int>? ProjectIds = null,
     IReadOnlyList<int>? CustomerIds = null,
     IReadOnlyList<BillingCandidateState>? CandidateStates = null,
-    DateTime? AsOfDate = null);
+    DateTime? AsOfDate = null,
+    bool AllowStaleReplicaForCurrentCheck = false);

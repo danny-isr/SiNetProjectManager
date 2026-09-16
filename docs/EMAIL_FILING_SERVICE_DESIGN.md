@@ -56,3 +56,13 @@ Provide a single Application-layer port for project filing side effects so WPF n
 ## Companion read port
 
 `IEmailInboxQueryService` (read-only, **implemented**) supports task-driven navigation without filing writes.
+
+## Triage fix (2026-09-14)
+
+Mailbox filing from the viewer is a **user decision + background work** path. The one-shot project picker must not change global `CurrentProject`. After the picker returns, the UI stays usable; Gmail/SQL filing is serialized (one write at a time); ACC ingest is queued on `IEmailAccIngestQueue` and is **not** awaited by the filing command.
+
+`ThreadStatusMapping` is one global row per RFC `ThreadUniqueId` (not per mailbox / Gmail `ThreadId`). Filing upserts by `ThreadUniqueId` even when the current mailbox has no `EmailInboxMessage` yet. List hydration looks up that key directly so a second mailbox can show `ThreadProjectId` without inheriting the first mailbox's Gmail label (`IsFiledToProject` stays local).
+
+Selected-email detail is one atomic context. Completions for email A must not overwrite B's subject/body/action bar. Reuse `GetLoadVersion` / `BumpLoadVersion`. A same-id row patch refreshes A's action bar only when A is still selected.
+
+ACC ingest failure after a successful Gmail/SQL filing keeps `IsFiledToProject` and surfaces `העלאת הצרופות ל-ACC נכשלה` with Retry (`RetryBackgroundWorkCommand`). Filing failures stay distinct (`שיוך Gmail נכשל` / `שמירת שיוך הפרויקט נכשלה`).

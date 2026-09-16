@@ -280,6 +280,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
         }
 
         EmailList.SelectedEmailChanged += OnEmailListSelectionChanged;
+        EmailList.VisibleRowUpdated += OnVisibleRowUpdated;
         EmailList.StatusMessageChanged += (_, message) => StatusMessage = message;
         EmailList.AccStatusPatched += OnAccStatusPatched;
         EmailList.AccountStatusChanged += (_, _) => RefreshAuthDisplay();
@@ -647,6 +648,7 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
     {
         StopHistoryPolling();
         EmailList.SelectedEmailChanged -= OnEmailListSelectionChanged;
+        EmailList.VisibleRowUpdated -= OnVisibleRowUpdated;
         EmailList.AccStatusPatched -= OnAccStatusPatched;
         EmailDetail.StatusMessageChanged -= (_, _) => { };
         _currentProject.CurrentProjectChanged -= OnCurrentProjectChanged;
@@ -715,6 +717,9 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             }
         });
     }
+
+    private void OnVisibleRowUpdated(object? sender, EmailListRow row) =>
+        EmailDetail.ApplyVisibleRowPatch(row);
 
     private async void OnEmailListSelectionChanged(object? sender, EmailListRow? value)
     {

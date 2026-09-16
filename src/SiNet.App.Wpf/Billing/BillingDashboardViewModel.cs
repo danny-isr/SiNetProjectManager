@@ -29,7 +29,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private readonly IAuthorizationQueryService? _authorization;
     private readonly IBillingReviewPrompts? _prompts;
     private readonly IBillingPreparationService? _preparation;
+    private readonly bool _staleReplicaOverrideAvailable;
     private readonly AsyncRelayCommand _refreshCommand;
+    private readonly AsyncRelayCommand _checkAnywayCommand;
     private readonly AsyncRelayCommand _prepareBillCommand;
     private readonly AsyncRelayCommand _continuePrepareBillCommand;
     private readonly AsyncRelayCommand _notNowCommand;
@@ -82,6 +84,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     private bool _suppressSelectionGuard;
     private BillingLiveAmountSummary _liveAmount = new(0m, 0m, 0m, []);
     private BillingProjectFinancialSummary _projectFinancial = BillingProjectFinancialSummaryCalculator.Empty;
+    private bool _allowStaleReplicaForCurrentCheck;
 
     public BillingDashboardViewModel(
         IBillingDashboardReadService service,
@@ -90,7 +93,8 @@ public sealed class BillingDashboardViewModel : ObservableObject
         IBillingReviewDecisionService? reviewDecisions = null,
         IAuthorizationQueryService? authorization = null,
         IBillingReviewPrompts? prompts = null,
-        IBillingPreparationService? preparation = null)
+        IBillingPreparationService? preparation = null,
+        bool staleReplicaOverrideAvailable = false)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -99,7 +103,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
         _authorization = authorization;
         _prompts = prompts;
         _preparation = preparation;
+        _staleReplicaOverrideAvailable = staleReplicaOverrideAvailable;
         _refreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
+        _checkAnywayCommand = new AsyncRelayCommand(CheckAnywayAsync, CanCheckAnyway);
         _prepareBillCommand = new AsyncRelayCommand(PrepareBillAsync, CanWriteNewDecision);
         _continuePrepareBillCommand = new AsyncRelayCommand(ContinuePrepareBillAsync, CanContinuePrepareBill);
         _notNowCommand = new AsyncRelayCommand(NotNowAsync, CanWriteNewDecision);
@@ -143,6 +149,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
     public ObservableCollection<BillingPreparationHoursScopeEditVm> HourlyScopeEdits { get; }
     public IReadOnlyList<BillingDashboardStateFilterOption> StateFilterOptions { get; }
     public ICommand RefreshCommand => _refreshCommand;
+    public ICommand CheckAnywayCommand => _checkAnywayCommand;
     public ICommand ClearFiltersCommand { get; }
     public ICommand PrepareBillCommand => _prepareBillCommand;
     public ICommand ContinuePrepareBillCommand => _continuePrepareBillCommand;
@@ -345,6 +352,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
             OnPropertyChanged(nameof(IsLoading));
             OnPropertyChanged(nameof(ShowWarningBanner));
             OnPropertyChanged(nameof(ShowBlockedPanel));
+            OnPropertyChanged(nameof(ShowStaleReplicaWarning));
+            OnPropertyChanged(nameof(ShowCheckAnywayButton));
+            OnPropertyChanged(nameof(ShowStaleOverrideBanner));
             OnPropertyChanged(nameof(ShowErrorBanner));
             OnPropertyChanged(nameof(ShowOperationErrorBanner));
             OnPropertyChanged(nameof(ShowCandidatesArea));
@@ -368,6 +378,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             if (SetField(ref _isBusy, value))
             {
                 _refreshCommand.RaiseCanExecuteChanged();
+                _checkAnywayCommand.RaiseCanExecuteChanged();
                 RaiseDecisionCommands();
             }
         }
@@ -378,6 +389,16 @@ public sealed class BillingDashboardViewModel : ObservableObject
         UiState == BillingDashboardUiState.Loaded
         && _lastResult?.FreshnessStatus == BillingReplicaFreshnessStatus.Warning;
     public bool ShowBlockedPanel => UiState == BillingDashboardUiState.FreshnessBlocked;
+    public bool ShowStaleReplicaWarning =>
+        ShowBlockedPanel && IsAgeStaleBlocked(_lastResult);
+    public bool ShowCheckAnywayButton =>
+        _staleReplicaOverrideAvailable && ShowStaleReplicaWarning;
+    public bool ShowStaleOverrideBanner =>
+        UiState == BillingDashboardUiState.Loaded
+        && _lastResult is { CandidatesBlocked: false, FreshnessStatus: BillingReplicaFreshnessStatus.Stale };
+    public string StaleReplicaWarningText => BillingDashboardFormatters.StaleReplicaWarning;
+    public string CheckAnywayLabel => BillingDashboardFormatters.CheckAnywayLabel;
+    public string StaleOverrideBannerText => BillingDashboardFormatters.StaleOverrideBanner;
     public bool ShowErrorBanner =>
         UiState is BillingDashboardUiState.RecoverableError or BillingDashboardUiState.FatalError;
     public bool ShowOperationErrorBanner => !string.IsNullOrWhiteSpace(OperationErrorMessage);
@@ -587,8 +608,19 @@ public sealed class BillingDashboardViewModel : ObservableObject
 
     public Task LoadAsync() => RefreshAsync();
 
+    public Task CheckAnywayAsync()
+    {
+        if (!CanCheckAnyway())
+            return Task.CompletedTask;
+        _allowStaleReplicaForCurrentCheck = true;
+        return RefreshAsync();
+    }
+
     public async Task RefreshAsync()
     {
+        var allowStaleReplicaForCurrentCheck = _allowStaleReplicaForCurrentCheck;
+        _allowStaleReplicaForCurrentCheck = false;
+
         _loadCts?.Cancel();
         _loadCts?.Dispose();
         _loadCts = new CancellationTokenSource();
@@ -607,7 +639,9 @@ public sealed class BillingDashboardViewModel : ObservableObject
             AsOfDateText = asOf.ToString("dd/MM/yyyy");
             CanWriteBillingDecisions = await ResolveCanWriteAsync(ct).ConfigureAwait(true);
             var result = await _service.GetAsync(
-                    new BillingDashboardRequest(ActiveOnly: ActiveOnly),
+                    new BillingDashboardRequest(
+                        ActiveOnly: ActiveOnly,
+                        AllowStaleReplicaForCurrentCheck: allowStaleReplicaForCurrentCheck),
                     ct)
                 .ConfigureAwait(true);
             ApplyResult(result);
@@ -677,6 +711,7 @@ public sealed class BillingDashboardViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowEmptyFilterState));
             OnPropertyChanged(nameof(ShowEmptyServiceState));
             RefreshPreparationAmount();
+            NotifyStaleOverrideProperties();
             return;
         }
 
@@ -691,6 +726,22 @@ public sealed class BillingDashboardViewModel : ObservableObject
         ApplyFilters();
         StatusMessage = $"נטענו {result.Candidates.Count} מועמדים מהשירות.";
         RefreshPreparationAmount();
+        NotifyStaleOverrideProperties();
+    }
+
+    private bool CanCheckAnyway() => ShowCheckAnywayButton && !IsBusy;
+
+    private static bool IsAgeStaleBlocked(BillingDashboardResult? result) =>
+        result is { CandidatesBlocked: true, FreshnessStatus: BillingReplicaFreshnessStatus.Stale }
+        && result.Warnings.Any(w =>
+            string.Equals(w.Code, BillingDataQualityWarningCodes.ReplicaFreshnessFatal, StringComparison.Ordinal));
+
+    private void NotifyStaleOverrideProperties()
+    {
+        OnPropertyChanged(nameof(ShowStaleReplicaWarning));
+        OnPropertyChanged(nameof(ShowCheckAnywayButton));
+        OnPropertyChanged(nameof(ShowStaleOverrideBanner));
+        _checkAnywayCommand.RaiseCanExecuteChanged();
     }
 
     private void ApplyFilters()

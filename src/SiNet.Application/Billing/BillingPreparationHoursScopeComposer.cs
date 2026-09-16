@@ -51,7 +51,82 @@ public static class BillingPreparationHoursScopeComposer
             reports,
             reports.Count,
             reports.Sum(r => r.Hours),
-            ValidationMessage: null);
+            ValidationMessage: null,
+            PerSubContract:
+            [
+                new BillingPreparationHoursPerSubContractPreview(subId, reports.Count, reports.Sum(r => r.Hours)),
+            ]);
+    }
+
+    public static BillingPreparationHoursScopePreview PreviewMany(
+        IReadOnlyList<int> masterPlanSubContractIds,
+        DateTime? fromDateInclusive,
+        DateTime? toDateInclusive,
+        IReadOnlyList<BillingHourlySubContractDraft> hourlySubContracts,
+        IReadOnlyList<BillingHourReportFact> hourReports)
+    {
+        ArgumentNullException.ThrowIfNull(masterPlanSubContractIds);
+        if (masterPlanSubContractIds.Count == 0)
+            return BillingPreparationHoursScopePreview.Empty();
+
+        var reports = new List<BillingPreparationHourReportSnapshot>();
+        var per = new List<BillingPreparationHoursPerSubContractPreview>();
+        string? validation = null;
+        foreach (var id in masterPlanSubContractIds.Distinct())
+        {
+            var preview = Preview(id, fromDateInclusive, toDateInclusive, hourlySubContracts, hourReports);
+            if (preview.ValidationMessage is not null)
+            {
+                validation ??= preview.ValidationMessage;
+                per.Add(new BillingPreparationHoursPerSubContractPreview(id, 0, 0m));
+                continue;
+            }
+
+            reports.AddRange(preview.Reports);
+            per.Add(new BillingPreparationHoursPerSubContractPreview(id, preview.ReportCount, preview.TotalHours));
+        }
+
+        var distinct = DistinctReports(reports);
+        return new BillingPreparationHoursScopePreview(
+            distinct,
+            distinct.Count,
+            distinct.Sum(r => r.Hours),
+            validation,
+            per);
+    }
+
+    public static IReadOnlyList<BillingPreparationHoursLineSnapshot> ComposeMany(
+        IReadOnlyList<int> masterPlanSubContractIds,
+        DateTime fromDateInclusive,
+        DateTime toDateInclusive,
+        IReadOnlyList<BillingHourlySubContractDraft> hourlySubContracts,
+        IReadOnlyList<BillingHourReportFact> hourReports,
+        IReadOnlyList<int> overlappingHourReportIds,
+        DateTime snapshotTimestampUtc,
+        BillingConfirmationMode confirmationMode = BillingConfirmationMode.None,
+        DateTime? confirmedAtUtc = null,
+        int? confirmedByUserId = null,
+        string? confirmationNote = null)
+    {
+        ArgumentNullException.ThrowIfNull(masterPlanSubContractIds);
+        if (masterPlanSubContractIds.Count == 0)
+            throw new InvalidOperationException("יש לבחור לפחות הסכם משנה שעתי.");
+
+        return masterPlanSubContractIds
+            .Distinct()
+            .Select(id => Compose(
+                id,
+                fromDateInclusive,
+                toDateInclusive,
+                hourlySubContracts,
+                hourReports,
+                overlappingHourReportIds,
+                snapshotTimestampUtc,
+                confirmationMode,
+                confirmedAtUtc,
+                confirmedByUserId,
+                confirmationNote))
+            .ToList();
     }
 
     public static BillingPreparationHoursLineSnapshot Compose(
@@ -77,7 +152,8 @@ public static class BillingPreparationHoursScopeComposer
         if (preview.ValidationMessage is not null)
             throw new InvalidOperationException(preview.ValidationMessage);
         if (preview.ReportCount == 0)
-            throw new InvalidOperationException("לא ניתן לשמור היקף שעות ללא דיווחים תואמים בטווח שנבחר.");
+            throw new InvalidOperationException(
+                $"לא נמצאו דיווחי שעות עבור הסכם המשנה '{sub.Name}' — לא ניתן לשמור היקף שעות ללא דיווחים תואמים בטווח שנבחר.");
 
         IReadOnlyList<int> overlap = overlappingHourReportIds is null
             ? Array.Empty<int>()
@@ -148,12 +224,18 @@ public static class BillingPreparationHoursScopeComposer
     }
 }
 
+public readonly record struct BillingPreparationHoursPerSubContractPreview(
+    int MasterPlanSubContractId,
+    int ReportCount,
+    decimal TotalHours);
+
 public readonly record struct BillingPreparationHoursScopePreview(
     IReadOnlyList<BillingPreparationHourReportSnapshot> Reports,
     int ReportCount,
     decimal TotalHours,
-    string? ValidationMessage)
+    string? ValidationMessage,
+    IReadOnlyList<BillingPreparationHoursPerSubContractPreview> PerSubContract)
 {
     public static BillingPreparationHoursScopePreview Empty(string? validationMessage = null) =>
-        new([], 0, 0m, validationMessage);
+        new([], 0, 0m, validationMessage, []);
 }

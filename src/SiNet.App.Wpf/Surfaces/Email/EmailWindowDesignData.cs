@@ -181,6 +181,13 @@ public sealed record EmailListRow(
     /// <summary>True when this email carries at least one attachment (drives the badge visibility).</summary>
     public bool HasAttachments => AttachmentCount > 0;
 
+    public bool HasActionError => !string.IsNullOrWhiteSpace(ActionErrorText);
+
+    public bool CanRetryFiling =>
+        HasActionError
+        && !IsActionBusy
+        && (!IsFiledToProject || AccProcessingStatus == EmailAccProcessingStatus.Failed);
+
     public bool ShowAccStatus =>
         AccProcessingStatus != EmailAccProcessingStatus.NotChecked
         || IsAccStatusLoading

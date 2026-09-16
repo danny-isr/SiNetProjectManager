@@ -60,6 +60,21 @@ public sealed class ProjectsDashboardBoundaryTests
     }
 
     [Fact]
+    public void Number_column_sorts_by_precomputed_numeric_key()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Projects/Dashboard/ProjectsDashboardView.xaml");
+        var row = ReadRepoFile("src/SiNet.App.Wpf/Projects/Dashboard/ProjectsDashboardRowVm.cs");
+        var codeBehind = ReadRepoFile("src/SiNet.App.Wpf/Projects/Dashboard/ProjectsDashboardView.xaml.cs");
+
+        Assert.Contains("Binding=\"{Binding ProjectNumber}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SortMemberPath=\"ProjectNumberSortKey\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Sorting=\"OnProjectsGridSorting\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ProjectNumberSortKey = ProjectNumberSort.ToSortKey", row, StringComparison.Ordinal);
+        Assert.Contains("view.CustomSort", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveChanges", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Dashboard_sources_forbid_write_and_sql_identifiers()
     {
         foreach (var relativePath in EnumerateDashboardFiles())

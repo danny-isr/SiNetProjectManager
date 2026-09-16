@@ -50,7 +50,10 @@ public sealed class SqlBillingDashboardReadService(
             logger?.Warn($"[Billing] replica-freshness {decision.Code}: {decision.Message}");
         }
 
-        if (decision.CandidatesBlocked)
+        var bypassAgeStale = BillingReplicaFreshnessOverride.CanBypassAgeBlock(
+            decision,
+            request.AllowStaleReplicaForCurrentCheck);
+        if (decision.CandidatesBlocked && !bypassAgeStale)
         {
             return new BillingDashboardResult(
                 new BillingDashboardSummary(
@@ -69,6 +72,12 @@ public sealed class SqlBillingDashboardReadService(
                 Diagnostics: probe.Diagnostics,
                 FreshnessStatus: decision.Status,
                 CandidatesBlocked: true);
+        }
+
+        if (bypassAgeStale)
+        {
+            logger?.Warn(
+                "[Billing] stale-replica one-time override: loading candidates without marking Replica fresh.");
         }
 
         var snapshot = await _replica.LoadFactsAsync(request, cancellationToken).ConfigureAwait(false);

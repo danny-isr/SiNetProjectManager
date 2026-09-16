@@ -48,13 +48,16 @@ public sealed class EmailListViewModelFilingTests
             projectContext,
             new EmailListViewModelTestFixtures.StubCurrentUser(7));
 
-        var row = EmailListViewModelTestFixtures.CreateRow(inboxMessageId: null, isFiledToProject: false);
+        var row = EmailListViewModelTestFixtures.CreateRow(inboxMessageId: null, isFiledToProject: false)
+            with { ThreadUniqueId = "GLOBAL-123", ThreadId = "AAA" };
         await sut.FileEmailToProjectForTestsAsync(row);
 
         Assert.True(filing.FileCalled);
         Assert.Null(filing.LastFileCommand?.InboxMessageId);
         Assert.Equal(1042, filing.LastFileCommand?.TargetProjectId);
         Assert.Equal("msg-1", filing.LastFileCommand?.GmailMessageId);
+        Assert.Equal("GLOBAL-123", filing.LastFileCommand?.ThreadUniqueId);
+        Assert.Equal("AAA", filing.LastFileCommand?.GmailThreadId);
     }
 
     [Fact]

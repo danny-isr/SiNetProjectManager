@@ -63,12 +63,17 @@ Computed from the **currently filtered** row set:
 | Only with open tasks | Client filter `OpenTaskCount > 0` |
 
 Sorting: built-in DataGrid column sort (place, status, dates, counts, …).
+The **מספר** column displays the formatted `ProjectNumber` string but **sorts numerically**
+via a precomputed `ProjectNumberSortKey` (`long`). Missing / non-finite / legacy-empty
+values sort before every real number when ascending (and after when descending). Clicking
+the header again reverses that numeric order. Search and filters still match the display
+string; the stored `Project.Number` is not rewritten.
 
 ### 4.3 Grid columns
 
 | Column | Source |
 | --- | --- |
-| מספר | `ProjectNumber` |
+| מספר | Display: `ProjectNumber`. Sort: `ProjectNumberSortKey` (numeric). |
 | שם | `ProjectName` |
 | מקום | `PlaceName` |
 | לקוח | `CompanyName` |

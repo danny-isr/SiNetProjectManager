@@ -30,7 +30,7 @@ public sealed class GmailEmailGateway : IEmailGateway
     internal const string InboxQuery = EmailMailboxQueryComposer.InboxQuery;
     internal const string AllMailQuery = EmailMailboxQueryComposer.AllMailQuery;
     internal const string AllMailUnreadQuery = EmailMailboxQueryComposer.AllMailUnreadQuery;
-    private static readonly string[] MetadataHeaders = { "Subject", "From", "To", "Date", "Message-ID" };
+    private static readonly string[] MetadataHeaders = { "Subject", "From", "To", "Date", "Message-ID", "References", "In-Reply-To" };
     internal const string SummaryFieldsMask =
         "id,threadId,labelIds,snippet," +
         "payload(mimeType,headers,parts(mimeType,filename,headers,body(attachmentId),parts))";
@@ -198,6 +198,112 @@ public sealed class GmailEmailGateway : IEmailGateway
         return new EmailMailboxPage(summaries, pageSize, listResponse.NextPageToken, hasNext);
     }
 
+    public async Task<GmailMessageIdPage> ListMessageIdsByQueryAsync(
+        string gmailQuery,
+        string? pageToken = null,
+        int pageSize = 500,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gmailQuery);
+
+        var size = pageSize <= 0 ? 500 : Math.Min(pageSize, 500);
+        var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
+        if (gmail is null)
+        {
+            return GmailMessageIdPage.Failed("Gmail service is not available.", pageToken);
+        }
+
+        var retries = 0;
+        var rateLimitHits = 0;
+        try
+        {
+            var listRequest = gmail.Users.Messages.List("me");
+            listRequest.Q = gmailQuery.Trim();
+            listRequest.MaxResults = size;
+            listRequest.PageToken = pageToken;
+            listRequest.IncludeSpamTrash = false;
+
+            var listResponse = await GmailRetry.ExecuteAsync(
+                    ct => listRequest.ExecuteAsync(ct),
+                    _logger,
+                    "Messages.List(historical ids)",
+                    cancellationToken,
+                    maxAttempts: GmailRetry.HistoricalMaxAttempts,
+                    onDiagnostic: diagnostic =>
+                    {
+                        retries++;
+                        if (diagnostic.IsRateLimit)
+                        {
+                            rateLimitHits++;
+                        }
+
+                        LogRetryDiagnostic(diagnostic, gmailQuery, pageToken, "Messages.List", size);
+                    })
+                .ConfigureAwait(false);
+
+            var ids = (listResponse.Messages ?? [])
+                .Select(static message => message.Id)
+                .Where(static id => !string.IsNullOrWhiteSpace(id))
+                .Select(static id => id!)
+                .ToArray();
+            return GmailMessageIdPage.Ok(ids, listResponse.NextPageToken) with
+            {
+                Retries = retries,
+                RateLimitHits = rateLimitHits,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            LogHistoricalFailure(ex, gmailQuery, pageToken, "Messages.List", size);
+            var reason = ex is global::Google.GoogleApiException google
+                ? GmailRetry.TryGetReason(google) ?? ex.Message
+                : ex.Message;
+            return GmailMessageIdPage.Failed(reason, pageToken) with
+            {
+                Retries = retries,
+                RateLimitHits = rateLimitHits,
+            };
+        }
+    }
+
+    private void LogRetryDiagnostic(
+        GmailRetryDiagnostic diagnostic,
+        string query,
+        string? pageToken,
+        string requestType,
+        int batchSize)
+    {
+        _logger.Warn(
+            $"[HistoricalEmailBackfill] GmailFailure ts={DateTimeOffset.UtcNow:O} " +
+            $"status={diagnostic.HttpStatus} reason={diagnostic.GoogleReason ?? "(none)"} " +
+            $"retryAfter={(diagnostic.RetryAfter is { } wait ? wait.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) : "(none)")} " +
+            $"query={query} pageToken={pageToken ?? "(start)"} request={requestType} batchSize={batchSize}");
+    }
+
+    private void LogHistoricalFailure(
+        Exception ex,
+        string query,
+        string? pageToken,
+        string requestType,
+        int batchSize)
+    {
+        var google = ex as global::Google.GoogleApiException;
+        var status = google is null ? "(n/a)" : ((int)google.HttpStatusCode).ToString();
+        var reason = google is null ? "(n/a)" : GmailRetry.TryGetReason(google) ?? "(none)";
+        var retryAfter = GmailRetry.TryGetRetryAfter(ex);
+        _logger.Error(
+            $"[HistoricalEmailBackfill] GmailFailure ts={DateTimeOffset.UtcNow:O} " +
+            $"status={status} reason={reason} message={ex.Message} " +
+            $"inner={ex.InnerException?.Message ?? "(none)"} " +
+            $"retryAfter={(retryAfter is { } wait ? wait.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) : "(none)")} " +
+            $"query={query} pageToken={pageToken ?? "(start)"} request={requestType} batchSize={batchSize}",
+            ex);
+    }
+
     public async Task<EmailMailboxUnreadCount> GetMailboxUnreadCountAsync(
         EmailMailboxQuery query,
         CancellationToken cancellationToken = default)
@@ -356,7 +462,8 @@ public sealed class GmailEmailGateway : IEmailGateway
             return null;
         }
 
-        return await TryGetSummaryAsync(gmail, messageId, labelMap: null, cancellationToken).ConfigureAwait(false);
+        var labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
+        return await TryGetSummaryAsync(gmail, messageId, labelMap, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<EmailMessageDetails?> GetDetailsAsync(string messageId, CancellationToken cancellationToken = default)
@@ -383,16 +490,21 @@ public sealed class GmailEmailGateway : IEmailGateway
                 },
                 _logger,
                 $"Messages.Get(full '{messageId}')",
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                onDiagnostic: diagnostic => LogRetryDiagnostic(diagnostic, "(none)", null, "Messages.Get", 1)).ConfigureAwait(false);
 
             var details = MapDetails(message);
             var inlineImages = await ResolveInlineImagesAsync(
                 gmail, messageId, message.Payload, details.HtmlBody, cancellationToken).ConfigureAwait(false);
             return inlineImages.Count == 0 ? details : details with { InlineImages = inlineImages };
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.Warn($"[Gmail] Messages.Get(full) failed for id '{messageId}': {ex.Message}");
+            LogHistoricalFailure(ex, messageId, null, "Messages.Get", 1);
             return null;
         }
     }
@@ -466,7 +578,8 @@ public sealed class GmailEmailGateway : IEmailGateway
                 },
                 _logger,
                 $"Messages.Get(metadata '{messageId}')",
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                onDiagnostic: diagnostic => LogRetryDiagnostic(diagnostic, "(none)", null, "Messages.Get", 1)).ConfigureAwait(false);
             if (labelMap is null)
             {
                 labelMap = await LoadLabelMapAsync(gmail, cancellationToken).ConfigureAwait(false);
@@ -474,9 +587,13 @@ public sealed class GmailEmailGateway : IEmailGateway
 
             return Map(message, labelMap);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.Warn($"[Gmail] Messages.Get failed for id '{messageId}': {ex.Message}");
+            LogHistoricalFailure(ex, messageId, null, "Messages.Get", 1);
             return null;
         }
     }
@@ -701,7 +818,9 @@ public sealed class GmailEmailGateway : IEmailGateway
             labelNames,
             labelChips,
             primaryLabel,
-            isUnread);
+            isUnread,
+            GetHeader(headers, "References"),
+            GetHeader(headers, "In-Reply-To"));
     }
 
     internal EmailSummary MapForTests(Message message) => Map(message, labelMap: null);

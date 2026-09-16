@@ -145,7 +145,8 @@
         </WrapPanel>
 
         <!-- Grid -->
-        <DataGrid ItemsSource="{Binding Rows}"
+        <DataGrid x:Name="ProjectsGrid"
+                  ItemsSource="{Binding Rows}"
                   SelectedItem="{Binding Selected}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
@@ -164,6 +165,7 @@
                   BorderThickness="1"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  Sorting="OnProjectsGridSorting"
                   MouseDoubleClick="OnProjectsGridMouseDoubleClick">
             <DataGrid.Resources>
                 <Style x:Key="WrapTextBlockStyle" TargetType="TextBlock">
@@ -175,7 +177,7 @@
             <DataGrid.Columns>
                 <DataGridTextColumn Header="מספר"
                                     Binding="{Binding ProjectNumber}"
-                                    SortMemberPath="ProjectNumberValue"
+                                    SortMemberPath="ProjectNumberSortKey"
                                     Width="70" />
                 <DataGridTextColumn Header="שם" Binding="{Binding ProjectName}" Width="160"
                                     ElementStyle="{StaticResource WrapTextBlockStyle}" />

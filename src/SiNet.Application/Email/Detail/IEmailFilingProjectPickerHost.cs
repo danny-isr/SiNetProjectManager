@@ -11,5 +11,7 @@ public interface IEmailFilingProjectPickerHost
     /// Shows a modal project selector. Returns null if the user cancels.
     /// Must not call <c>ICurrentProjectContext.SetCurrentProjectAsync</c>.
     /// </summary>
-    Task<Projects.ProjectSummaryDto?> PickProjectAsync(CancellationToken cancellationToken = default);
+    Task<Projects.ProjectSummaryDto?> PickProjectAsync(
+        string? initialSearchText = null,
+        CancellationToken cancellationToken = default);
 }

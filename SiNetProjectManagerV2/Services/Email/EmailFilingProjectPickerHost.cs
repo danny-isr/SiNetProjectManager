@@ -13,7 +13,9 @@ internal sealed class EmailFilingProjectPickerHost : IEmailFilingProjectPickerHo
 {
     public bool IsAvailable => true;
 
-    public Task<ProjectSummaryDto?> PickProjectAsync(CancellationToken cancellationToken = default)
+    public Task<ProjectSummaryDto?> PickProjectAsync(
+        string? initialSearchText = null,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 

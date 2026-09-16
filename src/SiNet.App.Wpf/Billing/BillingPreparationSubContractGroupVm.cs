@@ -63,6 +63,7 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
     private decimal _remainingSummaryPercent;
     private decimal _pricedAdditionAmount;
     private bool _hasUnpricedAddition;
+    private BillingSubContractMoneySummary? _money;
 
     public BillingPreparationSubContractGroupVm(BillingSubContractStageGroupDraft draft, bool showContract)
     {
@@ -252,17 +253,33 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
     public bool ShowAfterBillAsValid => !HasInvalidAddition;
 
     public string ObservedSummaryText =>
-        BillingSubContractStageGroupBuilder.FormatObservedSummary(
-            ObservedSummaryPercent, _draft.WeightsSumApproximatelyToOne);
+        BillingMoneyFormatter.AppendToPercentLabel(
+            BillingSubContractStageGroupBuilder.FormatObservedSummary(
+                ObservedSummaryPercent, _draft.WeightsSumApproximatelyToOne),
+            _money?.AlreadyBilled ?? UnpricedMoney);
     public string AdditionSummaryText =>
-        BillingSubContractStageGroupBuilder.FormatAdditionSummary(
-            AdditionSummaryPercent, _draft.WeightsSumApproximatelyToOne);
+        BillingMoneyFormatter.AppendToPercentLabel(
+            BillingSubContractStageGroupBuilder.FormatAdditionSummary(
+                AdditionSummaryPercent, _draft.WeightsSumApproximatelyToOne),
+            _money?.CurrentAddition ?? UnpricedMoney);
     public string AfterSummaryText =>
-        BillingSubContractStageGroupBuilder.FormatAfterSummary(
-            AfterSummaryPercent, ShowAfterBillAsValid, _draft.WeightsSumApproximatelyToOne);
+        ShowAfterBillAsValid
+            ? BillingMoneyFormatter.AppendToPercentLabel(
+                BillingSubContractStageGroupBuilder.FormatAfterSummary(
+                    AfterSummaryPercent, true, _draft.WeightsSumApproximatelyToOne),
+                _money?.AfterAccount ?? UnpricedMoney)
+            : BillingSubContractStageGroupBuilder.FormatAfterSummary(
+                AfterSummaryPercent, false, _draft.WeightsSumApproximatelyToOne);
     public string RemainingSummaryText =>
-        BillingSubContractStageGroupBuilder.FormatRemainingSummary(
-            RemainingSummaryPercent, ShowAfterBillAsValid, _draft.WeightsSumApproximatelyToOne);
+        ShowAfterBillAsValid
+            ? BillingMoneyFormatter.AppendToPercentLabel(
+                BillingSubContractStageGroupBuilder.FormatRemainingSummary(
+                    RemainingSummaryPercent, true, _draft.WeightsSumApproximatelyToOne),
+                _money?.Remaining ?? UnpricedMoney)
+            : BillingSubContractStageGroupBuilder.FormatRemainingSummary(
+                RemainingSummaryPercent, false, _draft.WeightsSumApproximatelyToOne);
+
+    private static BillingPricedValue UnpricedMoney => new(null, "לא נמצא בסיס תמחור");
 
     public void CaptureRestingExpansion() => _restingExpanded = IsExpanded;
 
@@ -348,6 +365,11 @@ public sealed class BillingPreparationSubContractGroupVm : ObservableObject
 
         PricedAdditionAmount = priced;
         HasUnpricedAddition = unpriced;
+        _money = BillingPreparationAmountCalculator.SubContractProgressAmounts(
+            _draft.SummaryStages.Count > 0
+                ? _draft.SummaryStages
+                : EditableStages.Select(s => s.ToPricingDraft()).ToList(),
+            additions);
 
         OnPropertyChanged(nameof(AdditionCount));
         OnPropertyChanged(nameof(CompactSummaryText));

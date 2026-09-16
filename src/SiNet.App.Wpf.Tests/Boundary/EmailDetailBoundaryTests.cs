@@ -116,6 +116,9 @@ public sealed class EmailDetailBoundaryTests
         Assert.Contains("IEmailFilingProjectPickerHost", app, StringComparison.Ordinal);
         Assert.Contains("CanAttemptFileEmailToProject", detailVm, StringComparison.Ordinal);
         Assert.Contains("_filingProjectPicker.PickProjectAsync", detailVm, StringComparison.Ordinal);
+        Assert.Contains("EnqueueFileToProject", detailVm, StringComparison.Ordinal);
+        Assert.Contains("IsCurrentSelection", detailVm, StringComparison.Ordinal);
+        Assert.Contains("ApplyVisibleRowPatch", detailVm, StringComparison.Ordinal);
         Assert.Contains("RefreshWorkflowContextAsync", detailVm, StringComparison.Ordinal);
         Assert.Contains("OverrideProjectId: null", detailVm, StringComparison.Ordinal);
     }

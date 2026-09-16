@@ -79,6 +79,8 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private bool _hasLabelGroups;
     private ICollectionView? _emailsView;
     private readonly HashSet<string> _busyRowIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ProjectSummaryDto> _filingTargets = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim _gmailFilingGate = new(1, 1);
     private string? _lastActionDiagnostics;
 
     public EmailListViewModel()
@@ -214,6 +216,14 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
             _filing.CanMarkAsFyi,
             allowConcurrentParameters: true);
         UploadToAccInboxCommand = new AsyncRelayCommand<EmailListRow>(UploadToAccInboxAsync, CanUploadToAccInbox, allowConcurrentParameters: true);
+        RetryBackgroundWorkCommand = new AsyncRelayCommand<EmailListRow>(
+            row =>
+            {
+                RetryBackgroundWork(row);
+                return Task.CompletedTask;
+            },
+            row => row?.CanRetryFiling == true,
+            allowConcurrentParameters: true);
         ConnectCommand = new AsyncRelayCommand(() => _paging.ConnectAsync(), () => !IsBusy);
         DisconnectCommand = new AsyncRelayCommand(() => _paging.DisconnectGmailAsync(), () => IsConnected && !IsBusy);
 
@@ -352,6 +362,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public event EventHandler<EmailListRow?>? SelectedEmailChanged;
     public event EventHandler<string>? StatusMessageChanged;
     public event EventHandler<string>? AccStatusPatched;
+    public event EventHandler<EmailListRow>? VisibleRowUpdated;
     public event EventHandler? AccountStatusChanged;
 
     public int UnreadInCurrentPage => Emails.Count(static row => row.IsUnread);
@@ -690,6 +701,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     public ICommand MarkAsIrrelevantCommand { get; }
     public ICommand MarkAsFyiCommand { get; }
     public ICommand UploadToAccInboxCommand { get; }
+    public ICommand RetryBackgroundWorkCommand { get; }
     public ICommand ConnectCommand { get; }
     public ICommand DisconnectCommand { get; }
 
@@ -1071,6 +1083,91 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         return await _accHandler.TryPassiveIngestAsync(row, isStillSelected, cancellationToken).ConfigureAwait(true);
     }
 
+    internal void NotifyVisibleRowUpdated(EmailListRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        VisibleRowUpdated?.Invoke(this, row);
+    }
+
+    public void EnqueueFileToProject(EmailListRow row, ProjectSummaryDto project)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(project);
+        _filingTargets[row.Id] = project;
+        if (IsRowActionBusy(row.Id))
+        {
+            SetLoadWarning("פעולה כבר רצה על מייל זה.");
+            return;
+        }
+
+        AddBusyRowId(row.Id);
+        _display.SetRowActionState(row, busy: true, statusText: EmailFilingUserMessages.Queued);
+        RaiseCommandStates();
+        ObservedTask.Run(
+            () => RunQueuedFileToProjectAsync(row, project),
+            "Email.FileToProject");
+    }
+
+    public void RetryBackgroundWork(EmailListRow? row)
+    {
+        if (row is null || !row.CanRetryFiling)
+        {
+            return;
+        }
+
+        if (row.IsFiledToProject)
+        {
+            var current = _display.FindRowById(row.Id) ?? row;
+            var cleared = current with
+            {
+                ActionErrorText = null,
+                AccProcessingStatus = EmailAccProcessingStatus.NotChecked,
+                AccStatusDisplay = EmailFilingUserMessages.AccUploading,
+            };
+            _display.ReplaceRowInDisplay(cleared);
+            StartAccIngestAfterProjectFile(cleared);
+            return;
+        }
+
+        if (!_filingTargets.TryGetValue(row.Id, out var project))
+        {
+            project = _currentProject?.CurrentProject;
+        }
+
+        if (project is null)
+        {
+            SetLoadWarning("אין פרויקט יעד לחזרה על השיוך.");
+            return;
+        }
+
+        var retryRow = (_display.FindRowById(row.Id) ?? row) with { ActionErrorText = null };
+        _display.ReplaceRowInDisplay(retryRow);
+        EnqueueFileToProject(retryRow, project);
+    }
+
+    public void StartAccIngestAfterProjectFile(EmailListRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ObservedTask.Run(
+            () => TryIngestAfterProjectFileAsync(row),
+            "Email.AccAfterFile");
+    }
+
+    private async Task RunQueuedFileToProjectAsync(EmailListRow row, ProjectSummaryDto project)
+    {
+        await _gmailFilingGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            await _filing.FileEmailToProjectAsync(row, project, ownBusy: false).ConfigureAwait(true);
+        }
+        finally
+        {
+            RemoveBusyRowId(row.Id);
+            RaiseCommandStates();
+            _gmailFilingGate.Release();
+        }
+    }
+
     /// <summary>
     /// N4.3: after mailbox File-to-project, ingest zero-attachment (or not-yet-uploaded) messages.
     /// Best-effort — filing already succeeded.
@@ -1140,6 +1237,12 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
 
     public Task<EmailListRow?> FileEmailToProjectAsync(EmailListRow? row, ProjectSummaryDto? targetProject) =>
         _filing.FileEmailToProjectAsync(row, targetProject);
+
+    public Task<EmailListRow?> FileEmailToProjectAsync(
+        EmailListRow? row,
+        ProjectSummaryDto? targetProject,
+        bool ownBusy) =>
+        _filing.FileEmailToProjectAsync(row, targetProject, ownBusy);
 
     public EmailListRow? PatchRowAttachmentCount(string messageId, int attachmentCount)
     {
