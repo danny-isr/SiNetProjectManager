@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.Ai;
 using SiNet.Application.Settings;
 using SiNet.Infrastructure.Sql;
 using SiNet.Infrastructure.Sql.Services.Ai;
@@ -90,8 +91,8 @@ public sealed class SqlInspectionWorkspaceTests
     [Fact]
     public async Task Ai_reviewer_fails_gracefully_when_ollama_unavailable()
     {
-        var settings = new StubSettings();
-        var sut = new OllamaInspectionNoteAiReviewer(settings);
+        var completion = new UnavailableCompletion();
+        var sut = new OllamaInspectionNoteAiReviewer(completion);
         var result = await sut.ReviewAsync("טקסט לבדיקה");
         Assert.True(result.HasError);
         Assert.Equal("טקסט לבדיקה", result.OriginalText);
@@ -243,6 +244,19 @@ public sealed class SqlInspectionWorkspaceTests
 
         public Task<SiNetSQLDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(CreateDbContext());
+    }
+
+    private sealed class UnavailableCompletion : IAiCompletionService
+    {
+        public Task<AiCompletionResult> CompleteAsync(
+            AiCompletionRequest request,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(AiCompletionResult.Fail(AiCompletionFailureKind.Unavailable, "שירות ה-AI אינו זמין כרגע."));
+
+        public Task<bool> IsAvailableAsync(
+            AiCompletionLevel level = AiCompletionLevel.Simple,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
     }
 
     private sealed class StubSettings : ISystemSettingsQueryService
