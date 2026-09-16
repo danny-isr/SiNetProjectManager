@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiNet.Application.Abstractions.Inspection;
+using SiNet.Application.Ai;
+using SiNet.Application.Email;
 using SiNet.Infrastructure.Sql.Services.Ai;
 using SiNet.Infrastructure.Sql.Services.Inspection;
 using SiNetSQL.Services.InspectionSync;
@@ -31,7 +33,11 @@ public static class InspectionServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<IInspectionNoteAiReviewer, OllamaInspectionNoteAiReviewer>();
+        services.TryAddSingleton<IAiHttpTransport, HttpClientAiHttpTransport>();
+        services.TryAddSingleton<IAiCompletionService, SettingsAiCompletionService>();
+        services.TryAddSingleton<IInspectionNoteAiReviewer, OllamaInspectionNoteAiReviewer>();
+        services.TryAddTransient<IEmailProjectRecommendationService, EmailProjectRecommendationService>();
+        services.TryAddSingleton<IEmailProjectSuggestionService, EmailProjectSuggestionService>();
         return services;
     }
 }

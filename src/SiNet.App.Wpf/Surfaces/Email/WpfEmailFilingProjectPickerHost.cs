@@ -15,13 +15,15 @@ namespace SiNet.App.Wpf.Surfaces.Email;
 internal sealed class WpfEmailFilingProjectPickerHost(
     IProjectQueryService projectQuery,
     IProjectFilterOptionsService filterOptions,
-    IAppSettingsService? appSettings = null) : IEmailFilingProjectPickerHost
+    IAppSettingsService? appSettings = null,
+    IEmailProjectSuggestionService? suggestions = null) : IEmailFilingProjectPickerHost
 {
     private readonly IProjectQueryService _projectQuery =
         projectQuery ?? throw new ArgumentNullException(nameof(projectQuery));
     private readonly IProjectFilterOptionsService _filterOptions =
         filterOptions ?? throw new ArgumentNullException(nameof(filterOptions));
     private readonly IAppSettingsService? _appSettings = appSettings;
+    private readonly IEmailProjectSuggestionService? _suggestions = suggestions;
 
     public bool IsAvailable => true;
 
@@ -52,29 +54,41 @@ internal sealed class WpfEmailFilingProjectPickerHost(
         _ = selector.InitializeAsync();
         ApplySubjectPrefill(selector, initialSearchText);
 
+        var recVm = new EmailFilingAiRecommendationsViewModel();
+        recVm.ProjectChosen += project => selector.SelectProjectCommand.Execute(project);
+        var suggestionItems = LoadSuggestions(initialSearchText);
+        recVm.ApplyLocal(suggestionItems);
+
+        var content = new DockPanel { Margin = new Thickness(12) };
+        content.Children.Add(CreateButtons(out var okButton, out var cancelButton));
+        if (suggestionItems.Count > 0)
+        {
+            var recView = new EmailFilingAiRecommendationsView
+            {
+                DataContext = recVm,
+                Margin = new Thickness(0, 0, 0, 12),
+            };
+            DockPanel.SetDock(recView, Dock.Bottom);
+            content.Children.Add(recView);
+        }
+
+        content.Children.Add(new ProjectSelectorView
+        {
+            DataContext = selector,
+            CompactMode = true,
+            Margin = new Thickness(0, 0, 0, 12),
+        });
+
         var window = new Window
         {
             Title = "בחירת פרויקט לשיוך המייל",
             Width = 720,
-            Height = 160,
+            Height = suggestionItems.Count > 0 ? 360 : 160,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize,
             ShowInTaskbar = false,
             FlowDirection = FlowDirection.RightToLeft,
-            Content = new DockPanel
-            {
-                Margin = new Thickness(12),
-                Children =
-                {
-                    CreateButtons(out var okButton, out var cancelButton),
-                    new ProjectSelectorView
-                    {
-                        DataContext = selector,
-                        CompactMode = true,
-                        Margin = new Thickness(0, 0, 0, 12),
-                    },
-                },
-            },
+            Content = content,
         };
 
         if (System.Windows.Application.Current?.MainWindow is { IsVisible: true } owner)
@@ -107,6 +121,20 @@ internal sealed class WpfEmailFilingProjectPickerHost(
         window.ShowDialog();
         selector.Dispose();
         return window.DialogResult == true ? result : null;
+    }
+
+    private IReadOnlyList<EmailProjectSuggestion> LoadSuggestions(string? subject)
+    {
+        if (_suggestions is null)
+        {
+            return [];
+        }
+
+        var available = _projectQuery
+            .SearchProjectsAsync(new ProjectSearchQuery(IncludeClosed: false))
+            .GetAwaiter()
+            .GetResult();
+        return _suggestions.Suggest(subject, available).Suggestions;
     }
 
     private void ApplySubjectPrefill(ProjectSelectorViewModel selector, string? subject)

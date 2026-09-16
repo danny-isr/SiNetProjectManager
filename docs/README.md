@@ -2,7 +2,7 @@
 
 > **Title:** docs/ README -- New System & ops documentation index
 > **Date:** 02.08.2026
-> **Updated:** 09.09.2026
+> **Updated:** 16.09.2026
 
 Agent entry: [`AGENTS.md`](../AGENTS.md). Documentation-round rules: [`.agents/AGENTS.md`](../.agents/AGENTS.md).
 As-Is reconciliation ledger: [`DOCUMENTATION_RECONCILIATION_2026-08-07.md`](./DOCUMENTATION_RECONCILIATION_2026-08-07.md).
@@ -82,6 +82,8 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md) | Identity & permissions target |
 | [`IDENTITY_SIUSER_GATE.md`](./IDENTITY_SIUSER_GATE.md) | SIUser authority, pending auto-registration, Google/ACC coherence |
 | [`SETTINGS.md`](./SETTINGS.md) | Settings (Stage 5) |
+| [`AI_COMPLETION.md`](./AI_COMPLETION.md) | Generic AI port (Inspection notes). Live email-picker AI path is inactive |
+| [`PROJECT_INTELLIGENCE.md`](./PROJECT_INTELLIGENCE.md) | Facts-only Project Intelligence in the email filing picker + unused enrichment prototype |
 | [`TEST_STRATEGY.md`](./TEST_STRATEGY.md) | Test strategy |
 | [`AI_DEVELOPMENT_GUIDE.md`](./AI_DEVELOPMENT_GUIDE.md) | AI-assisted development guide |
 

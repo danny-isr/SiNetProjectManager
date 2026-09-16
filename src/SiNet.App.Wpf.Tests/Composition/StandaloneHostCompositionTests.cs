@@ -9,6 +9,8 @@ using SiNet.Application.Abstractions.Inspection;
 using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Common;
 using SiNet.Application.Email.Detail;
+using SiNet.Application.Ai;
+using SiNet.Application.Email;
 using SiNet.Application.Identity;
 using SiNet.Application.MasterPlan.Reports;
 using SiNet.Application.ProjectWork;
@@ -54,6 +56,9 @@ public sealed class StandaloneHostCompositionTests
             Assert.NotNull(sp.GetRequiredService<IAccServiceModeProvider>());
             Assert.NotNull(sp.GetRequiredService<IAuthorizationQueryService>());
             Assert.NotNull(sp.GetRequiredService<ISystemSettingsQueryService>());
+            Assert.NotNull(sp.GetRequiredService<IAiCompletionService>());
+            Assert.NotNull(sp.GetRequiredService<IEmailProjectRecommendationService>());
+            Assert.NotNull(sp.GetRequiredService<IEmailProjectSuggestionService>());
             Assert.NotNull(sp.GetRequiredService<IInspectionTemplateCatalog>());
             Assert.IsType<GoogleSheetsInspectionReportExportPort>(
                 sp.GetRequiredService<IInspectionReportExportPort>());

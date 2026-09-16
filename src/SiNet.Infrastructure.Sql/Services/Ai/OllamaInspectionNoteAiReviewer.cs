@@ -1,17 +1,14 @@
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using SiNet.Application.Abstractions.Inspection;
-using SiNet.Application.Settings;
+using SiNet.Application.Ai;
 
 namespace SiNet.Infrastructure.Sql.Services.Ai;
 
 /// <summary>
-/// Ollama-backed note reviewer. Reads model routing from <see cref="ISystemSettingsQueryService"/>.
+/// Inspection note reviewer on the generic AI port.
+/// Grammar = <see cref="AiCompletionLevel.Simple"/>; rephrase = <see cref="AiCompletionLevel.QualityCheck"/>.
 /// </summary>
-internal sealed class OllamaInspectionNoteAiReviewer : IInspectionNoteAiReviewer, IDisposable
+internal sealed class OllamaInspectionNoteAiReviewer : IInspectionNoteAiReviewer
 {
     private const string GrammarPrompt =
         """
@@ -31,35 +28,19 @@ internal sealed class OllamaInspectionNoteAiReviewer : IInspectionNoteAiReviewer
         הטקסט:
         """;
 
-    private readonly ISystemSettingsQueryService _settings;
+    private readonly IAiCompletionService _completion;
     private readonly ILogger<OllamaInspectionNoteAiReviewer>? _logger;
-    private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromMinutes(5) };
 
     public OllamaInspectionNoteAiReviewer(
-        ISystemSettingsQueryService settings,
+        IAiCompletionService completion,
         ILogger<OllamaInspectionNoteAiReviewer>? logger = null)
     {
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _completion = completion ?? throw new ArgumentNullException(nameof(completion));
         _logger = logger;
     }
 
-    public async Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var ai = (await _settings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false)).Ai;
-            var baseUrl = NormalizeBaseUrl(ai.OllamaBaseUrl);
-            using var response = await _httpClient
-                .GetAsync(new Uri(new Uri(baseUrl), "/api/tags"), cancellationToken)
-                .ConfigureAwait(false);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogDebug(ex, "[AI] Ollama availability check failed");
-            return false;
-        }
-    }
+    public Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default) =>
+        _completion.IsAvailableAsync(AiCompletionLevel.Simple, cancellationToken);
 
     public async Task<InspectionNoteAiReviewResult> ReviewAsync(
         string plainText, CancellationToken cancellationToken = default)
@@ -72,70 +53,40 @@ internal sealed class OllamaInspectionNoteAiReviewer : IInspectionNoteAiReviewer
 
         try
         {
-            var ai = (await _settings.GetSystemSettingsAsync(cancellationToken).ConfigureAwait(false)).Ai;
-            var baseUrl = NormalizeBaseUrl(ai.OllamaBaseUrl);
-            var grammarModel = ResolveModel(ai.Simple, ai.OllamaModel);
-            var rephraseModel = ResolveModel(ai.QualityCheck, ai.OllamaModel);
-
-            if (string.IsNullOrWhiteSpace(grammarModel) || string.IsNullOrWhiteSpace(rephraseModel))
+            var grammar = await _completion
+                .CompleteAsync(new AiCompletionRequest(GrammarPrompt + original, AiCompletionLevel.Simple), cancellationToken)
+                .ConfigureAwait(false);
+            if (!grammar.Succeeded)
             {
                 return InspectionNoteAiReviewResult.Fail(
                     original,
-                    "לא הוגדר מודל AI עבור בדיקת הערות. יש להגדיר מודלים בהגדרות המערכת.");
+                    string.IsNullOrWhiteSpace(grammar.UserMessageHe)
+                        ? "בדיקת AI נכשלה."
+                        : grammar.UserMessageHe!);
             }
 
-            var grammar = await GenerateAsync(baseUrl, grammarModel, GrammarPrompt + original, cancellationToken)
+            var rephrase = await _completion
+                .CompleteAsync(new AiCompletionRequest(RephrasePrompt + original, AiCompletionLevel.QualityCheck), cancellationToken)
                 .ConfigureAwait(false);
-            var rephrase = await GenerateAsync(baseUrl, rephraseModel, RephrasePrompt + original, cancellationToken)
-                .ConfigureAwait(false);
+            if (!rephrase.Succeeded)
+            {
+                return InspectionNoteAiReviewResult.Fail(
+                    original,
+                    string.IsNullOrWhiteSpace(rephrase.UserMessageHe)
+                        ? "בדיקת AI נכשלה."
+                        : rephrase.UserMessageHe!);
+            }
 
-            return new InspectionNoteAiReviewResult(original, grammar, rephrase, null);
+            return new InspectionNoteAiReviewResult(
+                original,
+                string.IsNullOrWhiteSpace(grammar.Text) ? null : grammar.Text.Trim(),
+                string.IsNullOrWhiteSpace(rephrase.Text) ? null : rephrase.Text.Trim(),
+                null);
         }
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "[AI] Note review failed");
             return InspectionNoteAiReviewResult.Fail(original, ex.Message);
         }
-    }
-
-    private async Task<string?> GenerateAsync(
-        string baseUrl, string model, string prompt, CancellationToken cancellationToken)
-    {
-        var payload = new
-        {
-            model,
-            prompt,
-            stream = false,
-        };
-        using var content = new StringContent(
-            JsonSerializer.Serialize(payload),
-            Encoding.UTF8,
-            "application/json");
-        using var response = await _httpClient
-            .PostAsync(new Uri(new Uri(baseUrl), "/api/generate"), content, cancellationToken)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var parsed = await JsonSerializer
-            .DeserializeAsync<OllamaGenerateResponse>(stream, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        return string.IsNullOrWhiteSpace(parsed?.Response) ? null : parsed!.Response.Trim();
-    }
-
-    private static string ResolveModel(AiModelLevelSelectionDto level, string fallback) =>
-        !string.IsNullOrWhiteSpace(level.Model) ? level.Model.Trim() : fallback?.Trim() ?? string.Empty;
-
-    private static string NormalizeBaseUrl(string? url)
-    {
-        var value = string.IsNullOrWhiteSpace(url) ? SystemSettingsDefaults.OllamaBaseUrl : url.Trim().TrimEnd('/');
-        return value;
-    }
-
-    public void Dispose() => _httpClient.Dispose();
-
-    private sealed class OllamaGenerateResponse
-    {
-        [JsonPropertyName("response")]
-        public string? Response { get; set; }
     }
 }

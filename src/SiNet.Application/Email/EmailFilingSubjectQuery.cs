@@ -90,7 +90,7 @@ public static class EmailFilingSubjectQuery
 
     private static string StripOnePrefix(string text)
     {
-        foreach (var prefix in new[] { "RE:", "FW:", "FWD:", "העברה:", "תשובה:" })
+        foreach (var prefix in new[] { "RE:", "FW:", "FWD:", "העברה:", "תשובה:", "השב:" })
         {
             if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
