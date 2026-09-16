@@ -1048,7 +1048,10 @@ public sealed class NewShellFactory(IServiceProvider services) : INewShellFactor
         CancellationToken cancellationToken)
     {
         var coherence = _services.GetRequiredService<IIdentityCoherenceService>();
-        await coherence.EvaluateAsync(cancellationToken: cancellationToken).ConfigureAwait(true);
+        await coherence.EvaluateAsync(
+                new IdentityCoherenceEvaluateOptions(DisconnectGoogleOnMismatch: false),
+                cancellationToken)
+            .ConfigureAwait(true);
 
         var pendingVm = new PendingIdentityViewModel(
             profile,

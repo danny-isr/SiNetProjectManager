@@ -5,7 +5,8 @@ namespace SiNet.Infrastructure.Sql.Services.Identity;
 
 /// <summary>
 /// Central SIUser ↔ Google ↔ ACC membership coherence evaluator.
-/// On Google mismatch, disconnects the shared Google session (Gmail/Drive/Sheets).
+/// Google mismatch is reported as Mismatch; the shared Gmail session is left intact
+/// unless the caller explicitly sets DisconnectGoogleOnMismatch.
 /// Overall MATCH requires ACC membership readback when a project is active.
 /// </summary>
 public sealed class IdentityCoherenceService : IIdentityCoherenceService
@@ -39,7 +40,7 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
 
     private void OnGoogleAuthStateChanged(bool authenticated)
     {
-        _ = EvaluateAsync(new IdentityCoherenceEvaluateOptions(DisconnectGoogleOnMismatch: true));
+        _ = EvaluateAsync(new IdentityCoherenceEvaluateOptions(DisconnectGoogleOnMismatch: false));
     }
 
     /// <inheritdoc />
@@ -62,7 +63,10 @@ public sealed class IdentityCoherenceService : IIdentityCoherenceService
         CancellationToken cancellationToken = default)
     {
         await _sessionRefresh.RefreshCurrentUserAsync(cancellationToken).ConfigureAwait(false);
-        return await EvaluateAsync(null, cancellationToken).ConfigureAwait(false);
+        return await EvaluateAsync(
+                new IdentityCoherenceEvaluateOptions(DisconnectGoogleOnMismatch: false),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />

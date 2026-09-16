@@ -51,6 +51,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
     private GmailService? _gmailService;
     private DriveService? _driveService;
     private SheetsService? _sheetsService;
+    private int _sessionGeneration;
 
     public GmailClientProvider(
         GmailOptions options,
@@ -72,6 +73,14 @@ public sealed class GmailClientProvider : IAsyncDisposable
     public string DefaultMailboxQuery => _options.DefaultMailboxQuery;
 
     /// <summary>
+    /// Label-catalog session key. Changes only when cached clients are cleared
+    /// (logout / account switch / dispose). Never derived from live null checks —
+    /// a torn read during bind/clear must not look like a different mailbox.
+    /// </summary>
+    internal string SessionIdentity =>
+        "s" + _sessionGeneration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
     /// <c>true</c> once a usable Google user session has been established and cached. Reflects the
     /// last known state for the UI; it does not itself attempt a sign-in.
     /// </summary>
@@ -88,6 +97,8 @@ public sealed class GmailClientProvider : IAsyncDisposable
         var isSignedIn = _credential != null;
         if (isSignedIn != wasSignedIn)
         {
+            _logger.Warn(
+                $"[GmailAuth] AuthStateChanged authenticated={isSignedIn} was={wasSignedIn} session={SessionIdentity}");
             AuthStateChanged?.Invoke(isSignedIn);
         }
     }
@@ -98,8 +109,9 @@ public sealed class GmailClientProvider : IAsyncDisposable
     /// </summary>
     public async Task<GmailService?> TryGetServiceAsync(CancellationToken cancellationToken = default)
     {
-        if (_gmailService != null)
-            return _gmailService;
+        var existing = TryGetUsableGmailService();
+        if (existing is not null)
+            return existing;
 
         var wasSignedIn = _credential != null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -258,6 +270,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            _logger.Warn($"[GmailAuth] LogoutAsync session={SessionIdentity}");
             ClearCachedServicesLocked();
             DeletePersistedTokenStore();
         }
@@ -332,6 +345,25 @@ public sealed class GmailClientProvider : IAsyncDisposable
         });
     }
 
+    private GmailService? TryGetUsableGmailService()
+    {
+        var service = _gmailService;
+        if (service is null)
+            return null;
+
+        try
+        {
+            _ = service.HttpClient;
+            return service;
+        }
+        catch (ObjectDisposedException)
+        {
+            _logger.Warn($"[GmailAuth] Cached GmailService was disposed; recreating from existing credential session={SessionIdentity}");
+            _gmailService = null;
+            return null;
+        }
+    }
+
     private GmailService EnsureGmailServiceLocked(UserCredential credential)
     {
         if (_gmailService != null)
@@ -380,6 +412,7 @@ public sealed class GmailClientProvider : IAsyncDisposable
         _sheetsService?.Dispose();
         _sheetsService = null;
         _credential = null;
+        _sessionGeneration++;
     }
 
     private async Task<UserCredential?> AcquireCredentialAsync(bool allowInteractive, CancellationToken cancellationToken)

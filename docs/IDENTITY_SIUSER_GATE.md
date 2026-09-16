@@ -1,7 +1,7 @@
 # SIUser identity gate + pending auto-registration
 
 > **Status:** Active  
-> **Date:** 04.09.2026 (AccService Admin vs operator clarified 04.09.2026)  
+> **Date:** 16.09.2026 (mismatch no longer logs Gmail out; AccService Admin vs operator 04.09.2026)  
 > **Scope:** Standalone New System host (`SiNet.App.Wpf`)  
 > **Related:** [`IDENTITY_AND_PERMISSIONS.md`](./IDENTITY_AND_PERMISSIONS.md), [`APP_SHELL.md`](./APP_SHELL.md), [`GOOGLE_BOUNDARY.md`](./GOOGLE_BOUNDARY.md), [`OPS_ACCSERVICE_TOKEN_REFRESH.md`](./OPS_ACCSERVICE_TOKEN_REFRESH.md)
 
@@ -82,7 +82,7 @@ Wrong connected identity → Admin API mutations **fail closed** (read-only iden
 
 ## External coherence
 
-- Google (Gmail/Drive/Sheets share one credential): `SIUser.Email` == `IConnectorAuthService.ConnectedAccountEmail` (trim, case-insensitive). Mismatch → logout shared Google session + fail-closed.
+- Google (Gmail/Drive/Sheets share one credential): `SIUser.Email` == `IConnectorAuthService.ConnectedAccountEmail` (trim, case-insensitive). Mismatch → **deny Gmail/Drive/Sheets writes** and show identity mismatch. **Do not** logout or delete tokens. Only explicit user logout / account-switch / a real auth failure may disconnect Gmail.
 - ACC Data Management uses 2-legged application OAuth (not human). Human ACC check = ACC project membership email == `SIUser.Email` via `IAccHumanMembershipProbe` (Autodesk/AccService readback). SQL `ProjectAccMapping` only resolves AccProjectId.
 - Project-specific ACC writes (`AccFileWrite`, MoveToProject, …) require `IdentityOperationContext` with `SiProjectId` and/or `AccProjectId`, and **`AccMembershipMatch == true`**. `false` / `null` / unavailable → **deny** (fail-closed).
 - If email missing from membership: supported reconciler once (AccService Admin credential), then fresh ACC readback; only readback `IsMember=true` may PASS.
@@ -94,6 +94,23 @@ Wrong connected identity → Admin API mutations **fail closed** (read-only iden
 - Full **`זהות: תקינה`** only when authorized SIUser + Email + Google MATCH, and when a project is active also ACC **membership** MATCH (operator). AccService Admin email is **not** part of this footer.
 - Active project without ACC verification → **`AccUnverified`** (`Google: תקין | ACC: טרם אומת`) — never overall MATCH.
 - No active project → ACC may show as לא רלוונטי; Google-only MATCH is allowed.
+
+## `EvaluateAsync` call sites (Gmail session)
+
+`IdentityCoherenceEvaluateOptions.DisconnectGoogleOnMismatch` defaults to **false**.
+No production call site should logout Gmail on mismatch. Writes stay fail-closed via `IIdentityOperationGuard`.
+
+| Caller | Operation | `DisconnectGoogleOnMismatch` | Gmail on mismatch |
+| --- | --- | --- | --- |
+| `App.OnStartup` | Application startup coherence | `false` (explicit) | Remain connected; UI may show mismatch |
+| `NewShellFactory.CreatePendingShellAsync` | Pending-user shell | `false` (explicit) | Remain connected |
+| `NewShellViewModel.OnCurrentProjectChanged` | Project selection | `false` (explicit) | Remain connected |
+| `IdentityCoherenceService.OnGoogleAuthStateChanged` | Auth event re-evaluate | `false` (explicit) | Remain connected |
+| `RefreshSiUserAndEvaluateAsync` / `PendingIdentityViewModel` | SIUser refresh | `false` (explicit) | Remain connected |
+| `IdentityOperationGuard` (`GmailWrite` / Drive / Sheets) | Gmail write gate | `false` | Remain connected; **WRITE denied** |
+| `IdentityOperationGuard` (`AccFileWrite`, `CrossSystemWorkflow`, …) | ACC / workflow writes | `false` | Remain connected; write denied if required match fails |
+| Mailbox refresh / History poll | Not a coherence caller | n/a | Must not logout |
+| Email `DisconnectGmail` / `Connect` (`SkipSilentRestore`) | Explicit logout / account switch | n/a | **May** reset Gmail (user-initiated) |
 
 ## Ports
 

@@ -170,7 +170,10 @@ public partial class App : System.Windows.Application
             var coherence = _services.GetService<IIdentityCoherenceService>();
             if (coherence is not null)
             {
-                await coherence.EvaluateAsync(cancellationToken: _shutdownCts.Token).ConfigureAwait(true);
+                await coherence.EvaluateAsync(
+                        new IdentityCoherenceEvaluateOptions(DisconnectGoogleOnMismatch: false),
+                        _shutdownCts.Token)
+                    .ConfigureAwait(true);
             }
 
             splash.SetStatus("מחיל הגדרות...");

@@ -255,7 +255,7 @@ public class NewShellViewModel : INotifyPropertyChanged, IDisposable
 
             var projectId = e.Project?.ProjectId;
             _ = _identityCoherence.EvaluateAsync(new IdentityCoherenceEvaluateOptions(
-                DisconnectGoogleOnMismatch: true,
+                DisconnectGoogleOnMismatch: false,
                 ProbeAccMembership: projectId is > 0,
                 SiProjectId: projectId is > 0 ? projectId : null,
                 HasActiveProject: projectId is > 0));

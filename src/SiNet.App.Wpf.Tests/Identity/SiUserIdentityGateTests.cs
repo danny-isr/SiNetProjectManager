@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SiNet.Application.Abstractions.Logging;
@@ -46,7 +47,7 @@ public sealed class IdentityCoherenceAndGuardTests
     }
 
     [Fact]
-    public async Task Google_mismatch_logs_out_and_denies_gmail_write()
+    public async Task Google_mismatch_denies_gmail_write_without_logging_out()
     {
         var session = new AuthenticatedUserSession();
         session.SetAuthenticated(new CurrentUserProfileDto(
@@ -60,8 +61,75 @@ public sealed class IdentityCoherenceAndGuardTests
 
         Assert.False(decision.Allowed);
         Assert.Equal(IdentityCoherenceStatus.Mismatch, decision.Snapshot.Status);
-        Assert.False(auth.IsAuthenticated);
-        Assert.True(auth.LogoutCalled);
+        Assert.True(auth.IsAuthenticated);
+        Assert.False(auth.LogoutCalled);
+    }
+
+    [Fact]
+    public async Task Default_evaluate_and_project_change_do_not_logout_google()
+    {
+        var session = new AuthenticatedUserSession();
+        session.SetAuthenticated(new CurrentUserProfileDto(
+            1, "Danny", "DOMAIN\\danny", AppRole.Employee, true,
+            Email: "danny@si.co.il"));
+        var auth = new StubConnectorAuth { IsAuthenticated = true, ConnectedAccountEmail = "wrong@si.co.il" };
+        var coherence = new IdentityCoherenceService(session, new NoOpRefresh(session), auth);
+
+        var defaultSnap = await coherence.EvaluateAsync();
+        Assert.Equal(IdentityCoherenceStatus.Mismatch, defaultSnap.Status);
+        Assert.True(auth.IsAuthenticated);
+        Assert.False(auth.LogoutCalled);
+
+        var projectSnap = await coherence.EvaluateAsync(new IdentityCoherenceEvaluateOptions(
+            DisconnectGoogleOnMismatch: false,
+            ProbeAccMembership: true,
+            SiProjectId: 1042,
+            HasActiveProject: true));
+        Assert.True(auth.IsAuthenticated);
+        Assert.False(auth.LogoutCalled);
+        Assert.NotEqual(IdentityCoherenceStatus.Match, projectSnap.Status);
+    }
+
+    [Fact]
+    public async Task CrossSystemWorkflow_mismatch_denies_without_logging_out()
+    {
+        var session = new AuthenticatedUserSession();
+        session.SetAuthenticated(new CurrentUserProfileDto(
+            1, "Danny", "DOMAIN\\danny", AppRole.Employee, true,
+            Email: "danny@si.co.il"));
+        var auth = new StubConnectorAuth { IsAuthenticated = true, ConnectedAccountEmail = "wrong@si.co.il" };
+        var coherence = new IdentityCoherenceService(session, new NoOpRefresh(session), auth);
+        var guard = new IdentityOperationGuard(coherence);
+
+        var decision = await guard.EvaluateAsync(
+            IdentityOperationKind.CrossSystemWorkflow,
+            IdentityOperationContext.ForSiProject(1042));
+
+        Assert.False(decision.Allowed);
+        Assert.True(auth.IsAuthenticated);
+        Assert.False(auth.LogoutCalled);
+    }
+
+    [Fact]
+    public void Project_change_and_startup_evaluate_must_not_request_google_logout()
+    {
+        var shell = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "SiNet.App.Wpf", "Shell", "NewShellViewModel.cs"));
+        var factory = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "SiNet.App.Wpf", "Shell", "NewShellFactory.cs"));
+        var app = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "SiNet.App.Wpf", "App.xaml.cs"));
+        var options = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "SiNet.Application", "Identity", "IIdentityCoherenceService.cs"));
+
+        var guard = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "SiNet.Infrastructure.Sql", "Services", "Identity", "IdentityOperationGuard.cs"));
+
+        Assert.DoesNotContain("DisconnectGoogleOnMismatch: true", shell, StringComparison.Ordinal);
+        Assert.Contains("DisconnectGoogleOnMismatch: false", shell, StringComparison.Ordinal);
+        Assert.Contains("DisconnectGoogleOnMismatch: false", factory, StringComparison.Ordinal);
+        Assert.Contains("DisconnectGoogleOnMismatch: false", app, StringComparison.Ordinal);
+        Assert.Contains("bool DisconnectGoogleOnMismatch = false", options, StringComparison.Ordinal);
+        Assert.Contains("DisconnectGoogleOnMismatch: false", guard, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "DisconnectGoogleOnMismatch: kind is IdentityOperationKind.CrossSystemWorkflow",
+            guard,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -361,6 +429,19 @@ public sealed class IdentityCoherenceAndGuardTests
 
         Assert.False(decision.Allowed);
         Assert.False(externalCalled);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "SiNet.sln")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("SiNet.sln not found.");
     }
 
     private sealed class NoOpRefresh(AuthenticatedUserSession session) : ICurrentUserSessionRefreshService

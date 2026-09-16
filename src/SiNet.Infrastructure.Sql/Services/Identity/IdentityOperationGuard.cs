@@ -47,10 +47,9 @@ public sealed class IdentityOperationGuard(
 
         var snapshot = await _coherence.EvaluateAsync(
                 new IdentityCoherenceEvaluateOptions(
-                    DisconnectGoogleOnMismatch: kind is IdentityOperationKind.GmailWrite
-                        or IdentityOperationKind.GoogleDriveWrite
-                        or IdentityOperationKind.GoogleSheetsWrite
-                        or IdentityOperationKind.CrossSystemWorkflow,
+                    // Passive / gated writes may DENY. Only explicit Logout / account-switch
+                    // may destroy the Gmail session.
+                    DisconnectGoogleOnMismatch: false,
                     ProbeAccMembership: needsAcc,
                     SiProjectId: context.SiProjectId,
                     AccProjectId: context.AccProjectId,

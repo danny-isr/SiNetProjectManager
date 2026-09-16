@@ -88,7 +88,11 @@ public sealed class GmailConnectorAuthService : IConnectorAuthService
     {
         if (!_provider.IsSignedIn)
         {
-            ConnectedAccountEmail = null;
+            ConnectedAccountEmail = GmailAccountProfileRefresh.AfterLookup(
+                isSignedIn: false,
+                previousEmail: ConnectedAccountEmail,
+                profileEmail: null,
+                lookupFailed: false);
             return;
         }
 
@@ -97,18 +101,28 @@ public sealed class GmailConnectorAuthService : IConnectorAuthService
             var gmail = await _provider.TryGetServiceAsync(cancellationToken).ConfigureAwait(false);
             if (gmail is null)
             {
-                ConnectedAccountEmail = null;
+                ConnectedAccountEmail = GmailAccountProfileRefresh.AfterLookup(
+                    _provider.IsSignedIn,
+                    ConnectedAccountEmail,
+                    profileEmail: null,
+                    lookupFailed: true);
                 return;
             }
 
             var profile = await gmail.Users.GetProfile("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
-            ConnectedAccountEmail = string.IsNullOrWhiteSpace(profile.EmailAddress)
-                ? null
-                : profile.EmailAddress.Trim();
+            ConnectedAccountEmail = GmailAccountProfileRefresh.AfterLookup(
+                _provider.IsSignedIn,
+                ConnectedAccountEmail,
+                profile.EmailAddress,
+                lookupFailed: false);
         }
         catch
         {
-            ConnectedAccountEmail = null;
+            ConnectedAccountEmail = GmailAccountProfileRefresh.AfterLookup(
+                _provider.IsSignedIn,
+                ConnectedAccountEmail,
+                profileEmail: null,
+                lookupFailed: true);
         }
     }
 }

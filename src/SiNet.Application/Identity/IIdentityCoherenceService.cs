@@ -10,7 +10,10 @@ public interface IIdentityCoherenceService
 
     event Action<IdentityCoherenceSnapshot>? Changed;
 
-    /// <summary>Re-evaluate from current session + connectors. May logout Google on mismatch.</summary>
+    /// <summary>
+    /// Re-evaluate from current session + connectors. Does not logout Google unless
+    /// <see cref="IdentityCoherenceEvaluateOptions.DisconnectGoogleOnMismatch"/> is explicitly true.
+    /// </summary>
     Task<IdentityCoherenceSnapshot> EvaluateAsync(
         IdentityCoherenceEvaluateOptions? options = null,
         CancellationToken cancellationToken = default);
@@ -24,7 +27,7 @@ public interface IIdentityCoherenceService
 
 /// <summary>Optional inputs for a coherence pass.</summary>
 public sealed record IdentityCoherenceEvaluateOptions(
-    bool DisconnectGoogleOnMismatch = true,
+    bool DisconnectGoogleOnMismatch = false,
     bool ProbeAccMembership = true,
     int? SiProjectId = null,
     string? AccProjectId = null,
