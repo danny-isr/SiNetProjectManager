@@ -1,5 +1,6 @@
 using Google.Apis.Gmail.v1.Data;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Email;
 using Xunit;
 
 namespace SiNet.Infrastructure.Google.Tests;
@@ -99,6 +100,36 @@ public sealed class GmailLabelCatalogTests
 
         Assert.Equal(2, catalog.ListCallCount);
         Assert.All(tasks, task => Assert.Equal(ProjectPath, task.Result["Label_X"].Name));
+    }
+
+    [Fact]
+    public async Task Project_index_rebuilds_on_rename_delete_and_session_change()
+    {
+        var directory = new FakeDirectory("acct-1");
+        directory.Add("Label_X", ProjectPath);
+        var catalog = new GmailLabelCatalog(directory, new NullLogger());
+        await catalog.GetMapAsync();
+
+        var first = catalog.GetProjectLabelIndex(EmailGmailLabelNames.RootLabel);
+        Assert.Equal("Label_X", Assert.Single(first.Find(1042)).LabelId);
+
+        catalog.NotifyRenamed("Label_X", "פרויקטים_משרד/חיפה/(1042)חדש");
+        var renamed = catalog.GetProjectLabelIndex(EmailGmailLabelNames.RootLabel);
+        Assert.Equal("פרויקטים_משרד/חיפה/(1042)חדש", Assert.Single(renamed.Find(1042)).FullPath);
+        Assert.True(renamed.CatalogGeneration > first.CatalogGeneration);
+
+        catalog.NotifyDeleted("Label_X");
+        var deleted = catalog.GetProjectLabelIndex(EmailGmailLabelNames.RootLabel);
+        Assert.Empty(deleted.Find(1042));
+
+        directory.SessionKey = "acct-2";
+        directory.Clear();
+        directory.Add("Label_B", "פרויקטים_משרד/יבנה/(3070)חדש");
+        await catalog.GetMapAsync();
+        var switched = catalog.GetProjectLabelIndex(EmailGmailLabelNames.RootLabel);
+        Assert.Equal("acct-2", switched.SessionKey);
+        Assert.Empty(switched.Find(1042));
+        Assert.Equal("Label_B", Assert.Single(switched.Find(3070)).LabelId);
     }
 
     [Fact]

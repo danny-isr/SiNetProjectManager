@@ -38,12 +38,19 @@ During FileQuoteMaterial QA (2026-07), a proposed fix treated SQL `ProjectId` as
 
 ## Project label identity (per mailbox)
 
-- Gmail project labels live **per user mailbox** — they are not a shared office tree. A centralized project rename **must not** rename labels for all users.
-- **Identity** of a project leaf label is the **number in parentheses at the start of the leaf name** (`^\((\d+)\)` → `Project.Number`), not the full display string after the number. Parser: `EmailProjectLabelParser`.
-- Leaves are only considered under the configured root / place hierarchy (`Gmail.RootLabel` / `פרויקטים_משרד/...`).
-- Optional SystemSetting **`Email.AutoSyncProjectLabelNames`**: when on, for the **signed-in mailbox only**, rename leaf labels whose `(Number)` matches a project so the leaf equals current `NameAndNumber`. Duplicate numbers in one mailbox require an **explicit keep/delete decision UI** (no silent merge; warn-only MessageBox is insufficient — see [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) §4.1).
+Within each Gmail mailbox and the configured SiNet `RootLabel` (`פרויקטים_משרד`):
+
+- **`ProjectNumber` is the unique identity of a project label.** The leaf must match `^\((\d+)\)` (`EmailProjectLabelParser`). Parent/category folders and labels **outside** the root are not project labels, even if they contain digits.
+- **`FullPath` is organizational metadata**, not identity. A unique `(3070)` under `ישן/` is the same project label as the expected `יבנה/(3070)…` path. Filing **reuses that LabelId** and does **not** create a second leaf.
+- **At most one** active Gmail project label may exist per `ProjectNumber` in that mailbox. There is **no** global cross-user Gmail label map.
+- `GetOrCreateProjectLabelAsync` looks up the per-mailbox **ProjectNumber index** derived from `GmailLabelCatalog` (not the intended full path):
+  - **0 matches** → create at the current canonical path.
+  - **1 match** → reuse that `LabelId` (do not move/rename during filing).
+  - **2+ matches** → **duplicate conflict** (no silent `FirstOrDefault`, no third label). Surface: *קיימות מספר תוויות Gmail לפרויקט N. יש להסדיר אותן בחלון ניהול התוויות.*
+- A SQL project title/name change does **not** create a new Gmail label. The existing `(Number)` leaf remains the project; Label Management may offer *העבר למיקום הנכון* (same `LabelId`, `RenameLabelAsync`).
+- Optional SystemSetting **`Email.AutoSyncProjectLabelNames`**: when on, for the **signed-in mailbox only**, rename leaf labels whose `(Number)` matches a project so the leaf equals current `NameAndNumber`. Duplicate numbers in one mailbox require an **explicit** Label Management merge (no silent pick).
+- **Merge safety:** attach `targetLabelId` to every source `MessageId` (paginated; already-labeled is success) → **verify** every source id is on the target → **only then** delete the source label. On any attach/verify failure: **do not** delete source; report partial merge; retry is safe.
 - **Label change journal:** per-mailbox JSON under `%LocalAppData%\SiNet\GmailLabelJournal\` logging `LabelId` + old/new full path for renames/deletes performed by SiNet, retained **at most 30 days**. On **delete / duplicate merge**, also store the Gmail **message id list** that had that label before removal (mandatory capture; fail closed if list or journal write cannot be obtained). See plan §4.2.
-- When the setting is off, filing/association still uses `(Number)`; leaf titles may lag after a project rename until the user syncs.
 
 ## Code anchors
 
@@ -55,13 +62,16 @@ During FileQuoteMaterial QA (2026-07), a proposed fix treated SQL `ProjectId` as
 - Move gate: `EmailDetailViewModel` passes `_selectedEmail.IsFiledToProject` into eligibility
 - ACC move: `NativeEmailMoveToProjectExecutor` verifies ACC; Move/Lock attributes are SoT for “already moved”
 - Label name sync: `IProjectGmailLabelSyncService` (DEV-009)
-- Mailbox label audit table (DEV-026): [`DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md`](./DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md) — read-only list of **this mailbox’s** user labels mapped by `(Number)`; duplicate labels for one project are a note only (not keep/delete)
+- Mailbox label management (DEV-026 + 1.0.42): [`DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md`](./DEV_PLAN_GMAIL_LABEL_CUTOVER_AUDIT.md) — **this mailbox’s** user labels mapped by `(Number)`; classify **Correct / Misplaced / Duplicate**; explicit *העבר למיקום הנכון* (same LabelId) and *מזג אל…* (attach → verify → delete source)
 
-## Mailbox label audit (DEV-026)
+## Mailbox label management (DEV-026 / 1.0.42)
 
-- Entry: Email window **«בדיקת תיוג»** after Gmail is connected (same connect gate as the list).
-- Product: sortable table — one row per **user** Gmail label, columns for mapped SiNet project. A label without a project is OK. A project without a label is OK and is **not** listed as something to create.
-- The only required defect: two user labels whose leaf `(Number)` maps to the same `Project.Number`. This window does **not** rename, merge, or delete (DEV-009 keep/delete stays separate).
+- Entry: Email window **«בדיקת תיוג»** after Gmail is connected (same connect gate as the list). This **is** Label Management — do not add a second organizer window.
+- Product: sortable table — one row per **user** Gmail label. Columns include project number, current Gmail path, expected path, and status. A label without a project is OK. A project without a label is OK and is **not** listed as something to create.
+- **Correct:** unique `(Number)` under the root and `FullPath` equals the canonical path.
+- **Misplaced** (warning surface): unique `(Number)` but path/name differs — *העבר למיקום הנכון* renames the **same** LabelId.
+- **Duplicate** (danger surface): two or more project labels under the root share a `ProjectNumber`. User chooses the survivor; merge never auto-picks.
+- Opening / refreshing this window invalidates the label catalog so manual Gmail changes appear without an app restart. Filing itself does **not** `Labels.List` per message.
 
 ## FileMaterial / MoveToProject (six decisions)
 

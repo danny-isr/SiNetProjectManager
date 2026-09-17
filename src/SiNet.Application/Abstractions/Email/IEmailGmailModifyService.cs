@@ -10,6 +10,36 @@ public interface IEmailGmailModifyService
         string projectDisplayName,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Resolves the mailbox project label by <paramref name="projectNumber"/> (identity).
+    /// Path is only used when creating a missing label.
+    /// </summary>
+    Task<string> GetOrCreateProjectLabelAsync(
+        string location,
+        string projectDisplayName,
+        int projectNumber,
+        CancellationToken cancellationToken = default)
+        => GetOrCreateProjectLabelAsync(location, projectDisplayName, cancellationToken);
+
+    /// <summary>
+    /// Ensures <c>{Root}/{location}</c> exists so a later rename can land on that parent.
+    /// Default: no-op for test fakes.
+    /// </summary>
+    Task EnsureProjectLocationAsync(
+        string location,
+        CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    /// <summary>
+    /// Merges two project labels that share a ProjectNumber: attach target, verify, then delete source.
+    /// </summary>
+    Task<SiNet.Application.Email.GmailProjectLabelMergeResult> MergeProjectLabelsAsync(
+        string sourceLabelId,
+        string targetLabelId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(
+            SiNet.Application.Email.GmailProjectLabelMergeResult.Rejected("מיזוג תוויות אינו זמין."));
+
     Task<string?> GetProjectLabelIdAsync(
         string location,
         string projectDisplayName,

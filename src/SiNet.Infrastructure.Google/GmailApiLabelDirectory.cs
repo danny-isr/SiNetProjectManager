@@ -43,5 +43,6 @@ internal sealed class GmailApiLabelDirectory(GmailClientProvider provider, IAppL
             label.Color?.BackgroundColor,
             label.Color?.TextColor,
             label.Type,
-            label.MessagesUnread);
+            label.MessagesUnread,
+            label.MessagesTotal);
 }

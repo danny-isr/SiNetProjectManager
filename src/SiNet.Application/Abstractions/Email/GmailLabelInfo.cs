@@ -5,4 +5,5 @@ public sealed record GmailLabelInfo(
     string Id,
     string Name,
     string? BackgroundColor = null,
-    string? TextColor = null);
+    string? TextColor = null,
+    int? MessagesTotal = null);

@@ -1,4 +1,5 @@
 using SiNet.Application.Abstractions.Email;
+using SiNet.Application.Email;
 using SiNet.Application.Identity;
 
 namespace SiNet.Infrastructure.Google;
@@ -24,6 +25,35 @@ public sealed class IdentityGuardedGmailModifyService(
     {
         await EnsureGmailWriteAsync(cancellationToken).ConfigureAwait(false);
         return await _inner.GetOrCreateProjectLabelAsync(location, projectDisplayName, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<string> GetOrCreateProjectLabelAsync(
+        string location,
+        string projectDisplayName,
+        int projectNumber,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureGmailWriteAsync(cancellationToken).ConfigureAwait(false);
+        return await _inner.GetOrCreateProjectLabelAsync(location, projectDisplayName, projectNumber, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task EnsureProjectLocationAsync(
+        string location,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureGmailWriteAsync(cancellationToken).ConfigureAwait(false);
+        await _inner.EnsureProjectLocationAsync(location, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GmailProjectLabelMergeResult> MergeProjectLabelsAsync(
+        string sourceLabelId,
+        string targetLabelId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureGmailWriteAsync(cancellationToken).ConfigureAwait(false);
+        return await _inner.MergeProjectLabelsAsync(sourceLabelId, targetLabelId, cancellationToken)
             .ConfigureAwait(false);
     }
 

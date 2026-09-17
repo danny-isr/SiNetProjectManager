@@ -8,4 +8,9 @@ public sealed record GmailMailboxLabelAuditRow(
     string? ProjectDisplayName,
     string? PlaceName,
     string Note,
-    bool IsDuplicate);
+    bool IsDuplicate,
+    string? ExpectedPath = null,
+    GmailProjectLabelPathStatus Status = GmailProjectLabelPathStatus.None,
+    int? MessageCount = null,
+    string? ParentPath = null,
+    string StatusLabel = "");

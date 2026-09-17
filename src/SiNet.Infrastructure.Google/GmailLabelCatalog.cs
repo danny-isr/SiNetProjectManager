@@ -1,4 +1,5 @@
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Email;
 
 namespace SiNet.Infrastructure.Google;
 
@@ -8,7 +9,8 @@ internal sealed record GmailLabelRecord(
     string? BackgroundColor = null,
     string? TextColor = null,
     string? Type = null,
-    int? MessagesUnread = null);
+    int? MessagesUnread = null,
+    int? MessagesTotal = null);
 
 internal interface IGmailLabelDirectory
 {
@@ -27,6 +29,8 @@ internal interface IGmailLabelCatalog
 
     Task<IReadOnlyDictionary<string, GmailLabelRecord>> GetMapAsync(
         CancellationToken cancellationToken = default);
+
+    GmailProjectLabelIndex GetProjectLabelIndex(string rootLabel);
 
     Task<IReadOnlyDictionary<string, GmailLabelRecord>> ResolveForMessageAsync(
         string? messageId,
@@ -54,6 +58,8 @@ internal sealed class GmailLabelCatalog : IGmailLabelCatalog
     private int _generation;
     private int _listCallCount;
     private Task<IReadOnlyDictionary<string, GmailLabelRecord>>? _refreshInFlight;
+    private GmailProjectLabelIndex? _projectIndex;
+    private string? _projectIndexRoot;
 
     public GmailLabelCatalog(IGmailLabelDirectory directory, IAppLogger logger)
     {
@@ -66,6 +72,30 @@ internal sealed class GmailLabelCatalog : IGmailLabelCatalog
     public int ListCallCount => _listCallCount;
 
     public string? CachedSessionKey => _sessionKey;
+
+    public GmailProjectLabelIndex GetProjectLabelIndex(string rootLabel)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rootLabel);
+
+        lock (_mapLock)
+        {
+            DropCacheIfSessionChangedLocked();
+            if (_projectIndex is not null
+                && _projectIndex.CatalogGeneration == _generation
+                && string.Equals(_projectIndexRoot, rootLabel, StringComparison.Ordinal)
+                && string.Equals(_projectIndex.SessionKey, _sessionKey, StringComparison.Ordinal))
+            {
+                return _projectIndex;
+            }
+
+            var labels = _map is null
+                ? Array.Empty<(string Id, string Name)>()
+                : _map.Select(static pair => (pair.Value.Id, pair.Value.Name));
+            _projectIndex = GmailProjectLabelIndex.Build(labels, rootLabel, _sessionKey, _generation);
+            _projectIndexRoot = rootLabel;
+            return _projectIndex;
+        }
+    }
 
     public async Task<IReadOnlyDictionary<string, GmailLabelRecord>> GetMapAsync(
         CancellationToken cancellationToken = default)
@@ -249,6 +279,8 @@ internal sealed class GmailLabelCatalog : IGmailLabelCatalog
         _sessionKey = current;
         _generation++;
         _refreshInFlight = null;
+        _projectIndex = null;
+        _projectIndexRoot = null;
     }
 
     private void InvalidateLocked(string reason)
@@ -258,6 +290,8 @@ internal sealed class GmailLabelCatalog : IGmailLabelCatalog
         _hasDirectorySnapshot = false;
         _refreshInFlight = null;
         _generation++;
+        _projectIndex = null;
+        _projectIndexRoot = null;
     }
 
     private static List<string> CollectUnknown(

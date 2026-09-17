@@ -50,4 +50,48 @@ public static class EmailProjectLabelParser
 
         return (TryExtractProjectIdFromDisplaySegment(display), display.Trim());
     }
+
+    /// <summary>
+    /// Strict project-label parse: leaf under <paramref name="rootLabel"/> whose name starts with
+    /// <c>(digits)</c>. Parent folders and labels outside the root are rejected.
+    /// </summary>
+    public static ProjectLabelEntry? TryParseProjectLabel(
+        string? labelId,
+        string? fullPath,
+        string rootLabel = EmailGmailLabelNames.RootLabel)
+    {
+        var parsed = TryParseProjectFromLabelPath(fullPath, rootLabel);
+        if (parsed is not { ProjectId: int number } || number <= 0
+            || string.IsNullOrWhiteSpace(parsed.Value.ProjectDisplayName)
+            || string.IsNullOrWhiteSpace(fullPath))
+        {
+            return null;
+        }
+
+        return new ProjectLabelEntry(
+            string.IsNullOrWhiteSpace(labelId) ? fullPath.Trim() : labelId.Trim(),
+            fullPath.Trim(),
+            number,
+            parsed.Value.ProjectDisplayName,
+            TryExtractParentPath(fullPath) ?? string.Empty);
+    }
+
+    public static string? TryExtractParentPath(string? fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath))
+        {
+            return null;
+        }
+
+        var lastSlash = fullPath.LastIndexOf('/');
+        return lastSlash <= 0 ? null : fullPath[..lastSlash];
+    }
+
+    public static string BuildCanonicalPath(string rootLabel, string location, string projectDisplayName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rootLabel);
+        ArgumentException.ThrowIfNullOrWhiteSpace(location);
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectDisplayName);
+        return $"{rootLabel.Trim()}/{location.Trim()}/{projectDisplayName.Trim()}";
+    }
 }

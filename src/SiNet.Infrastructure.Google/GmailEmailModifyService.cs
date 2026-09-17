@@ -2,6 +2,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
 using SiNet.Application.Abstractions.Email;
 using SiNet.Application.Abstractions.Logging;
+using SiNet.Application.Email;
 
 namespace SiNet.Infrastructure.Google;
 
@@ -34,24 +35,55 @@ public sealed class GmailEmailModifyService : IEmailGmailModifyService
 
     public string RootLabel => _provider.RootLabel;
 
-    public async Task<string> GetOrCreateProjectLabelAsync(
+    public Task<string> GetOrCreateProjectLabelAsync(
         string location,
         string projectDisplayName,
         CancellationToken cancellationToken = default)
     {
-        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
-        var fullPath = $"{_provider.RootLabel}/{location}/{projectDisplayName}";
-        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+        var number = EmailProjectLabelParser.TryExtractProjectIdFromDisplaySegment(projectDisplayName)
+            ?? throw new ArgumentException(
+                "Project display name must start with (ProjectNumber).",
+                nameof(projectDisplayName));
+        return GetOrCreateProjectLabelAsync(location, projectDisplayName, number, cancellationToken);
+    }
 
-        var existing = GmailLabelIdempotency.FindExactByName(labels.Labels, fullPath);
-        if (!string.IsNullOrWhiteSpace(existing?.Id))
+    public async Task<string> GetOrCreateProjectLabelAsync(
+        string location,
+        string projectDisplayName,
+        int projectNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(location);
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectDisplayName);
+        if (projectNumber <= 0)
         {
-            _catalog.NotifyCreated(existing.Id, existing.Name ?? fullPath);
-            return existing.Id;
+            throw new ArgumentOutOfRangeException(nameof(projectNumber), projectNumber, "ProjectNumber must be positive.");
         }
 
-        await EnsureParentLabelExistsAsync(gmail, labels, _provider.RootLabel, cancellationToken).ConfigureAwait(false);
-        await EnsureParentLabelExistsAsync(gmail, labels, $"{_provider.RootLabel}/{location}", cancellationToken).ConfigureAwait(false);
+        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
+        var map = await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+        var decision = ResolveProjectLabel(projectNumber);
+        if (decision.Kind == GmailProjectLabelResolveKind.ReuseExisting)
+        {
+            return decision.Existing!.LabelId;
+        }
+
+        if (decision.Kind == GmailProjectLabelResolveKind.DuplicateConflict)
+        {
+            throw new GmailDuplicateProjectLabelException(projectNumber, decision.Matches);
+        }
+
+        var fullPath = EmailProjectLabelParser.BuildCanonicalPath(_provider.RootLabel, location, projectDisplayName);
+        var existingPath = FindByName(map, fullPath);
+        if (!string.IsNullOrWhiteSpace(existingPath?.Id))
+        {
+            _catalog.NotifyCreated(existingPath.Id, existingPath.Name);
+            return existingPath.Id;
+        }
+
+        await EnsureParentFromCatalogAsync(gmail, _provider.RootLabel, cancellationToken).ConfigureAwait(false);
+        await EnsureParentFromCatalogAsync(gmail, $"{_provider.RootLabel}/{location.Trim()}", cancellationToken)
+            .ConfigureAwait(false);
 
         try
         {
@@ -68,11 +100,63 @@ public sealed class GmailEmailModifyService : IEmailGmailModifyService
         }
         catch (Exception ex) when (GmailLabelIdempotency.IsLabelExistsOrConflicts(ex))
         {
-            var relisted = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
-            var resolved = GmailLabelIdempotency.ResolveIntendedAfterConflict(relisted.Labels, fullPath);
-            _catalog.NotifyCreated(resolved.Id!, resolved.Name ?? fullPath);
-            return resolved.Id!;
+            _catalog.Invalidate("create-conflict");
+            map = await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+            var retry = ResolveProjectLabel(projectNumber);
+            if (retry.Kind == GmailProjectLabelResolveKind.ReuseExisting)
+            {
+                return retry.Existing!.LabelId;
+            }
+
+            if (retry.Kind == GmailProjectLabelResolveKind.DuplicateConflict)
+            {
+                throw new GmailDuplicateProjectLabelException(projectNumber, retry.Matches);
+            }
+
+            var resolved = FindByName(map, fullPath);
+            if (!string.IsNullOrWhiteSpace(resolved?.Id))
+            {
+                _catalog.NotifyCreated(resolved.Id, resolved.Name);
+                return resolved.Id;
+            }
+
+            throw new InvalidOperationException($"Gmail label '{fullPath}' conflicted but could not be resolved.");
         }
+    }
+
+    public async Task EnsureProjectLocationAsync(
+        string location,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(location);
+        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
+        await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureParentFromCatalogAsync(gmail, _provider.RootLabel, cancellationToken).ConfigureAwait(false);
+        await EnsureParentFromCatalogAsync(gmail, $"{_provider.RootLabel}/{location.Trim()}", cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<GmailProjectLabelMergeResult> MergeProjectLabelsAsync(
+        string sourceLabelId,
+        string targetLabelId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceLabelId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetLabelId);
+
+        var map = await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+        var index = _catalog.GetProjectLabelIndex(RootLabel);
+        var source = ResolveProjectEntry(map, index, sourceLabelId.Trim());
+        var target = ResolveProjectEntry(map, index, targetLabelId.Trim());
+        var validation = GmailProjectLabelMerge.Validate(source, target);
+        if (validation is not null)
+        {
+            return GmailProjectLabelMergeResult.Rejected(validation);
+        }
+
+        return await GmailProjectLabelMerge
+            .ExecuteAsync(new ModifyMergeOperations(this), source!, target!, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<string?> GetProjectLabelIdAsync(
@@ -80,23 +164,32 @@ public sealed class GmailEmailModifyService : IEmailGmailModifyService
         string projectDisplayName,
         CancellationToken cancellationToken = default)
     {
-        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
-        var fullPath = $"{_provider.RootLabel}/{location}/{projectDisplayName}";
-        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
-        return labels.Labels?
-            .FirstOrDefault(label => string.Equals(label.Name, fullPath, StringComparison.OrdinalIgnoreCase))
-            ?.Id;
+        await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+        var number = EmailProjectLabelParser.TryExtractProjectIdFromDisplaySegment(projectDisplayName);
+        if (number is int projectNumber && projectNumber > 0)
+        {
+            var decision = ResolveProjectLabel(projectNumber);
+            if (decision.Kind == GmailProjectLabelResolveKind.ReuseExisting)
+            {
+                return decision.Existing!.LabelId;
+            }
+
+            if (decision.Kind == GmailProjectLabelResolveKind.DuplicateConflict)
+            {
+                return null;
+            }
+        }
+
+        var fullPath = EmailProjectLabelParser.BuildCanonicalPath(_provider.RootLabel, location, projectDisplayName);
+        return FindByName(await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false), fullPath)?.Id;
     }
 
     public async Task<string?> GetProjectLabelIdByFullPathAsync(
         string fullPath,
         CancellationToken cancellationToken = default)
     {
-        var gmail = await RequireServiceAsync(cancellationToken).ConfigureAwait(false);
-        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
-        return labels.Labels?
-            .FirstOrDefault(label => string.Equals(label.Name, fullPath, StringComparison.OrdinalIgnoreCase))
-            ?.Id;
+        var map = await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+        return FindByName(map, fullPath)?.Id;
     }
 
     public async Task<IReadOnlyList<string>> GetProjectLabelIdsOnMessageAsync(
@@ -110,19 +203,13 @@ public sealed class GmailEmailModifyService : IEmailGmailModifyService
             return [];
         }
 
-        var labels = await gmail.Users.Labels.List("me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
-        var labelMap = labels.Labels?
-            .Where(static label => !string.IsNullOrWhiteSpace(label.Id) && !string.IsNullOrWhiteSpace(label.Name))
-            .ToDictionary(static label => label.Id!, static label => label.Name!, StringComparer.Ordinal)
-            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        var catalogMap = await _catalog
+            .ResolveForMessageAsync(gmailMessageId, message.LabelIds, cancellationToken)
+            .ConfigureAwait(false);
 
-        var rootPrefix = $"{RootLabel}/";
         return message.LabelIds
-            .Where(labelMap.ContainsKey)
-            .Select(id => labelMap[id])
-            .Where(name => name.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase)
-                && name.Count(static ch => ch == '/') >= 2)
-            .Select(name => labels.Labels!.First(label => string.Equals(label.Name, name, StringComparison.OrdinalIgnoreCase)).Id!)
+            .Where(id => catalogMap.TryGetValue(id, out var record)
+                && EmailGmailLabelNames.IsProjectLabel(record.Name, RootLabel))
             .Distinct(StringComparer.Ordinal)
             .ToList();
     }
@@ -364,6 +451,78 @@ public sealed class GmailEmailModifyService : IEmailGmailModifyService
                 existingLabels.Labels.Add(resolved);
             }
         }
+    }
+
+    private GmailProjectLabelResolveDecision ResolveProjectLabel(int projectNumber)
+        => GmailProjectLabelResolver.Resolve(_catalog.GetProjectLabelIndex(RootLabel), projectNumber);
+
+    private static ProjectLabelEntry? ResolveProjectEntry(
+        IReadOnlyDictionary<string, GmailLabelRecord> map,
+        GmailProjectLabelIndex index,
+        string labelId)
+    {
+        if (map.TryGetValue(labelId, out var record))
+        {
+            return EmailProjectLabelParser.TryParseProjectLabel(record.Id, record.Name);
+        }
+
+        return index.FindByLabelId(labelId);
+    }
+
+    private static GmailLabelRecord? FindByName(
+        IReadOnlyDictionary<string, GmailLabelRecord> map,
+        string fullPath)
+        => map.Values.FirstOrDefault(label =>
+            string.Equals(label.Name, fullPath, StringComparison.OrdinalIgnoreCase));
+
+    private async Task EnsureParentFromCatalogAsync(
+        GmailService gmail,
+        string labelName,
+        CancellationToken cancellationToken)
+    {
+        var map = await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+        if (FindByName(map, labelName) is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            var created = await gmail.Users.Labels.Create(new Label
+            {
+                Name = labelName,
+                LabelListVisibility = "labelShow",
+                MessageListVisibility = "show",
+            }, "me").ExecuteAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(created.Id))
+                _catalog.NotifyCreated(created.Id, created.Name ?? labelName);
+        }
+        catch (Exception ex) when (GmailLabelIdempotency.IsLabelExistsOrConflicts(ex))
+        {
+            _catalog.Invalidate("parent-create-conflict");
+            map = await _catalog.GetMapAsync(cancellationToken).ConfigureAwait(false);
+            var resolved = FindByName(map, labelName);
+            if (!string.IsNullOrWhiteSpace(resolved?.Id))
+                _catalog.NotifyCreated(resolved.Id, resolved.Name);
+        }
+    }
+
+    private sealed class ModifyMergeOperations(GmailEmailModifyService owner) : IGmailProjectLabelMergeOperations
+    {
+        public Task<IReadOnlyList<string>> ListMessageIdsByLabelAsync(
+            string labelId,
+            CancellationToken cancellationToken)
+            => owner.ListMessageIdsByLabelAsync(labelId, cancellationToken);
+
+        public Task AttachProjectLabelAsync(
+            string gmailMessageId,
+            string projectLabelId,
+            CancellationToken cancellationToken)
+            => owner.AttachProjectLabelAsync(gmailMessageId, projectLabelId, cancellationToken);
+
+        public Task DeleteLabelAsync(string labelId, CancellationToken cancellationToken)
+            => owner.DeleteLabelAsync(labelId, cancellationToken);
     }
 
     private async Task<GmailService> RequireServiceAsync(CancellationToken cancellationToken)

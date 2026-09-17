@@ -47,7 +47,7 @@ public static class GmailMailboxLabelAuditMatcher
         }
 
         var duplicateNumbers = drafts
-            .Where(static d => d.ParsedProjectNumber is int n && n > 0 && d.MatchedProject)
+            .Where(static d => d.IsProjectLeaf && d.ParsedProjectNumber is int n && n > 0)
             .GroupBy(static d => d.ParsedProjectNumber!.Value)
             .Where(static g => g.Count() > 1)
             .Select(static g => g.Key)
@@ -56,8 +56,10 @@ public static class GmailMailboxLabelAuditMatcher
         var rows = new List<GmailMailboxLabelAuditRow>(drafts.Count);
         foreach (var draft in drafts)
         {
-            var isDuplicate = draft.ParsedProjectNumber is int number
+            var isDuplicate = draft.IsProjectLeaf
+                && draft.ParsedProjectNumber is int number
                 && duplicateNumbers.Contains(number);
+            var status = Classify(draft, isDuplicate);
             var note = BuildNote(draft, drafts, isDuplicate);
             rows.Add(new GmailMailboxLabelAuditRow(
                 draft.LabelId,
@@ -66,7 +68,12 @@ public static class GmailMailboxLabelAuditMatcher
                 draft.ProjectDisplayName,
                 draft.PlaceName,
                 note,
-                isDuplicate));
+                isDuplicate,
+                draft.ExpectedPath,
+                status,
+                draft.MessageCount,
+                draft.ParentPath,
+                StatusLabel(status)));
         }
 
         return rows
@@ -88,8 +95,10 @@ public static class GmailMailboxLabelAuditMatcher
         var placeName = TryExtractPlaceSegment(name, rootLabel);
         var underRoot = name.StartsWith($"{rootLabel}/", StringComparison.OrdinalIgnoreCase)
             || string.Equals(name, rootLabel, StringComparison.OrdinalIgnoreCase);
+        var projectLeaf = EmailProjectLabelParser.TryParseProjectLabel(label.Id, name, rootLabel);
 
         string? projectDisplay = null;
+        string? expectedPath = null;
         var matchedProject = false;
         if (parsedNumber is int number && projectsByNumber.TryGetValue(number, out var project))
         {
@@ -97,6 +106,8 @@ public static class GmailMailboxLabelAuditMatcher
             projectDisplay = string.IsNullOrWhiteSpace(project.ProjectLabelName)
                 ? $"({project.ProjectNumber}){project.ProjectName}"
                 : project.ProjectLabelName;
+            var location = string.IsNullOrWhiteSpace(project.PlaceName) ? "General" : project.PlaceName.Trim();
+            expectedPath = EmailProjectLabelParser.BuildCanonicalPath(rootLabel, location, projectDisplay);
         }
 
         string? closePlace = null;
@@ -121,7 +132,11 @@ public static class GmailMailboxLabelAuditMatcher
             placeName,
             matchedProject,
             underRoot,
-            closePlace);
+            closePlace,
+            projectLeaf is not null,
+            expectedPath,
+            label.MessagesTotal,
+            projectLeaf?.ParentPath);
     }
 
     private static string BuildNote(DraftRow draft, IReadOnlyList<DraftRow> all, bool isDuplicate)
@@ -176,6 +191,44 @@ public static class GmailMailboxLabelAuditMatcher
         return string.IsNullOrWhiteSpace(place) ? null : place.Trim();
     }
 
+    private static GmailProjectLabelPathStatus Classify(DraftRow draft, bool isDuplicate)
+    {
+        if (isDuplicate)
+        {
+            return GmailProjectLabelPathStatus.Duplicate;
+        }
+
+        if (!draft.IsProjectLeaf)
+        {
+            return draft.ParsedProjectNumber is not null && !draft.MatchedProject
+                ? GmailProjectLabelPathStatus.Unknown
+                : GmailProjectLabelPathStatus.None;
+        }
+
+        if (!draft.MatchedProject)
+        {
+            return GmailProjectLabelPathStatus.Unknown;
+        }
+
+        if (!string.IsNullOrWhiteSpace(draft.ExpectedPath)
+            && string.Equals(draft.LabelName, draft.ExpectedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return GmailProjectLabelPathStatus.Correct;
+        }
+
+        return GmailProjectLabelPathStatus.Misplaced;
+    }
+
+    private static string StatusLabel(GmailProjectLabelPathStatus status) =>
+        status switch
+        {
+            GmailProjectLabelPathStatus.Correct => "תקין",
+            GmailProjectLabelPathStatus.Misplaced => "מיקום שגוי",
+            GmailProjectLabelPathStatus.Duplicate => "כפילות",
+            GmailProjectLabelPathStatus.Unknown => "לא במערכת",
+            _ => string.Empty
+        };
+
     private sealed record DraftRow(
         string LabelId,
         string LabelName,
@@ -184,5 +237,9 @@ public static class GmailMailboxLabelAuditMatcher
         string? PlaceName,
         bool MatchedProject,
         bool UnderRoot,
-        string? ClosePlaceTitle);
+        string? ClosePlaceTitle,
+        bool IsProjectLeaf,
+        string? ExpectedPath,
+        int? MessageCount,
+        string? ParentPath);
 }

@@ -38,6 +38,28 @@ Only an explicit user logout, account-switch, or a real authentication failure m
 
 TTL is not used as the primary consistency mechanism.
 
+## ProjectNumber index (1.0.42)
+
+Project-label identity is **`ProjectNumber`**, not `FullPath`. A mailbox-scoped index is **derived from the current `GmailLabelCatalog` snapshot** — it is not a second cache.
+
+```
+Gmail Labels.List
+    → GmailLabelCatalog (session key + generation)
+    → GmailProjectLabelIndex (ProjectNumber → ProjectLabelEntry[])
+    → GetOrCreate / Label Management
+```
+
+| Event | Index action |
+| --- | --- |
+| Catalog first load / `GetMapAsync` | Build index from snapshot |
+| `NotifyCreated` / `NotifyRenamed` / `NotifyDeleted` | Generation bump → next lookup rebuilds from the updated map |
+| Label Management open / explicit refresh | `Invalidate` then `Labels.List` → new snapshot → new index |
+| Gmail session / account change | Catalog drops the previous map; index must not leak the old mailbox |
+| Unknown `LabelId` on a message | Existing catalog refresh; index rebuilds with the new snapshot |
+| Email filing | Lookup the cached index. **No** `Labels.List` per message when a valid snapshot exists |
+
+Parser: `EmailProjectLabelParser.TryParseProjectLabel` — only leaves under `RootLabel` with `^\((\d+)\)`. Parent folders and labels outside the root are ignored.
+
 ## Out of Scope
 
 - SQL `ProjectId` as filing proof

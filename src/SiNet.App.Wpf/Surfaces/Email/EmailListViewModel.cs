@@ -39,6 +39,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
     private readonly ICurrentUserContext? _currentUser;
     private readonly IProjectGmailLabelSyncService? _projectLabelSync;
     private readonly IGmailMailboxLabelAuditService? _labelAudit;
+    private readonly IEmailGmailModifyService? _gmailModify;
     private readonly IUserMailViewPreferencesService? _mailViewPrefs;
     private readonly MailboxReloadOrchestrator _reloadGate;
 
@@ -105,13 +106,15 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         IProjectGmailLabelSyncService? projectLabelSync = null,
         IGmailMailboxLabelAuditService? labelAudit = null,
         IUserMailViewPreferencesService? mailViewPrefs = null,
-        MailboxReloadOrchestrator? reloadOrchestrator = null)
+        MailboxReloadOrchestrator? reloadOrchestrator = null,
+        IEmailGmailModifyService? gmailModify = null)
     {
         _emailGateway = emailGateway ?? throw new ArgumentNullException(nameof(emailGateway));
         _threadLinkQuery = threadLinkQuery;
         _threadMappingSync = threadMappingSync;
         _projectLabelSync = projectLabelSync;
         _labelAudit = labelAudit;
+        _gmailModify = gmailModify;
         _mailViewPrefs = mailViewPrefs;
         _reloadGate = reloadOrchestrator ?? new MailboxReloadOrchestrator();
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
@@ -860,7 +863,7 @@ public sealed partial class EmailListViewModel : ObservableObject, IEmailListRow
         {
             IsBusy = true;
             var rows = await _labelAudit.AuditAsync(CancellationToken.None).ConfigureAwait(true);
-            var dialog = new GmailMailboxLabelAuditWindow(rows);
+            var dialog = new GmailMailboxLabelAuditWindow(rows, _labelAudit, _gmailModify);
             var owner = System.Windows.Application.Current?.Windows
                 .OfType<System.Windows.Window>()
                 .FirstOrDefault(w => w.IsActive);

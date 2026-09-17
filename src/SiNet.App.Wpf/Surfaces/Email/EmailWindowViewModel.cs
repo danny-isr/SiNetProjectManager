@@ -236,7 +236,8 @@ public sealed partial class EmailWindowViewModel : ObservableObject, IDisposable
             projectLabelSync,
             labelAudit,
             mailViewPrefs,
-            _reloadGate);
+            _reloadGate,
+            gmailModify);
 
         EmailDetail = new EmailDetailViewModel(
             EmailList,

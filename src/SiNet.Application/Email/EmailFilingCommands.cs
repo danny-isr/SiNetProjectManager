@@ -26,4 +26,5 @@ public sealed record UnfileEmailCommand(
 public sealed record EmailFilingResult(
     bool Succeeded,
     string? ErrorMessage = null,
-    int? AssignedProjectId = null);
+    int? AssignedProjectId = null,
+    bool RequiresLabelManagement = false);

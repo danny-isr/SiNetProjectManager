@@ -72,7 +72,7 @@ public sealed class GmailMailboxLabelAuditMatcherTests
     }
 
     [Fact]
-    public void Unknown_number_is_not_a_duplicate()
+    public void Unknown_number_under_root_is_a_duplicate_when_repeated()
     {
         var path = $"{EmailGmailLabelNames.RootLabel}/X/(9999)Ghost";
         var rows = GmailMailboxLabelAuditMatcher.BuildRows(
@@ -83,9 +83,35 @@ public sealed class GmailMailboxLabelAuditMatcherTests
             [Tower]);
 
         Assert.Equal(2, rows.Count);
-        Assert.All(rows, r => Assert.False(r.IsDuplicate));
-        Assert.All(rows, r => Assert.Contains("מספר לא במערכת", r.Note, StringComparison.Ordinal));
-        Assert.All(rows, r => Assert.DoesNotContain("כפילות", r.Note, StringComparison.Ordinal));
+        Assert.All(rows, r => Assert.True(r.IsDuplicate));
+        Assert.All(rows, r => Assert.Equal(GmailProjectLabelPathStatus.Duplicate, r.Status));
+        Assert.All(rows, r => Assert.Contains("כפילות", r.Note, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Unique_leaf_on_expected_path_is_correct()
+    {
+        var path = $"{EmailGmailLabelNames.RootLabel}/Tel Aviv/(1042)North Towers";
+        var row = Assert.Single(GmailMailboxLabelAuditMatcher.BuildRows(
+            [new GmailLabelInfo("l1", path)],
+            [Tower]));
+
+        Assert.Equal(GmailProjectLabelPathStatus.Correct, row.Status);
+        Assert.Equal(path, row.ExpectedPath);
+        Assert.False(row.IsDuplicate);
+    }
+
+    [Fact]
+    public void Unique_leaf_under_other_folder_is_misplaced()
+    {
+        var path = $"{EmailGmailLabelNames.RootLabel}/ישן/(1042)North Towers";
+        var row = Assert.Single(GmailMailboxLabelAuditMatcher.BuildRows(
+            [new GmailLabelInfo("l1", path)],
+            [Tower]));
+
+        Assert.Equal(GmailProjectLabelPathStatus.Misplaced, row.Status);
+        Assert.Equal($"{EmailGmailLabelNames.RootLabel}/Tel Aviv/(1042)North Towers", row.ExpectedPath);
+        Assert.False(row.IsDuplicate);
     }
 
     [Fact]

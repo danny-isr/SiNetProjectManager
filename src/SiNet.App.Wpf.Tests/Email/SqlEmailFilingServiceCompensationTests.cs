@@ -99,6 +99,41 @@ public sealed class SqlEmailFilingServiceCompensationTests
         Assert.Empty(gmail.RemovedLabels);
     }
 
+    [Fact]
+    public async Task FileToProject_duplicate_project_labels_does_not_create_and_asks_for_management()
+    {
+        var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .Options;
+
+        await using (var seed = new SiNetSQLDbContext(options))
+        {
+            seed.Projects.Add(new Project
+            {
+                Id = 3070,
+                Number = 3070,
+                Title = "יבנה מזרח",
+                NameAndNumber = "(3070)מגרש 166-יבנה מזרח",
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        var gmail = new DuplicateConflictGmailModify();
+        var sut = new SqlEmailFilingService(new StubDbContextFactory(options), gmail, NullLogger.Instance);
+
+        var result = await sut.FileToProjectAsync(new FileEmailToProjectCommand(
+            TargetProjectId: 3070,
+            ActingUserId: 1,
+            GmailMessageId: GmailMessageId));
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.RequiresLabelManagement);
+        Assert.Contains("3070", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("ניהול התוויות", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.False(gmail.Created);
+        Assert.Empty(gmail.Attached);
+    }
+
     private sealed class StubDbContextFactory(DbContextOptions<SiNetSQLDbContext> options)
         : IDbContextFactory<SiNetSQLDbContext>
     {
@@ -177,6 +212,73 @@ public sealed class SqlEmailFilingServiceCompensationTests
             Task.FromResult<IReadOnlyList<string>>([]);
 
         public List<string> MarkedAsReadMessageIds { get; } = new();
+    }
+
+    private sealed class DuplicateConflictGmailModify : IEmailGmailModifyService
+    {
+        public bool Created { get; private set; }
+
+        public List<string> Attached { get; } = [];
+
+        public string RootLabel => EmailGmailLabelNames.RootLabel;
+
+        public Task<string> GetOrCreateProjectLabelAsync(
+            string location, string projectDisplayName, CancellationToken cancellationToken = default)
+            => throw new GmailDuplicateProjectLabelException(3070, []);
+
+        public Task<string> GetOrCreateProjectLabelAsync(
+            string location, string projectDisplayName, int projectNumber, CancellationToken cancellationToken = default)
+            => throw new GmailDuplicateProjectLabelException(projectNumber, []);
+
+        public Task<string?> GetProjectLabelIdAsync(
+            string location, string projectDisplayName, CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(null);
+
+        public Task<string?> GetProjectLabelIdByFullPathAsync(
+            string fullPath, CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(null);
+
+        public Task AttachProjectLabelAsync(
+            string gmailMessageId, string projectLabelId, CancellationToken cancellationToken = default)
+        {
+            Attached.Add(projectLabelId);
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveProjectLabelAsync(
+            string gmailMessageId, string projectLabelId, bool moveToInbox = true, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<string>> GetProjectLabelIdsOnMessageAsync(
+            string gmailMessageId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task RemoveProjectLabelsFromMessageAsync(
+            string gmailMessageId,
+            IReadOnlyList<string> labelIdsToRemove,
+            bool moveToInbox = false,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task ApplyTriageStatusLabelAsync(
+            string gmailMessageId, EmailTriageStatus status, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task MarkAsReadAsync(
+            string gmailMessageId, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task RenameLabelAsync(
+            string labelId, string newFullPath, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task DeleteLabelAsync(
+            string labelId, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<string>> ListMessageIdsByLabelAsync(
+            string labelId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private sealed class NullLogger : IAppLogger

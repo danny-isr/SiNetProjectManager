@@ -379,9 +379,13 @@ public sealed class GmailEmailGateway : IEmailGateway
                 label.Id ?? string.Empty,
                 label.Name ?? string.Empty,
                 label.Color?.BackgroundColor,
-                label.Color?.TextColor))
+                label.Color?.TextColor,
+                label.MessagesTotal))
             .ToList();
     }
+
+    public void InvalidateUserLabelCache(string reason)
+        => _catalog.Invalidate(string.IsNullOrWhiteSpace(reason) ? "manual" : reason);
 
     private async Task<IReadOnlyList<EmailSummary>> GetSummariesForLabelIdsAsync(
         GmailService gmail,
@@ -747,6 +751,7 @@ public sealed class GmailEmailGateway : IEmailGateway
                 Name = record.Name,
                 Type = record.Type,
                 MessagesUnread = record.MessagesUnread,
+                MessagesTotal = record.MessagesTotal,
                 Color = record.BackgroundColor is null && record.TextColor is null
                     ? null
                     : new LabelColor

@@ -72,6 +72,14 @@ public interface IEmailGateway
         Task.FromResult<IReadOnlyList<GmailLabelInfo>>([]);
 
     /// <summary>
+    /// Drops the in-process Gmail label catalog so the next read issues <c>Labels.List</c>.
+    /// Used by Label Management refresh. Default: no-op for test fakes.
+    /// </summary>
+    void InvalidateUserLabelCache(string reason)
+    {
+    }
+
+    /// <summary>
     /// Gets unread count for the mailbox scope in <paramref name="query"/>.
     /// Uses a separate Gmail query from paged list fetch — not derived from the current page.
     /// </summary>

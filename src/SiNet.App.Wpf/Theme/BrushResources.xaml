@@ -14,6 +14,7 @@
     <SolidColorBrush x:Key="SiDangerBrush" Color="#DC2626"/>
     <SolidColorBrush x:Key="SiDangerSurfaceBrush" Color="#FFEBEE"/>
     <SolidColorBrush x:Key="SiWarningBrush" Color="#D97706"/>
+    <SolidColorBrush x:Key="SiWarningSurfaceBrush" Color="#FEF3C7"/>
     <SolidColorBrush x:Key="SiSuccessBrush" Color="#059669"/>
 
     <!-- ProjectWork tree state colors (product-fixed semantic tokens) -->

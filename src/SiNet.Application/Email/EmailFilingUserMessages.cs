@@ -13,6 +13,11 @@ public static class EmailFilingUserMessages
     public static string FromException(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        if (exception is GmailDuplicateProjectLabelException duplicate)
+        {
+            return duplicate.Message;
+        }
+
         var text = exception.ToString();
         if (text.Contains("GoogleApiException", StringComparison.Ordinal)
             || text.Contains("Gmail", StringComparison.OrdinalIgnoreCase)

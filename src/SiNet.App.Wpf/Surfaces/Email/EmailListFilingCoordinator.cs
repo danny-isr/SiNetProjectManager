@@ -21,6 +21,22 @@ internal sealed class EmailListFilingCoordinator
         _paging = paging;
     }
 
+    private void OfferLabelManagement(string? errorMessage)
+    {
+        var text = string.IsNullOrWhiteSpace(errorMessage)
+            ? GmailDuplicateProjectLabelException.FormatMessage(0)
+            : errorMessage;
+        var open = System.Windows.MessageBox.Show(
+            text + System.Environment.NewLine + System.Environment.NewLine + "לפתוח את חלון ניהול התוויות?",
+            "כפילות תוויות פרויקט",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+        if (open == System.Windows.MessageBoxResult.Yes)
+        {
+            _ = _owner.AuditMailboxLabelsAsync();
+        }
+    }
+
     public bool CanFileEmailToProject(EmailListRow? row) =>
         CanAttemptFileEmailToProject(row)
         && _owner.GetCurrentProject() is not null
@@ -151,6 +167,11 @@ internal sealed class EmailListFilingCoordinator
                     row.ThreadId,
                     row.InternetMessageId,
                     ThreadUniqueId: row.ThreadUniqueId)).ConfigureAwait(true);
+                if (!result.Succeeded && result.RequiresLabelManagement)
+                {
+                    OfferLabelManagement(result.ErrorMessage);
+                }
+
                 return (result.Succeeded, result.ErrorMessage ?? "שיוך לפרויקט נכשל.");
             },
             onSuccessLocalUpdate: async currentRow =>
@@ -226,6 +247,11 @@ internal sealed class EmailListFilingCoordinator
                     row.ThreadId,
                     row.InternetMessageId,
                     ThreadUniqueId: row.ThreadUniqueId)).ConfigureAwait(true);
+                if (!result.Succeeded && result.RequiresLabelManagement)
+                {
+                    OfferLabelManagement(result.ErrorMessage);
+                }
+
                 return (result.Succeeded, result.ErrorMessage ?? "שיוך לפרויקט השרשור נכשל.");
             },
             onSuccessLocalUpdate: currentRow => RefreshRowAfterThreadFileAsync(currentRow, threadProject),

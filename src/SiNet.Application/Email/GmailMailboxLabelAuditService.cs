@@ -21,6 +21,7 @@ public sealed class GmailMailboxLabelAuditService(
     public async Task<IReadOnlyList<GmailMailboxLabelAuditRow>> AuditAsync(
         CancellationToken cancellationToken = default)
     {
+        _emailGateway.InvalidateUserLabelCache("label-audit");
         var labels = await _emailGateway.GetAllUserLabelsAsync(cancellationToken).ConfigureAwait(false);
         var projects = await _projectQuery
             .SearchProjectsAsync(new ProjectSearchQuery(IncludeClosed: true), cancellationToken)

@@ -32,6 +32,7 @@ public static class ThemeResourceKeys
     public const string DangerBrush = "SiDangerBrush";
     public const string DangerSurfaceBrush = "SiDangerSurfaceBrush";
     public const string WarningBrush = "SiWarningBrush";
+    public const string WarningSurfaceBrush = "SiWarningSurfaceBrush";
     public const string SuccessBrush = "SiSuccessBrush";
 
     public const string TreePhysicalBrush = "SiTreePhysicalBrush";
@@ -89,6 +90,7 @@ public static class ThemeResourceKeys
         DangerBrush,
         DangerSurfaceBrush,
         WarningBrush,
+        WarningSurfaceBrush,
         SuccessBrush,
         TreePhysicalBrush,
         TreeMissingBrush,
@@ -110,6 +112,7 @@ public static class ThemeResourceKeys
         DangerBrush,
         DangerSurfaceBrush,
         WarningBrush,
+        WarningSurfaceBrush,
         SuccessBrush,
         TreePhysicalBrush,
         TreeMissingBrush,

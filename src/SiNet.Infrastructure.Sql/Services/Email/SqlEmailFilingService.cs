@@ -97,8 +97,11 @@ public sealed class SqlEmailFilingService(
                 removedProjectLabelIds = existingProjectLabelIds;
             }
 
+            var projectNumber = EmailProjectLabelParser.TryExtractProjectIdFromDisplaySegment(projectDisplayName)
+                ?? EmailProjectLabelParser.TryExtractProjectIdFromDisplaySegment(project.NameAndNumber)
+                ?? project.Id;
             var labelId = await _gmailModify
-                .GetOrCreateProjectLabelAsync(location, projectDisplayName, cancellationToken)
+                .GetOrCreateProjectLabelAsync(location, projectDisplayName, projectNumber, cancellationToken)
                 .ConfigureAwait(false);
             await _gmailModify
                 .AttachProjectLabelAsync(command.GmailMessageId, labelId, cancellationToken)
@@ -162,7 +165,11 @@ public sealed class SqlEmailFilingService(
             _logger.Error(
                 $"[EmailFiling] outcome=Failed op=FileToProject gmailMsg={command.GmailMessageId} project={command.TargetProjectId} detail={ex.Message}",
                 ex);
-            return new EmailFilingResult(false, EmailFilingUserMessages.FromException(ex));
+            var requiresManagement = ex is GmailDuplicateProjectLabelException;
+            return new EmailFilingResult(
+                false,
+                EmailFilingUserMessages.FromException(ex),
+                RequiresLabelManagement: requiresManagement);
         }
     }
 
