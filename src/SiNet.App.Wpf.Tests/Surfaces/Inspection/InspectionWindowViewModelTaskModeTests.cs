@@ -72,6 +72,32 @@ public sealed class InspectionWindowViewModelTaskModeTests
     }
 
     [Fact]
+    public async Task ApplyContextAsync_PerformProfessionalReview_without_report_does_not_select_an_existing_report()
+    {
+        var workspace = new StubInspectionWorkspace(
+            series: [new(1, "Series A")],
+            reports: [
+                new(13, 1, DateTime.UtcNow, "X"),
+                new(14, 2, DateTime.UtcNow, "X")],
+            notes: [new(1, "1.1", "historical", "Open")]);
+
+        var sut = new InspectionWindowViewModel(workspace);
+        var context = CreateContext(taskId: 330, projectId: 3227, reportId: 0) with
+        {
+            PrimaryWorkTargetEntityId = null,
+            TaskTypeCode = "PerformProfessionalReview",
+        };
+
+        var ok = await sut.ApplyContextAsync(context);
+
+        Assert.True(ok);
+        Assert.Null(sut.SelectedReport);
+        Assert.False(sut.CanCompleteTask);
+        Assert.Empty(sut.Notes);
+        Assert.Contains("צור או בחר דוח", sut.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ApplyContextAsync_FixReport_without_report_is_blocked()
     {
         var sut = new InspectionWindowViewModel(new StubInspectionWorkspace([], [], []));

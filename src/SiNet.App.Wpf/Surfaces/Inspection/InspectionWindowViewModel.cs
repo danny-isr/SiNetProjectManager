@@ -582,7 +582,11 @@ public sealed class InspectionWindowViewModel : ObservableObject
             RaiseCommandStates();
 
             await RefreshTemplatesAsync(ct).ConfigureAwait(true);
-            await LoadBrowseReportsAsync(context.ProjectId, selectReportId: null, ct).ConfigureAwait(true);
+            await LoadBrowseReportsAsync(
+                context.ProjectId,
+                selectReportId: null,
+                ct,
+                selectLatestWhenUnspecified: false).ConfigureAwait(true);
             StatusMessage =
                 "משימת בדיקת דוח: צור או בחר דוח לטיפול. הקישור למשימה ייווצר עם יצירת הדוח.";
             return true;
@@ -1643,11 +1647,27 @@ public sealed class InspectionWindowViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// When no report id is requested, browse mode opens the latest report.
+    /// Task creation mode must not: an unspecified id is not permission to pick first or last.
+    /// </summary>
+    internal static InspectionReportRow? ResolveBrowseSelection(
+        IReadOnlyList<InspectionReportRow> reports,
+        int? selectReportId,
+        bool selectLatestWhenUnspecified)
+    {
+        if (selectReportId is int id)
+            return reports.FirstOrDefault(r => r.ReportId == id);
+
+        return selectLatestWhenUnspecified ? reports.FirstOrDefault() : null;
+    }
+
     private async Task LoadBrowseReportsAsync(
         int projectId,
         int? selectReportId,
         CancellationToken ct = default,
-        bool manageBusy = true)
+        bool manageBusy = true,
+        bool selectLatestWhenUnspecified = true)
     {
         if (_workspace is null)
             return;
@@ -1695,10 +1715,7 @@ public sealed class InspectionWindowViewModel : ObservableObject
                 foreach (var row in all)
                     Reports.Add(row);
 
-                var target = selectReportId is int id
-                    ? Reports.FirstOrDefault(r => r.ReportId == id)
-                    : Reports.FirstOrDefault();
-                SelectedReport = target;
+                SelectedReport = ResolveBrowseSelection(Reports, selectReportId, selectLatestWhenUnspecified);
             }
             finally
             {
