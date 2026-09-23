@@ -16,7 +16,7 @@ public static class WorkflowAdoptionMarkers
 
     public static bool IsMarked(string? notes) =>
         !string.IsNullOrWhiteSpace(notes)
-        && notes.Contains(NotesPrefix, StringComparison.Ordinal);
+        && notes.StartsWith(NotesPrefix, StringComparison.Ordinal);
 
     public static string BuildNotes(
         string stageCode,

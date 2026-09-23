@@ -29,6 +29,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
     private readonly IAuthorizationQueryService? _authorization;
     private readonly IAppLogger? _logger;
     private readonly IWorkflowAdoptionDialogLauncher? _adoptionLauncher;
+    private bool _canAdoptFeature;
 
     private CancellationTokenSource? _loadCts;
     private bool _isBusy;
@@ -75,6 +76,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         _authorization = authorization;
         _logger = logger;
         _adoptionLauncher = adoptionLauncher;
+        _canAdoptFeature = authorization is null;
 
         Rows = new ObservableCollection<ProjectsDashboardRowVm>();
         StatusFilterOptions = new ObservableCollection<ProjectFilterOptionDto>();
@@ -84,9 +86,9 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
         OpenSelectedCommand = new AsyncRelayCommand(OpenSelectedAsync, () => Selected is not null);
         EditSelectedCommand = new AsyncRelayCommand(EditSelectedAsync, () => Selected is not null);
-        AdoptExistingWorkflowCommand = new RelayCommand(
-            _ => AdoptExistingWorkflow(),
-            _ => Selected is not null && _adoptionLauncher is not null);
+        AdoptExistingWorkflowCommand = new AsyncRelayCommand(
+            AdoptExistingWorkflowAsync,
+            () => Selected is not null && _adoptionLauncher is not null && _canAdoptFeature);
     }
 
     public ObservableCollection<ProjectsDashboardRowVm> Rows { get; }
@@ -224,7 +226,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
                 return;
             (OpenSelectedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             (EditSelectedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            (AdoptExistingWorkflowCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (AdoptExistingWorkflowCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 
@@ -284,6 +286,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
             if (!SetField(ref _isBusy, value))
                 return;
             (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (AdoptExistingWorkflowCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 
@@ -294,6 +297,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
 
     public async Task LoadAsync()
     {
+        await RefreshAdoptPermissionAsync().ConfigureAwait(true);
         await EnsureFilterOptionsAsync().ConfigureAwait(true);
         await RefreshAsync().ConfigureAwait(true);
     }
@@ -366,13 +370,29 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         }
     }
 
-    private void AdoptExistingWorkflow()
+    internal async Task AdoptExistingWorkflowAsync()
     {
         if (Selected is null || _adoptionLauncher is null)
             return;
 
+        await RefreshAdoptPermissionAsync().ConfigureAwait(true);
+        if (!_canAdoptFeature)
+        {
+            StatusMessage = "אין הרשאה להטמעת תהליך.";
+            return;
+        }
+
         var owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
         _adoptionLauncher.Show(Selected.ProjectId, owner);
+    }
+
+    private async Task RefreshAdoptPermissionAsync()
+    {
+        _canAdoptFeature = _authorization is null
+            || await _authorization
+                .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.WorkflowOpsStart, CancellationToken.None)
+                .ConfigureAwait(true);
+        (AdoptExistingWorkflowCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }
 
     internal async Task EditSelectedAsync()

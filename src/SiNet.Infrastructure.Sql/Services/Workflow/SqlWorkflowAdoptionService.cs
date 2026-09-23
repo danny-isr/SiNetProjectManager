@@ -4,6 +4,7 @@ using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
 using SiNet.Infrastructure.Sql.Constants;
 using SiNet.Infrastructure.Sql.Services.Inspection;
+using SiNet.Infrastructure.Sql.Services.Tasks;
 using SiNetSQL.Data;
 using SiNetSQL.Models;
 
@@ -167,7 +168,7 @@ internal sealed class SqlWorkflowAdoptionService(
                 ?.ReportId;
             if (activeReportId is int reportId)
             {
-                var taskId = await ResolveLinkTaskIdAsync(db, started, ct).ConfigureAwait(false);
+                var taskId = await ResolveInspectionReportTaskIdAsync(db, started, ct).ConfigureAwait(false);
                 linkId = await SqlInspectionReportTaskLinkService
                     .EnsureReportWorkTargetLinkOnContextAsync(db, taskId, reportId, request.UserId, ct)
                     .ConfigureAwait(false);
@@ -466,6 +467,31 @@ internal sealed class SqlWorkflowAdoptionService(
             return Blocked(
                 WorkflowAdoptionDisposition.BlockedNotAllowed,
                 reportBlock,
+                stageCode: stage.Code,
+                stageName: stage.Name,
+                sortOrder: stage.SortOrder,
+                nodeType: stage.NodeType,
+                isFinal: stage.IsFinal,
+                historical: historical,
+                willCreate: willCreate,
+                willNot: willNot,
+                actions: actions,
+                warnings: warnings,
+                reports: reports,
+                projectTitle: project.Title,
+                projectNumber: project.Number,
+                projectStatus: projectStatusCode,
+                jobTitle: jobType.Title,
+                workflowCode: definition.Code,
+                workflowName: definition.Name);
+        }
+
+        var reportTaskBlock = DescribeActiveReportTaskBlock(request.Reports, willCreate);
+        if (reportTaskBlock is not null)
+        {
+            return Blocked(
+                reportTaskBlock.Value.Disposition,
+                reportTaskBlock.Value.Message,
                 stageCode: stage.Code,
                 stageName: stage.Name,
                 sortOrder: stage.SortOrder,
@@ -900,7 +926,40 @@ internal sealed class SqlWorkflowAdoptionService(
         }).ToList();
     }
 
-    private static async Task<int> ResolveLinkTaskIdAsync(
+    private static (WorkflowAdoptionDisposition Disposition, string Message)? DescribeActiveReportTaskBlock(
+        IReadOnlyList<WorkflowAdoptionReportIntent>? requested,
+        IReadOnlyList<WorkflowAdoptionTaskPreview> willCreate)
+    {
+        if (requested is null || requested.Count(r => r.Mode == WorkflowAdoptionReportMode.Active) != 1)
+            return null;
+
+        var matches = willCreate
+            .Select(t => t.TaskTypeCode)
+            .Where(IsInspectionReportWorkTarget)
+            .ToList();
+        if (matches.Count == 1)
+            return null;
+        if (matches.Count == 0)
+        {
+            return (
+                WorkflowAdoptionDisposition.BlockedNotAllowed,
+                "אין בשלב הנוכחי משימה שעובדת על דוח בדיקה. דוח פעיל לא יקושר, וההטמעה נחסמה.");
+        }
+
+        return (
+            WorkflowAdoptionDisposition.BlockedConflict,
+            "יותר ממשימה אחת בשלב הנוכחי עובדת על דוח בדיקה. לא נבחרה משימה אוטומטית.");
+    }
+
+    internal static bool IsInspectionReportWorkTarget(string? taskTypeCode)
+    {
+        if (string.IsNullOrWhiteSpace(taskTypeCode))
+            return false;
+        var interaction = ReviewTaskInteractionRegistry.TryGet(taskTypeCode);
+        return interaction?.PrimaryWorkTargetEntityType == TaskWorkTargetEntityType.InspectionReport;
+    }
+
+    private static async Task<int> ResolveInspectionReportTaskIdAsync(
         SiNetSQLDbContext db,
         WorkflowStartResultDto started,
         CancellationToken ct)
@@ -909,11 +968,20 @@ internal sealed class SqlWorkflowAdoptionService(
         if (createdIds.Count == 0)
             throw new InvalidOperationException("אין משימת שלב לקשר אליה דוח.");
 
-        var professionalId = await db.ProjectAssignments.AsNoTracking()
-            .Where(t => createdIds.Contains(t.Id) && t.TaskType != null && t.TaskType.Code == TaskTypeCodes.PerformProfessionalReview)
-            .Select(t => (int?)t.Id)
-            .FirstOrDefaultAsync(ct)
+        var created = await db.ProjectAssignments.AsNoTracking()
+            .Where(t => createdIds.Contains(t.Id))
+            .Select(t => new { t.Id, Code = t.TaskType != null ? t.TaskType.Code : null })
+            .ToListAsync(ct)
             .ConfigureAwait(false);
-        return professionalId ?? createdIds[0];
+        var matches = created.Where(t => IsInspectionReportWorkTarget(t.Code)).ToList();
+        if (matches.Count != 1)
+        {
+            throw new InvalidOperationException(
+                matches.Count == 0
+                    ? "אין משימת שלב שעובדת על דוח בדיקה."
+                    : "יותר ממשימה אחת בשלב עובדת על דוח בדיקה.");
+        }
+
+        return matches[0].Id;
     }
 }
