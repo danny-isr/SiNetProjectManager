@@ -293,14 +293,229 @@ public sealed class WorkflowAdoptionTests
         }
     }
 
+    [Fact]
+    public void Adopted_marker_matches_only_the_notes_prefix()
+    {
+        Assert.True(WorkflowAdoptionMarkers.IsMarked("[ADOPTED] Existing workflow adopted into SiNet at REV.ProfessionalReview."));
+        Assert.False(WorkflowAdoptionMarkers.IsMarked("some text [ADOPTED]"));
+        Assert.False(WorkflowAdoptionMarkers.IsMarked(null));
+    }
+
+    [Fact]
+    public async Task Active_report_links_to_the_registry_inspection_task_for_later_review_stages()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+
+            await AssertActiveReportLinksTaskAsync(
+                options, adoption, ctx, ReviewStageCodes.AwaitingManagerApproval, TaskTypeCodes.ApproveReviewReport);
+        }
+
+        var (provider2, options2) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider2)
+        {
+            var ctx = await PrepareReviewProjectAsync(options2, assignReviewers: true);
+            var adoption = provider2.GetRequiredService<IWorkflowAdoptionService>();
+            await AssertActiveReportLinksTaskAsync(
+                options2, adoption, ctx, ReviewStageCodes.RecheckRound, TaskTypeCodes.RecheckPlan);
+        }
+    }
+
+    [Fact]
+    public async Task Active_report_on_a_non_report_stage_is_blocked_without_writes()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            int reportId;
+            await using (var db = new SiNetSQLDbContext(options))
+                reportId = await AddReportAsync(db, ctx.ProjectId, 1);
+
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var request = Request(
+                ctx,
+                ReviewStageCodes.ProjectSetup,
+                reports: [new WorkflowAdoptionReportIntent(reportId, WorkflowAdoptionReportMode.Active)]);
+
+            var preview = await adoption.PreviewAsync(request, CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.BlockedNotAllowed, preview.Disposition);
+            Assert.False(preview.CanCommit);
+
+            var commit = await adoption.CommitAsync(request, CancellationToken.None);
+            Assert.NotEqual(WorkflowAdoptionDisposition.Committed, commit.Disposition);
+
+            await using var verify = new SiNetSQLDbContext(options);
+            Assert.Equal(0, await verify.WorkflowInstances.CountAsync());
+            Assert.Equal(0, await verify.TaskLinks.CountAsync(l => l.IsWorkTarget));
+            Assert.False(SqlWorkflowAdoptionService.IsInspectionReportWorkTarget(TaskTypeCodes.OpenReviewProject));
+            Assert.True(SqlWorkflowAdoptionService.IsInspectionReportWorkTarget(TaskTypeCodes.PerformProfessionalReview));
+        }
+    }
+
+    [Fact]
+    public async Task Report_preview_distinguishes_the_same_number_in_two_series()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                var traffic = new InspectionSeries
+                {
+                    ProjectId = ctx.ProjectId,
+                    SeriesName = "בדיקת תנועה",
+                    Created = DateTime.UtcNow,
+                    Modified = DateTime.UtcNow,
+                };
+                var safety = new InspectionSeries
+                {
+                    ProjectId = ctx.ProjectId,
+                    SeriesName = "בדיקת בטיחות",
+                    Created = DateTime.UtcNow,
+                    Modified = DateTime.UtcNow,
+                };
+                db.InspectionSeries.AddRange(traffic, safety);
+                await db.SaveChangesAsync();
+                db.InspectionReports.AddRange(
+                    new InspectionReport
+                    {
+                        ProjectId = ctx.ProjectId,
+                        SeriesId = traffic.SeriesId,
+                        ReportNumber = 1,
+                        InspectionDate = new DateTime(2024, 1, 1),
+                    },
+                    new InspectionReport
+                    {
+                        ProjectId = ctx.ProjectId,
+                        SeriesId = safety.SeriesId,
+                        ReportNumber = 1,
+                        InspectionDate = new DateTime(2024, 2, 1),
+                    });
+                await db.SaveChangesAsync();
+            }
+
+            var optionsResult = await provider.GetRequiredService<IWorkflowAdoptionService>()
+                .GetOptionsAsync(ctx.ProjectId, CancellationToken.None);
+            var numberedOne = optionsResult.ExistingReports.Where(r => r.ReportNumber == 1).ToList();
+            Assert.Equal(2, numberedOne.Count);
+            Assert.Contains(numberedOne, r => r.DisplayLabel == "בדיקת תנועה — Report 1");
+            Assert.Contains(numberedOne, r => r.DisplayLabel == "בדיקת בטיחות — Report 1");
+        }
+    }
+
+    [Fact]
+    public async Task Review_adoption_follows_the_selected_jobtype_mapping()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            int otherJobTypeId;
+            int proposalId;
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                proposalId = await db.WorkflowDefinitions
+                    .Where(d => d.Code == WorkflowCodes.Proposal && d.IsActive)
+                    .Select(d => d.Id)
+                    .FirstAsync();
+                var other = new JobType { Title = "חוות דעת" };
+                db.JobTypes.Add(other);
+                await db.SaveChangesAsync();
+                otherJobTypeId = other.Id;
+                db.TypeOfProjectInProjects.Add(new TypeOfProjectInProject
+                {
+                    ProjectId = ctx.ProjectId,
+                    ProjectTypeId = otherJobTypeId,
+                    Title = other.Title,
+                });
+                db.ProjectTypeWorkflowDefinitions.AddRange(
+                    new ProjectTypeWorkflowDefinition
+                    {
+                        ProjectTypeId = ctx.JobTypeId,
+                        WorkflowDefinitionId = ctx.DefinitionId,
+                        IsEnabled = true,
+                        SortOrder = 1,
+                    },
+                    new ProjectTypeWorkflowDefinition
+                    {
+                        ProjectTypeId = otherJobTypeId,
+                        WorkflowDefinitionId = proposalId,
+                        IsEnabled = true,
+                        SortOrder = 1,
+                    });
+                await db.SaveChangesAsync();
+            }
+
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var listed = await adoption.GetOptionsAsync(ctx.ProjectId, CancellationToken.None);
+            var review = Assert.Single(listed.Workflows, w => w.Code == WorkflowCodes.Review);
+            Assert.Contains(review.JobTypes, j => j.JobTypeId == ctx.JobTypeId);
+            Assert.DoesNotContain(review.JobTypes, j => j.JobTypeId == otherJobTypeId);
+
+            var allowed = await adoption.PreviewAsync(
+                Request(ctx, ReviewStageCodes.ProfessionalReview), CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.ReadyToAdopt, allowed.Disposition);
+
+            var blocked = await adoption.PreviewAsync(
+                Request(ctx, ReviewStageCodes.ProfessionalReview, jobTypeId: otherJobTypeId),
+                CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.BlockedNotAllowed, blocked.Disposition);
+            Assert.False(blocked.CanCommit);
+
+            var commit = await adoption.CommitAsync(
+                Request(ctx, ReviewStageCodes.ProfessionalReview, jobTypeId: otherJobTypeId),
+                CancellationToken.None);
+            Assert.NotEqual(WorkflowAdoptionDisposition.Committed, commit.Disposition);
+            await using var verify = new SiNetSQLDbContext(options);
+            Assert.Equal(0, await verify.WorkflowInstances.CountAsync());
+        }
+    }
+
+    private static async Task AssertActiveReportLinksTaskAsync(
+        DbContextOptions<SiNetSQLDbContext> options,
+        IWorkflowAdoptionService adoption,
+        ReviewAdoptionContext ctx,
+        string stageCode,
+        string taskTypeCode)
+    {
+        int reportId;
+        await using (var db = new SiNetSQLDbContext(options))
+            reportId = await AddReportAsync(db, ctx.ProjectId, 4);
+
+        var committed = await adoption.CommitAsync(
+            Request(
+                ctx,
+                stageCode,
+                reports: [new WorkflowAdoptionReportIntent(reportId, WorkflowAdoptionReportMode.Active)]),
+            CancellationToken.None);
+        Assert.Equal(WorkflowAdoptionDisposition.Committed, committed.Disposition);
+
+        await using var verify = new SiNetSQLDbContext(options);
+        var link = Assert.Single(await verify.TaskLinks
+            .Where(l => l.LinkedEntityType == TaskLinkEntityType.InspectionReport && l.IsWorkTarget)
+            .ToListAsync());
+        Assert.Equal(reportId, link.LinkedEntityId);
+        var taskType = await verify.ProjectAssignments
+            .Where(t => t.Id == link.TaskId)
+            .Select(t => t.TaskType!.Code)
+            .SingleAsync();
+        Assert.Equal(taskTypeCode, taskType);
+    }
+
     private static WorkflowAdoptionRequest Request(
         ReviewAdoptionContext ctx,
         string stageCode,
-        IReadOnlyList<WorkflowAdoptionReportIntent>? reports = null) =>
+        IReadOnlyList<WorkflowAdoptionReportIntent>? reports = null,
+        int? jobTypeId = null) =>
         new(
             ctx.ProjectId,
             ctx.DefinitionId,
-            ctx.JobTypeId,
+            jobTypeId ?? ctx.JobTypeId,
             stageCode,
             ProposalWorkflowHarness.UserId,
             OriginalStartedAt: new DateTime(2024, 3, 1),

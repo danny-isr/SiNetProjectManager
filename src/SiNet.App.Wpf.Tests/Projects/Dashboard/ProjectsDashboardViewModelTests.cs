@@ -1,4 +1,6 @@
+using SiNet.App.Wpf.Admin.WorkflowOps;
 using SiNet.App.Wpf.Projects.Dashboard;
+using SiNet.Application.Identity;
 using SiNet.Application.Projects;
 using Xunit;
 
@@ -142,6 +144,37 @@ public sealed class ProjectsDashboardViewModelTests
         Assert.Equal("7", vm.OpenTasksSumText);
     }
 
+    [Fact]
+    public async Task Adopt_command_requires_workflow_ops_start_and_rechecks_before_open()
+    {
+        var rows = new[]
+        {
+            MakeRow(8, "Adopt", statusId: 1, place: "TLV", openWf: 0, openTasks: 0),
+        };
+        var auth = new RecordingAuthorization(allowStart: false);
+        var launcher = new RecordingAdoptionLauncher();
+        var vm = new ProjectsDashboardViewModel(
+            new FakeDashboardQuery(rows),
+            new FakeFilterOptions(),
+            new FakeCurrentProject(),
+            authorization: auth,
+            adoptionLauncher: launcher);
+
+        await vm.LoadAsync().ConfigureAwait(true);
+        vm.Selected = vm.Rows[0];
+        Assert.False(vm.AdoptExistingWorkflowCommand.CanExecute(null));
+
+        auth.AllowStart = true;
+        await vm.AdoptExistingWorkflowAsync().ConfigureAwait(true);
+        Assert.Equal(1, launcher.Shows);
+        Assert.Equal(AppFeatureCodes.WorkflowOpsStart, auth.LastFeatureCode);
+
+        auth.AllowStart = false;
+        await vm.AdoptExistingWorkflowAsync().ConfigureAwait(true);
+        Assert.Equal(1, launcher.Shows);
+        Assert.Contains("אין הרשאה", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
     private static ProjectsDashboardViewModel CreateVm(
         IReadOnlyList<ProjectDashboardRowDto> rows,
         bool includeClosedByDefault = false)
@@ -221,5 +254,27 @@ public sealed class ProjectsDashboardViewModelTests
             CurrentProjectChanged?.Invoke(this, new ProjectChangedEventArgs(project));
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class RecordingAuthorization(bool allowStart) : IAuthorizationQueryService
+    {
+        public bool AllowStart { get; set; } = allowStart;
+        public string? LastFeatureCode { get; private set; }
+
+        public Task<bool> IsCurrentUserInRoleAsync(AppRole requiredRole, CancellationToken cancellationToken = default) =>
+            Task.FromResult(AllowStart);
+
+        public Task<bool> CanCurrentUserAccessFeatureAsync(string featureCode, CancellationToken cancellationToken = default)
+        {
+            LastFeatureCode = featureCode;
+            return Task.FromResult(featureCode == AppFeatureCodes.WorkflowOpsStart && AllowStart);
+        }
+    }
+
+    private sealed class RecordingAdoptionLauncher : IWorkflowAdoptionDialogLauncher
+    {
+        public int Shows { get; private set; }
+
+        public void Show(int projectId, System.Windows.Window? owner) => Shows++;
     }
 }
