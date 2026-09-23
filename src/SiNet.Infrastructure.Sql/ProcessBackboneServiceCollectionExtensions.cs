@@ -36,6 +36,7 @@ public static class ProcessBackboneServiceCollectionExtensions
         services.AddTransient<NativeWorkflowCommandService>();
         services.AddTransient<IWorkflowCommandService>(
             sp => sp.GetRequiredService<NativeWorkflowCommandService>());
+        services.AddTransient<IWorkflowAdoptionService, SqlWorkflowAdoptionService>();
         services.AddTransient<SqlWorkflowAssigneeReadinessQueryService>();
         services.AddTransient<IWorkflowAssigneeReadinessQueryService>(
             sp => sp.GetRequiredService<SqlWorkflowAssigneeReadinessQueryService>());

@@ -27,6 +27,28 @@ public sealed class SqlInspectionReportTaskLinkService(IDbContextFactory<SiNetSQ
             throw new ArgumentOutOfRangeException(nameof(reportId));
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        return await EnsureReportWorkTargetLinkOnContextAsync(
+                db, taskId, reportId, userId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Same idempotent InspectionReport work-target row as
+    /// <see cref="EnsureReportWorkTargetLinkAsync"/>, on a caller-owned context so Adoption
+    /// can enlist it in the workflow start transaction.
+    /// </summary>
+    internal static async ValueTask<int> EnsureReportWorkTargetLinkOnContextAsync(
+        SiNetSQLDbContext db,
+        int taskId,
+        int reportId,
+        int userId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        if (taskId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(taskId));
+        if (reportId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(reportId));
 
         var candidates = await db.TaskLinks
             .Where(l =>
