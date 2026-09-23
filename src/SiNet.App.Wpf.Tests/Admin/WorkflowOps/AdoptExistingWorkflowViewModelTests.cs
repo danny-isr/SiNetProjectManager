@@ -1,3 +1,6 @@
+using System.IO;
+using System.Threading;
+using System.Windows;
 using SiNet.App.Wpf.Admin.WorkflowOps;
 using SiNet.Application.Workflow;
 using Xunit;
@@ -28,6 +31,64 @@ public sealed class AdoptExistingWorkflowViewModelTests
         vm.SelectedResponsible = vm.ResponsibleUsers.Single(u => u.UserId == 7);
         Assert.False(vm.CommitCommand.CanExecute(null));
         Assert.Contains("אינה מעודכנת", vm.PreviewText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Preview_textbox_binding_is_one_way()
+    {
+        var xaml = ReadRepoFile("src/SiNet.App.Wpf/Admin/WorkflowOps/AdoptExistingWorkflowView.xaml");
+        Assert.Contains("Text=\"{Binding PreviewText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Adopt_dialog_view_shows_without_readonly_preview_binding_exception()
+    {
+        Exception? caught = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var view = new AdoptExistingWorkflowView
+                {
+                    DataContext = new AdoptExistingWorkflowViewModel(new FakeAdoptionService()),
+                };
+                var window = new Window
+                {
+                    Content = view,
+                    Width = 640,
+                    Height = 480,
+                    ShowInTaskbar = false,
+                    WindowStyle = WindowStyle.None,
+                };
+                window.Show();
+                window.UpdateLayout();
+                window.Close();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(20)));
+        if (caught is not null)
+            throw new Xunit.Sdk.XunitException(caught.ToString());
+    }
+
+    private static string ReadRepoFile(string relativePath)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException($"Repo file not found: {relativePath}");
     }
 
     private sealed class FakeAdoptionService : IWorkflowAdoptionService

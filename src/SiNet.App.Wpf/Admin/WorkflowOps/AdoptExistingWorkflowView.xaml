@@ -8,11 +8,13 @@
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
             <Button Content="תצוגה מקדימה"
                     Command="{Binding PreviewCommand}"
+                    AutomationProperties.AutomationId="Adoption.Preview"
                     Style="{DynamicResource SiSecondaryButtonStyle}"
                     Padding="14,6"
                     Margin="0,0,8,0" />
             <Button Content="אשר והטמע"
                     Command="{Binding CommitCommand}"
+                    AutomationProperties.AutomationId="Adoption.Commit"
                     Style="{DynamicResource SiPrimaryButtonStyle}"
                     Padding="14,6"
                     Margin="0,0,8,0" />
@@ -36,28 +38,32 @@
                   Margin="0,0,0,8"
                   ItemsSource="{Binding Workflows}"
                   SelectedItem="{Binding SelectedWorkflow}"
-                  DisplayMemberPath="Name" />
+                  DisplayMemberPath="Name"
+                  AutomationProperties.AutomationId="Adoption.Workflow" />
 
         <TextBlock DockPanel.Dock="Top" Text="JobType" Margin="0,0,0,4" />
         <ComboBox DockPanel.Dock="Top"
                   Margin="0,0,0,8"
                   ItemsSource="{Binding JobTypes}"
                   SelectedItem="{Binding SelectedJobType}"
-                  DisplayMemberPath="Title" />
+                  DisplayMemberPath="Title"
+                  AutomationProperties.AutomationId="Adoption.JobType" />
 
         <TextBlock DockPanel.Dock="Top" Text="שלב נוכחי" Margin="0,0,0,4" />
         <ComboBox DockPanel.Dock="Top"
                   Margin="0,0,0,8"
                   ItemsSource="{Binding Stages}"
                   SelectedItem="{Binding SelectedStage}"
-                  DisplayMemberPath="Name" />
+                  DisplayMemberPath="Name"
+                  AutomationProperties.AutomationId="Adoption.Stage" />
 
         <TextBlock DockPanel.Dock="Top" Text="משתמש אחראי" Margin="0,0,0,4" />
         <ComboBox DockPanel.Dock="Top"
                   Margin="0,0,0,8"
                   ItemsSource="{Binding ResponsibleUsers}"
                   SelectedItem="{Binding SelectedResponsible}"
-                  DisplayMemberPath="Name" />
+                  DisplayMemberPath="Name"
+                  AutomationProperties.AutomationId="Adoption.Responsible" />
 
         <TextBlock DockPanel.Dock="Top" Text="דוחות קיימים" Margin="0,0,0,4" />
         <ListBox DockPanel.Dock="Top"
@@ -68,6 +74,7 @@
                 <DataTemplate>
                     <DockPanel Margin="0,2">
                         <ComboBox DockPanel.Dock="Left" Width="140" Margin="0,0,8,0"
+                                  AutomationProperties.AutomationId="{Binding ChoiceAutomationId}"
                                   ItemsSource="{x:Static local:AdoptionReportRowVm.Choices}"
                                   SelectedItem="{Binding Choice, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" />
@@ -76,7 +83,8 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <TextBox Text="{Binding PreviewText}"
+        <TextBox Text="{Binding PreviewText, Mode=OneWay}"
+                 AutomationProperties.AutomationId="Adoption.PreviewText"
                  IsReadOnly="True"
                  TextWrapping="Wrap"
                  AcceptsReturn="True"

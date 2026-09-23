@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
 using SiNet.Infrastructure.Sql.Constants;
@@ -19,22 +20,28 @@ internal sealed class SqlWorkflowAdoptionService(
     WorkflowTaskOrchestrator orchestrator,
     IProjectWorkflowPolicyService policy,
     IPilotStartGate pilotStartGate,
-    ITaskQueueService taskQueue) : IWorkflowAdoptionService
+    ITaskQueueService taskQueue,
+    IAppLogger? logger = null) : IWorkflowAdoptionService
 {
     private readonly IDbContextFactory<SiNetSQLDbContext> _dbFactory = dbFactory;
     private readonly WorkflowTaskOrchestrator _orchestrator = orchestrator;
     private readonly IProjectWorkflowPolicyService _policy = policy;
     private readonly IPilotStartGate _pilotStartGate = pilotStartGate;
     private readonly ITaskQueueService _taskQueue = taskQueue;
+    private readonly IAppLogger? _logger = logger;
 
     public async ValueTask<WorkflowAdoptionOptions> GetOptionsAsync(int projectId, CancellationToken ct)
     {
+        AdoptionDebugLog.Write("GetOptionsAsync", $"ENTER projectId={projectId}", _logger);
+        try
+        {
         await using var db = await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         var project = await db.Projects.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == projectId, ct)
             .ConfigureAwait(false);
         if (project is null)
         {
+            AdoptionDebugLog.Write("GetOptionsAsync", $"projectId={projectId} projectFound=false", _logger);
             return new WorkflowAdoptionOptions(
                 projectId, null, [], [], "הפרויקט לא נמצא.");
         }
@@ -53,6 +60,7 @@ internal sealed class SqlWorkflowAdoptionService(
 
         var allowed = await _policy.GetAllowedWorkflowsAsync(projectId, ct).ConfigureAwait(false);
         var workflows = new List<WorkflowAdoptionWorkflowOption>();
+        var rejectedByPolicy = new List<string>();
         foreach (var definition in allowed)
         {
             var stages = await db.WorkflowStageDefinitions.AsNoTracking()
@@ -66,7 +74,10 @@ internal sealed class SqlWorkflowAdoptionService(
             {
                 if (!await IsWorkflowEnabledForJobTypeAsync(
                         db, projectId, jobType.Id, definition.Id, ct).ConfigureAwait(false))
+                {
+                    rejectedByPolicy.Add($"{definition.Code}/{jobType.Id}");
                     continue;
+                }
 
                 var stageOptions = new List<WorkflowAdoptionStageOption>();
                 foreach (var stage in stages)
@@ -98,7 +109,17 @@ internal sealed class SqlWorkflowAdoptionService(
         var message = jobTypes.Count == 0
             ? "לפרויקט אין JobType. הטמעה דורשת track מפורש."
             : null;
+        AdoptionDebugLog.Write(
+            "GetOptionsAsync",
+            $"projectId={projectId} projectFound=true jobTypeIds=[{string.Join(",", jobTypeIds)}] policyDefinitions=[{string.Join(",", allowed.Select(d => d.Code))}] returned=[{string.Join(",", workflows.Select(w => w.Code))}] rejectedPolicy=[{string.Join(",", rejectedByPolicy)}] reports={reports.Count}",
+            _logger);
         return new WorkflowAdoptionOptions(project.Id, project.Title, workflows, reports, message);
+        }
+        catch (Exception ex)
+        {
+            AdoptionDebugLog.Error("GetOptionsAsync", ex, _logger);
+            throw;
+        }
     }
 
     public async ValueTask<WorkflowAdoptionPreview> PreviewAsync(

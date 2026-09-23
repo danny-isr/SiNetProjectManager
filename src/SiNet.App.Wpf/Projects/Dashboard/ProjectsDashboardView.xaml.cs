@@ -1,8 +1,10 @@
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using SiNet.Application.Projects;
+using SiNet.Application.Workflow;
 
 namespace SiNet.App.Wpf.Projects.Dashboard;
 
@@ -11,6 +13,21 @@ public partial class ProjectsDashboardView : UserControl
     public ProjectsDashboardView()
     {
         InitializeComponent();
+        Loaded += (_, _) =>
+        {
+            AdoptionDebugLog.Write(
+                "ProjectsDashboardView.Loaded",
+                $"dataContext={(DataContext is null ? "null" : DataContext.GetType().FullName)} isProjectsDashboardViewModel={DataContext is ProjectsDashboardViewModel}");
+        };
+    }
+
+    private void OnAdoptExistingWorkflowClick(object sender, RoutedEventArgs e)
+    {
+        var vm = DataContext as ProjectsDashboardViewModel;
+        var command = vm?.AdoptExistingWorkflowCommand;
+        AdoptionDebugLog.Write(
+            "Button clicked",
+            $"dataContext={(DataContext is null ? "null" : DataContext.GetType().FullName)} commandNull={command is null} canExecute={command?.CanExecute(null)} selectedProjectId={vm?.Selected?.ProjectId}");
     }
 
     private void OnProjectsGridMouseDoubleClick(object sender, MouseButtonEventArgs e)

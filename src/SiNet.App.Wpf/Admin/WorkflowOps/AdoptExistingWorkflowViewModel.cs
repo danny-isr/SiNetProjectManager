@@ -5,6 +5,7 @@ using System.Windows.Input;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shell;
+using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Identity;
 using SiNet.Application.Workflow;
 
@@ -14,6 +15,7 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
 {
     private readonly IWorkflowAdoptionService _adoption;
     private readonly ICurrentUserContext? _currentUser;
+    private readonly IAppLogger? _logger;
 
     private int _projectId;
     private bool _isBusy;
@@ -27,10 +29,12 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
 
     public AdoptExistingWorkflowViewModel(
         IWorkflowAdoptionService adoption,
-        ICurrentUserContext? currentUser = null)
+        ICurrentUserContext? currentUser = null,
+        IAppLogger? logger = null)
     {
         _adoption = adoption ?? throw new ArgumentNullException(nameof(adoption));
         _currentUser = currentUser;
+        _logger = logger;
         Workflows = [];
         JobTypes = [];
         Stages = [];
@@ -133,16 +137,32 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
 
     public async Task LoadAsync()
     {
+        AdoptionDebugLog.Write(
+            "AdoptExistingWorkflowViewModel.LoadAsync",
+            $"ENTER ProjectId={ProjectId}",
+            _logger);
         if (ProjectId <= 0)
         {
             StatusMessage = "לא נבחר פרויקט.";
+            AdoptionDebugLog.Write(
+                "AdoptExistingWorkflowViewModel.LoadAsync",
+                "RETURN ProjectId<=0",
+                _logger);
             return;
         }
 
         IsBusy = true;
         try
         {
+            AdoptionDebugLog.Write(
+                "AdoptExistingWorkflowViewModel.LoadAsync",
+                $"before GetOptionsAsync ProjectId={ProjectId}",
+                _logger);
             var options = await _adoption.GetOptionsAsync(ProjectId, CancellationToken.None).ConfigureAwait(true);
+            AdoptionDebugLog.Write(
+                "AdoptExistingWorkflowViewModel.LoadAsync",
+                $"after GetOptionsAsync Workflows.Count={options.Workflows.Count} Reports.Count={options.ExistingReports.Count} options.Message={options.Message}",
+                _logger);
             Workflows.Clear();
             foreach (var workflow in options.Workflows)
                 Workflows.Add(workflow);
@@ -154,12 +174,17 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
                 Reports.Add(row);
             }
             SelectedWorkflow = Workflows.FirstOrDefault();
+            AdoptionDebugLog.Write(
+                "AdoptExistingWorkflowViewModel.LoadAsync",
+                $"SelectedWorkflow={SelectedWorkflow?.Code} SelectedJobType={SelectedJobType?.JobTypeId} SelectedStage={SelectedStage?.Code}",
+                _logger);
             StatusMessage = options.Message ?? $"פרויקט {options.ProjectTitle}";
             PreviewText = string.Empty;
             _canCommit = false;
         }
         catch (Exception ex)
         {
+            AdoptionDebugLog.Error("AdoptExistingWorkflowViewModel.LoadAsync", ex, _logger);
             StatusMessage = ex.Message;
         }
         finally
@@ -334,6 +359,7 @@ public sealed class AdoptionReportRowVm : ObservableObject
     public int ReportId { get; }
     public int ReportNumber { get; }
     public string Summary { get; }
+    public string ChoiceAutomationId => $"Adoption.Report.{ReportNumber}";
     public static IReadOnlyList<string> Choices { get; } = ["לא נבחר", "היסטורי", "פעיל"];
 
     public event EventHandler? InputChanged;

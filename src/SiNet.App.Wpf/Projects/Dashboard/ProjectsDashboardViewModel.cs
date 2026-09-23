@@ -10,6 +10,7 @@ using SiNet.Application.Abstractions.Logging;
 using SiNet.Application.Identity;
 using SiNet.Application.ProjectWork;
 using SiNet.Application.Projects;
+using SiNet.Application.Workflow;
 
 namespace SiNet.App.Wpf.Projects.Dashboard;
 
@@ -77,6 +78,10 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         _logger = logger;
         _adoptionLauncher = adoptionLauncher;
         _canAdoptFeature = authorization is null;
+        AdoptionDebugLog.Write(
+            "ProjectsDashboardViewModel.ctor",
+            $"authorizationNull={_authorization is null} adoptionLauncherNull={_adoptionLauncher is null} _canAdoptFeature={_canAdoptFeature}",
+            _logger);
 
         Rows = new ObservableCollection<ProjectsDashboardRowVm>();
         StatusFilterOptions = new ObservableCollection<ProjectFilterOptionDto>();
@@ -227,6 +232,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
             (OpenSelectedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             (EditSelectedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             (AdoptExistingWorkflowCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            LogAdoptCanExecute("Selected setter");
         }
     }
 
@@ -287,6 +293,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
                 return;
             (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             (AdoptExistingWorkflowCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            LogAdoptCanExecute("IsBusy setter");
         }
     }
 
@@ -297,7 +304,15 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
 
     public async Task LoadAsync()
     {
+        AdoptionDebugLog.Write(
+            "ProjectsDashboardViewModel.LoadAsync",
+            $"ENTER authorizationNull={_authorization is null} adoptionLauncherNull={_adoptionLauncher is null}",
+            _logger);
         await RefreshAdoptPermissionAsync().ConfigureAwait(true);
+        AdoptionDebugLog.Write(
+            "ProjectsDashboardViewModel.LoadAsync",
+            $"after RefreshAdoptPermission feature={AppFeatureCodes.WorkflowOpsStart} _canAdoptFeature={_canAdoptFeature} canExecute={AdoptCanExecute()}",
+            _logger);
         await EnsureFilterOptionsAsync().ConfigureAwait(true);
         await RefreshAsync().ConfigureAwait(true);
     }
@@ -372,27 +387,98 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
 
     internal async Task AdoptExistingWorkflowAsync()
     {
-        if (Selected is null || _adoptionLauncher is null)
-            return;
-
-        await RefreshAdoptPermissionAsync().ConfigureAwait(true);
-        if (!_canAdoptFeature)
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        AdoptionDebugLog.Write(
+            "AdoptExistingWorkflowAsync",
+            $"ENTER Selected.ProjectId={Selected?.ProjectId} selectedNull={Selected is null} _adoptionLauncher!={_adoptionLauncher is not null} _canAdoptFeature={_canAdoptFeature} IsBusy={IsBusy} thread={Environment.CurrentManagedThreadId} dispatcherAccess={dispatcher?.CheckAccess()}",
+            _logger);
+        try
         {
-            StatusMessage = "אין הרשאה להטמעת תהליך.";
-            return;
-        }
+            if (Selected is null || _adoptionLauncher is null)
+            {
+                AdoptionDebugLog.Write(
+                    "AdoptExistingWorkflowAsync",
+                    $"RETURN early selectedNull={Selected is null} launcherNull={_adoptionLauncher is null}",
+                    _logger);
+                return;
+            }
 
-        var owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
-        _adoptionLauncher.Show(Selected.ProjectId, owner);
+            await RefreshAdoptPermissionAsync().ConfigureAwait(true);
+            AdoptionDebugLog.Write(
+                "AdoptExistingWorkflowAsync",
+                $"after RefreshAdoptPermission _canAdoptFeature={_canAdoptFeature} canExecute={AdoptCanExecute()}",
+                _logger);
+            if (!_canAdoptFeature)
+            {
+                StatusMessage = "אין הרשאה להטמעת תהליך.";
+                AdoptionDebugLog.Write(
+                    "AdoptExistingWorkflowAsync",
+                    "RETURN permission denied",
+                    _logger);
+                return;
+            }
+
+            var owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
+            AdoptionDebugLog.Write(
+                "AdoptExistingWorkflowAsync",
+                $"Calling WorkflowAdoptionDialogLauncher.Show projectId={Selected.ProjectId} ownerNull={owner is null} ownerType={owner?.GetType().FullName}",
+                _logger);
+            _adoptionLauncher.Show(Selected.ProjectId, owner);
+            AdoptionDebugLog.Write(
+                "AdoptExistingWorkflowAsync",
+                "WorkflowAdoptionDialogLauncher.Show returned",
+                _logger);
+        }
+        catch (Exception ex)
+        {
+            AdoptionDebugLog.Error("AdoptExistingWorkflowAsync", ex, _logger);
+            throw;
+        }
     }
 
     private async Task RefreshAdoptPermissionAsync()
     {
-        _canAdoptFeature = _authorization is null
-            || await _authorization
+        string? role = null;
+        if (_authorization is not null)
+        {
+            var employee = await _authorization.IsCurrentUserInRoleAsync(AppRole.Employee, CancellationToken.None).ConfigureAwait(true);
+            var management = await _authorization.IsCurrentUserInRoleAsync(AppRole.Management, CancellationToken.None).ConfigureAwait(true);
+            var administrator = await _authorization.IsCurrentUserInRoleAsync(AppRole.Administrator, CancellationToken.None).ConfigureAwait(true);
+            role = administrator ? nameof(AppRole.Administrator)
+                : management ? nameof(AppRole.Management)
+                : employee ? nameof(AppRole.Employee)
+                : nameof(AppRole.Unauthorized);
+        }
+
+        bool result;
+        if (_authorization is null)
+        {
+            result = true;
+        }
+        else
+        {
+            result = await _authorization
                 .CanCurrentUserAccessFeatureAsync(AppFeatureCodes.WorkflowOpsStart, CancellationToken.None)
                 .ConfigureAwait(true);
+        }
+
+        _canAdoptFeature = result;
         (AdoptExistingWorkflowCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        AdoptionDebugLog.Write(
+            "RefreshAdoptPermissionAsync",
+            $"currentUser=not-on-dashboard-vm role={role ?? "authorization-null"} requiredFeature={AppFeatureCodes.WorkflowOpsStart} result={result} _canAdoptFeature={_canAdoptFeature} canExecute={AdoptCanExecute()}",
+            _logger);
+    }
+
+    private bool AdoptCanExecute() =>
+        Selected is not null && _adoptionLauncher is not null && _canAdoptFeature;
+
+    private void LogAdoptCanExecute(string reason)
+    {
+        AdoptionDebugLog.Write(
+            "AdoptExistingWorkflowCommand.CanExecute",
+            $"changedBy={reason} result={AdoptCanExecute()} selectedNull={Selected is null} projectId={Selected?.ProjectId} projectNumber={Selected?.ProjectNumber} launcherNull={_adoptionLauncher is null} _canAdoptFeature={_canAdoptFeature}",
+            _logger);
     }
 
     internal async Task EditSelectedAsync()

@@ -1,5 +1,6 @@
 using System.Windows;
 using SiNet.App.Wpf.Theme;
+using SiNet.Application.Workflow;
 
 namespace SiNet.App.Wpf.Admin.WorkflowOps;
 
@@ -19,7 +20,22 @@ public sealed class AdoptExistingWorkflowWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ThemeWindowChrome.ApplyThemedWindowBackground(this);
         Content = new AdoptExistingWorkflowView { DataContext = viewModel };
-        Loaded += async (_, _) => await viewModel.LoadAsync().ConfigureAwait(true);
+        Loaded += async (_, _) =>
+        {
+            AdoptionDebugLog.Write(
+                "AdoptExistingWorkflowWindow.Loaded",
+                $"ENTER IsVisible={IsVisible} IsActive={IsActive} projectId={viewModel.ProjectId}");
+            try
+            {
+                await viewModel.LoadAsync().ConfigureAwait(true);
+                AdoptionDebugLog.Write("AdoptExistingWorkflowWindow.Loaded", "LoadAsync returned");
+            }
+            catch (Exception ex)
+            {
+                AdoptionDebugLog.Error("AdoptExistingWorkflowWindow.Loaded", ex);
+                throw;
+            }
+        };
         viewModel.RequestClose += (_, ok) =>
         {
             DialogResult = ok;

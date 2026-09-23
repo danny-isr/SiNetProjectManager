@@ -22,6 +22,7 @@
             <Button DockPanel.Dock="Left"
                     Content="הטמעת תהליך קיים"
                     Command="{Binding AdoptExistingWorkflowCommand}"
+                    Click="OnAdoptExistingWorkflowClick"
                     Style="{DynamicResource SiSecondaryButtonStyle}"
                     Padding="14,6"
                     Margin="0,0,12,0" />

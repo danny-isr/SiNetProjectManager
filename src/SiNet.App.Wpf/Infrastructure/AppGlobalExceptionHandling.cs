@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using SiNet.Application.Workflow;
 
 namespace SiNet.App.Wpf.Infrastructure;
 
@@ -21,6 +22,9 @@ public static class AppGlobalExceptionHandling
 
         _configured = true;
 
+        AdoptionDebugLog.Reset();
+        AdoptionDebugLog.Write("[Unhandled]", "handlers attached; product exception policy unchanged");
+
         app.DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
@@ -28,6 +32,7 @@ public static class AppGlobalExceptionHandling
 
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
+        AdoptionDebugLog.Error("[Unhandled] DispatcherUnhandledException", e.Exception);
         AppErrorReporter.Report(e.Exception, "DispatcherUnhandledException");
         MessageBox.Show(
             AppErrorReporter.FormatUserMessage(e.Exception, "UI"),
@@ -41,11 +46,13 @@ public static class AppGlobalExceptionHandling
     {
         var ex = e.ExceptionObject as Exception
             ?? new Exception($"Unknown AppDomain exception: {e.ExceptionObject}");
+        AdoptionDebugLog.Error("[Unhandled] AppDomain.UnhandledException", ex);
         AppErrorReporter.Report(ex, "AppDomain.UnhandledException");
     }
 
     private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
+        AdoptionDebugLog.Error("[Unhandled] TaskScheduler.UnobservedTaskException", e.Exception);
         AppErrorReporter.Report(e.Exception, "TaskScheduler.UnobservedTaskException");
         e.SetObserved();
     }
