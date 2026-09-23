@@ -378,7 +378,7 @@ public interface IAuthorizationQueryService
 | `WorkflowOps.Advance` | Administrator |
 | `WorkflowOps.Cancel` | Administrator |
 | `WorkflowOps.Retry` | Administrator |
-| `WorkflowOps.Start` | Administrator |
+| `WorkflowOps.Start` | Management |
 | `ShellOpenProjectsDashboard` | Management |
 | `ShellOpenBillingCenter` | Management |
 | `Billing.RecordReviewDecision` | Management |
