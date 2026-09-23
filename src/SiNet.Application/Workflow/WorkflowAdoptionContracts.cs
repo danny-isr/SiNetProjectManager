@@ -53,7 +53,17 @@ public sealed record WorkflowAdoptionReportPreview(
     WorkflowAdoptionReportMode? RequestedMode,
     bool IsLockedAfterSend,
     bool HasExportSnapshot,
-    string Note);
+    string Note,
+    int? SeriesId = null,
+    string? SeriesName = null)
+{
+    public string DisplayLabel =>
+        !string.IsNullOrWhiteSpace(SeriesName)
+            ? $"{SeriesName.Trim()} — Report {ReportNumber}"
+            : SeriesId is int seriesId
+                ? $"Series #{seriesId} — Report {ReportNumber}"
+                : $"Report {ReportNumber}";
+}
 
 public sealed record WorkflowAdoptionUserOption(int UserId, string? Name);
 

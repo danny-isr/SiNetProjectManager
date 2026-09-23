@@ -392,7 +392,7 @@ internal sealed class SqlWorkflowAdoptionService(
         foreach (var report in reports.Where(r => r.RequestedMode == WorkflowAdoptionReportMode.Historical && !r.IsLockedAfterSend && !r.HasExportSnapshot))
         {
             warnings.Add(
-                $"דוח {report.ReportNumber} סומן כהיסטורי, אבל אין snapshot ייצוא ולכן MarkReportAsSentAsync לא ירוץ. הדוח נשאר פתוח.");
+                $"{report.DisplayLabel} סומן כהיסטורי, אבל אין snapshot ייצוא ולכן MarkReportAsSentAsync לא ירוץ. הדוח נשאר פתוח.");
         }
 
         string? stageBlock = DescribeStageBlock(stage);
@@ -889,11 +889,14 @@ internal sealed class SqlWorkflowAdoptionService(
     {
         var reports = await db.InspectionReports.AsNoTracking()
             .Where(r => r.ProjectId == projectId)
-            .OrderBy(r => r.ReportNumber)
+            .OrderBy(r => r.SeriesId)
+            .ThenBy(r => r.ReportNumber)
             .Select(r => new
             {
                 r.ReportId,
                 r.ReportNumber,
+                r.SeriesId,
+                SeriesName = r.Series != null ? r.Series.SeriesName : null,
                 r.IsLockedAfterSend,
                 r.SentSpreadsheetId,
             })
@@ -922,7 +925,9 @@ internal sealed class SqlWorkflowAdoptionService(
                 hasMode ? mode : null,
                 r.IsLockedAfterSend,
                 hasSnapshot,
-                note);
+                note,
+                r.SeriesId,
+                r.SeriesName);
         }).ToList();
     }
 

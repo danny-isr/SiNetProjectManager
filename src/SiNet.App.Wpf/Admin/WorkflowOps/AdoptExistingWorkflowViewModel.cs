@@ -90,6 +90,7 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
         {
             if (!SetField(ref _selectedWorkflow, value))
                 return;
+            InvalidatePreview();
             ReloadJobTypes();
         }
     }
@@ -101,6 +102,7 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
         {
             if (!SetField(ref _selectedJobType, value))
                 return;
+            InvalidatePreview();
             ReloadStages();
         }
     }
@@ -112,17 +114,21 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
         {
             if (!SetField(ref _selectedStage, value))
                 return;
+            InvalidatePreview();
             ReloadResponsibleUsers();
-            _canCommit = false;
             (PreviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
-            (CommitCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 
     public WorkflowAdoptionUserOption? SelectedResponsible
     {
         get => _selectedResponsible;
-        set => SetField(ref _selectedResponsible, value);
+        set
+        {
+            if (!SetField(ref _selectedResponsible, value))
+                return;
+            InvalidatePreview();
+        }
     }
 
     public async Task LoadAsync()
@@ -142,7 +148,11 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
                 Workflows.Add(workflow);
             Reports.Clear();
             foreach (var report in options.ExistingReports)
-                Reports.Add(new AdoptionReportRowVm(report));
+            {
+                var row = new AdoptionReportRowVm(report);
+                row.InputChanged += (_, _) => InvalidatePreview();
+                Reports.Add(row);
+            }
             SelectedWorkflow = Workflows.FirstOrDefault();
             StatusMessage = options.Message ?? $"פרויקט {options.ProjectTitle}";
             PreviewText = string.Empty;
@@ -158,7 +168,7 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
         }
     }
 
-    private async Task PreviewAsync()
+    internal async Task PreviewAsync()
     {
         IsBusy = true;
         try
@@ -223,6 +233,20 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
             Reports: reports);
     }
 
+    private void InvalidatePreview()
+    {
+        var hadPreview = _canCommit || !string.IsNullOrEmpty(_previewText);
+        _canCommit = false;
+        if (!string.IsNullOrEmpty(_previewText))
+        {
+            PreviewText = "התצוגה המקדימה אינה מעודכנת. יש להציג מחדש לפני אישור.";
+            StatusMessage = PreviewText;
+        }
+
+        if (hadPreview)
+            (CommitCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+    }
+
     private void ReloadJobTypes()
     {
         JobTypes.Clear();
@@ -272,7 +296,7 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
         foreach (var stage in preview.HistoricalStages)
             text.AppendLine($"✓ {stage.Name ?? stage.Code}");
         foreach (var report in preview.Reports.Where(r => r.RequestedMode is not null))
-            text.AppendLine($"✓ Report {report.ReportNumber} — {report.Note}");
+            text.AppendLine($"✓ {report.DisplayLabel} — {report.Note}");
         text.AppendLine();
         text.AppendLine($"SiNet מתחיל כאן: {preview.CurrentStageName} ({preview.CurrentStageCode})");
         text.AppendLine("ייווצר:");
@@ -303,7 +327,7 @@ public sealed class AdoptionReportRowVm : ObservableObject
     {
         ReportId = report.ReportId;
         ReportNumber = report.ReportNumber;
-        Summary = $"Report {report.ReportNumber}"
+        Summary = report.DisplayLabel
                   + (report.IsLockedAfterSend ? " · נעול" : " · פתוח");
     }
 
@@ -311,6 +335,8 @@ public sealed class AdoptionReportRowVm : ObservableObject
     public int ReportNumber { get; }
     public string Summary { get; }
     public static IReadOnlyList<string> Choices { get; } = ["לא נבחר", "היסטורי", "פעיל"];
+
+    public event EventHandler? InputChanged;
 
     public WorkflowAdoptionReportMode? Mode => _mode;
 
@@ -335,6 +361,7 @@ public sealed class AdoptionReportRowVm : ObservableObject
             _mode = next;
             OnPropertyChanged();
             OnPropertyChanged(nameof(Mode));
+            InputChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 }
