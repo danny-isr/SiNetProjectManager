@@ -52,7 +52,7 @@ For `Project + WorkflowDefinition + JobType`, root instances only:
 
 The existing Active/Paused unique index remains the database guard. Adoption adds the Completed and same-stage rules on top of it.
 
-When the selected JobType has enabled `ProjectTypeWorkflowDefinition` rows, the workflow must be one of those rows. A workflow allowed for another JobType on the same project is not enough. If that JobType has no mappings, the existing project policy applies, including open policy when the project has no mappings at all.
+Open policy applies only when no JobType on the project has any `ProjectTypeWorkflowDefinition` row. Once any such row exists, adoption of a track requires an enabled row for that exact JobType and workflow. A mapping on another JobType, or a disabled row, does not allow it.
 
 Opening adoption from the projects dashboard requires `AppFeatureCodes.WorkflowOpsStart`, the same feature as manual workflow start.
 

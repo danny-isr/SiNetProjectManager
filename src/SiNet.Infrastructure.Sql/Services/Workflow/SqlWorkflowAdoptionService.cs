@@ -947,15 +947,26 @@ internal sealed class SqlWorkflowAdoptionService(
         int definitionId,
         CancellationToken ct)
     {
-        var mappedIds = await db.ProjectTypeWorkflowDefinitions.AsNoTracking()
-            .Where(m => m.ProjectTypeId == jobTypeId && m.IsEnabled)
-            .Select(m => m.WorkflowDefinitionId)
+        var projectJobTypeIds = await db.TypeOfProjectInProjects.AsNoTracking()
+            .Where(t => t.ProjectId == projectId && t.ProjectTypeId != null)
+            .Select(t => t.ProjectTypeId!.Value)
+            .Distinct()
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        if (mappedIds.Count > 0)
-            return mappedIds.Contains(definitionId);
 
-        return await _policy.IsWorkflowAllowedAsync(projectId, definitionId, ct).ConfigureAwait(false);
+        var projectHasMappings = projectJobTypeIds.Count > 0
+            && await db.ProjectTypeWorkflowDefinitions.AsNoTracking()
+                .AnyAsync(m => projectJobTypeIds.Contains(m.ProjectTypeId), ct)
+                .ConfigureAwait(false);
+        if (!projectHasMappings)
+            return await _policy.IsWorkflowAllowedAsync(projectId, definitionId, ct).ConfigureAwait(false);
+
+        return await db.ProjectTypeWorkflowDefinitions.AsNoTracking()
+            .AnyAsync(m =>
+                m.ProjectTypeId == jobTypeId
+                && m.WorkflowDefinitionId == definitionId
+                && m.IsEnabled, ct)
+            .ConfigureAwait(false);
     }
 
     private static (WorkflowAdoptionDisposition Disposition, string Message)? DescribeActiveReportTaskBlock(

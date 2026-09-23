@@ -476,6 +476,139 @@ public sealed class WorkflowAdoptionTests
         }
     }
 
+    [Fact]
+    public async Task Review_adoption_stays_open_when_the_project_has_no_workflow_mappings()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+
+            var listed = await adoption.GetOptionsAsync(ctx.ProjectId, CancellationToken.None);
+            var review = Assert.Single(listed.Workflows, w => w.Code == WorkflowCodes.Review);
+            Assert.Contains(review.JobTypes, j => j.JobTypeId == ctx.JobTypeId);
+
+            var preview = await adoption.PreviewAsync(
+                Request(ctx, ReviewStageCodes.ProfessionalReview), CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.ReadyToAdopt, preview.Disposition);
+        }
+    }
+
+    [Fact]
+    public async Task Review_mapping_on_another_jobtype_does_not_allow_an_unmapped_track()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            int unmappedJobTypeId;
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                var other = new JobType { Title = "ללא מיפוי" };
+                db.JobTypes.Add(other);
+                await db.SaveChangesAsync();
+                unmappedJobTypeId = other.Id;
+                db.TypeOfProjectInProjects.Add(new TypeOfProjectInProject
+                {
+                    ProjectId = ctx.ProjectId,
+                    ProjectTypeId = unmappedJobTypeId,
+                    Title = other.Title,
+                });
+                db.ProjectTypeWorkflowDefinitions.Add(new ProjectTypeWorkflowDefinition
+                {
+                    ProjectTypeId = ctx.JobTypeId,
+                    WorkflowDefinitionId = ctx.DefinitionId,
+                    IsEnabled = true,
+                    SortOrder = 1,
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var listed = await adoption.GetOptionsAsync(ctx.ProjectId, CancellationToken.None);
+            var review = Assert.Single(listed.Workflows, w => w.Code == WorkflowCodes.Review);
+            Assert.Contains(review.JobTypes, j => j.JobTypeId == ctx.JobTypeId);
+            Assert.DoesNotContain(review.JobTypes, j => j.JobTypeId == unmappedJobTypeId);
+
+            var blocked = await adoption.PreviewAsync(
+                Request(ctx, ReviewStageCodes.ProfessionalReview, jobTypeId: unmappedJobTypeId),
+                CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.BlockedNotAllowed, blocked.Disposition);
+            Assert.False(blocked.CanCommit);
+
+            var commit = await adoption.CommitAsync(
+                Request(ctx, ReviewStageCodes.ProfessionalReview, jobTypeId: unmappedJobTypeId),
+                CancellationToken.None);
+            Assert.NotEqual(WorkflowAdoptionDisposition.Committed, commit.Disposition);
+            await using var verify = new SiNetSQLDbContext(options);
+            Assert.Equal(0, await verify.WorkflowInstances.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Disabled_review_mapping_blocks_adoption_for_that_jobtype()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                db.ProjectTypeWorkflowDefinitions.Add(new ProjectTypeWorkflowDefinition
+                {
+                    ProjectTypeId = ctx.JobTypeId,
+                    WorkflowDefinitionId = ctx.DefinitionId,
+                    IsEnabled = false,
+                    SortOrder = 1,
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var listed = await adoption.GetOptionsAsync(ctx.ProjectId, CancellationToken.None);
+            Assert.DoesNotContain(listed.Workflows, w =>
+                w.Code == WorkflowCodes.Review
+                && w.JobTypes.Any(j => j.JobTypeId == ctx.JobTypeId));
+
+            var preview = await adoption.PreviewAsync(
+                Request(ctx, ReviewStageCodes.ProfessionalReview), CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.BlockedNotAllowed, preview.Disposition);
+            Assert.False(preview.CanCommit);
+        }
+    }
+
+    [Fact]
+    public async Task Enabled_review_mapping_allows_adoption_for_that_jobtype()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                db.ProjectTypeWorkflowDefinitions.Add(new ProjectTypeWorkflowDefinition
+                {
+                    ProjectTypeId = ctx.JobTypeId,
+                    WorkflowDefinitionId = ctx.DefinitionId,
+                    IsEnabled = true,
+                    SortOrder = 1,
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var listed = await adoption.GetOptionsAsync(ctx.ProjectId, CancellationToken.None);
+            var review = Assert.Single(listed.Workflows, w => w.Code == WorkflowCodes.Review);
+            Assert.Contains(review.JobTypes, j => j.JobTypeId == ctx.JobTypeId);
+
+            var preview = await adoption.PreviewAsync(
+                Request(ctx, ReviewStageCodes.ProfessionalReview), CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.ReadyToAdopt, preview.Disposition);
+            Assert.True(preview.CanCommit);
+        }
+    }
+
     private static async Task AssertActiveReportLinksTaskAsync(
         DbContextOptions<SiNetSQLDbContext> options,
         IWorkflowAdoptionService adoption,
