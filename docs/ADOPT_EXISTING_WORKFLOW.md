@@ -52,6 +52,10 @@ For `Project + WorkflowDefinition + JobType`, root instances only:
 
 The existing Active/Paused unique index remains the database guard. Adoption adds the Completed and same-stage rules on top of it.
 
+When the selected JobType has enabled `ProjectTypeWorkflowDefinition` rows, the workflow must be one of those rows. A workflow allowed for another JobType on the same project is not enough. If that JobType has no mappings, the existing project policy applies, including open policy when the project has no mappings at all.
+
+Opening adoption from the projects dashboard requires `AppFeatureCodes.WorkflowOpsStart`, the same feature as manual workflow start.
+
 ## Stage restrictions (v1)
 
 Allowed stages are real runtime stages: not `NodeType = Start`, not `NodeType = SubWorkflow`, not `IsFinal`, and active in `ProjectTypeWorkflowStage` for the JobType.
@@ -87,11 +91,15 @@ If the current stage provisions no task, the start is rolled back. Adoption does
 
 Report content import stays in `ReportImportService` (V2 `MigrationPocWindow`). Adoption does not copy that importer.
 
-In the new host, Preview lists `InspectionReport` rows that already belong to the project. Each selected report is Historical or Active. At most one report is Active.
+In the new host, Preview lists `InspectionReport` rows that already belong to the project, labeled with `InspectionSeries.SeriesName` and `ReportNumber` because report numbers are scoped to a series. Each selected report is Historical or Active. At most one report is Active.
 
 - Historical, with no export snapshot: `MarkReportAsSentAsync` is not called, and `SentAt` / `IsLockedAfterSend` are not set by hand. Preview warns that the report stays open. `MarkReportAsSentAsync` needs an export spreadsheet and a note-cell map; inventing those would fake a send.
-- Active: after the current task is created, `SqlInspectionReportTaskLinkService` links it on the existing `TaskLink` table (`InspectionReport`, `Related`, `IsWorkTarget`, `Pending`). The link is inside the adoption transaction and is idempotent.
-- All reports Historical: the current task is not linked. `PerformProfessionalReview` stays in its normal creation mode, which can open the next report through the existing inspection flow.
+- Active: the current stage must have exactly one created task whose `ReviewTaskInteractionRegistry` work target is `InspectionReport`. That task is linked through `SqlInspectionReportTaskLinkService` on the existing `TaskLink` table (`Related`, `IsWorkTarget`, `Pending`). Zero matches or more than one match blocks Preview. There is no fallback to the first created task. The link is inside the adoption transaction and is idempotent.
+- All reports Historical: the current task is not linked. A task such as `PerformProfessionalReview` stays in its normal creation mode, which can open the next report through the existing inspection flow.
+
+The wizard Commit button stays disabled until Preview is run again after a change to workflow, JobType, stage, responsible user, or report choice.
+
+`[ADOPTED]` is a Notes prefix (`StartsWith`), not a substring.
 
 `InspectionDate` on reports created by `CreateReportAsync` / `ReportImportService` is the import time. Adoption does not rewrite it. There is no reliable historical inspection date on that import path.
 

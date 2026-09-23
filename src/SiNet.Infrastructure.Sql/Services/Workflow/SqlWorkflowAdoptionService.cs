@@ -64,6 +64,10 @@ internal sealed class SqlWorkflowAdoptionService(
             var jobOptions = new List<WorkflowAdoptionJobTypeOption>();
             foreach (var jobType in jobTypes)
             {
+                if (!await IsWorkflowEnabledForJobTypeAsync(
+                        db, projectId, jobType.Id, definition.Id, ct).ConfigureAwait(false))
+                    continue;
+
                 var stageOptions = new List<WorkflowAdoptionStageOption>();
                 foreach (var stage in stages)
                 {
@@ -82,6 +86,9 @@ internal sealed class SqlWorkflowAdoptionService(
 
                 jobOptions.Add(new WorkflowAdoptionJobTypeOption(jobType.Id, jobType.Title, stageOptions));
             }
+
+            if (jobOptions.Count == 0)
+                continue;
 
             workflows.Add(new WorkflowAdoptionWorkflowOption(
                 definition.Id, definition.Code, definition.Name, jobOptions));
@@ -327,12 +334,13 @@ internal sealed class SqlWorkflowAdoptionService(
                 jobTitle: jobType.Title);
         }
 
-        if (!await _policy.IsWorkflowAllowedAsync(request.ProjectId, request.WorkflowDefinitionId, ct)
+        if (!await IsWorkflowEnabledForJobTypeAsync(
+                db, request.ProjectId, request.JobTypeId, request.WorkflowDefinitionId, ct)
                 .ConfigureAwait(false))
         {
             return Blocked(
                 WorkflowAdoptionDisposition.BlockedNotAllowed,
-                "התהליך אינו מותר לפרויקט.",
+                "התהליך אינו מותר ל-JobType שנבחר.",
                 projectTitle: project.Title,
                 projectNumber: project.Number,
                 projectStatus: projectStatusCode,
@@ -929,6 +937,24 @@ internal sealed class SqlWorkflowAdoptionService(
                 r.SeriesId,
                 r.SeriesName);
         }).ToList();
+    }
+
+    private async Task<bool> IsWorkflowEnabledForJobTypeAsync(
+        SiNetSQLDbContext db,
+        int projectId,
+        int jobTypeId,
+        int definitionId,
+        CancellationToken ct)
+    {
+        var mappedIds = await db.ProjectTypeWorkflowDefinitions.AsNoTracking()
+            .Where(m => m.ProjectTypeId == jobTypeId && m.IsEnabled)
+            .Select(m => m.WorkflowDefinitionId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        if (mappedIds.Count > 0)
+            return mappedIds.Contains(definitionId);
+
+        return await _policy.IsWorkflowAllowedAsync(projectId, definitionId, ct).ConfigureAwait(false);
     }
 
     private static (WorkflowAdoptionDisposition Disposition, string Message)? DescribeActiveReportTaskBlock(
