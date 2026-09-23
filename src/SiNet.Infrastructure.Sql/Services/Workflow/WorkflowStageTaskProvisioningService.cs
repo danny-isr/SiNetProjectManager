@@ -204,7 +204,8 @@ internal sealed class WorkflowStageTaskProvisioningService
         int instanceId,
         int stageId,
         int userId,
-        CancellationToken ct)
+        CancellationToken ct,
+        int? pendingInspectionReportId = null)
     {
         var instance = await db.WorkflowInstances
             .AsNoTracking()
@@ -346,7 +347,8 @@ internal sealed class WorkflowStageTaskProvisioningService
                             instance,
                             template.TaskType?.Code,
                             userId,
-                            ct)
+                            ct,
+                            pendingInspectionReportId)
                         .ConfigureAwait(false);
 
                     createdTasks.Add(existingOpenTask);
@@ -431,7 +433,8 @@ internal sealed class WorkflowStageTaskProvisioningService
                         instance,
                         template.TaskType?.Code,
                         userId,
-                        ct)
+                        ct,
+                        pendingInspectionReportId)
                     .ConfigureAwait(false);
 
                 createdTasks.Add(task);
@@ -678,7 +681,8 @@ internal sealed class WorkflowStageTaskProvisioningService
         WorkflowInstance instance,
         string? taskTypeCode,
         int userId,
-        CancellationToken ct)
+        CancellationToken ct,
+        int? pendingInspectionReportId = null)
     {
         var interaction = string.IsNullOrWhiteSpace(taskTypeCode)
             ? null
@@ -701,7 +705,8 @@ internal sealed class WorkflowStageTaskProvisioningService
                     instance,
                     taskTypeCode!,
                     userId,
-                    ct)
+                    ct,
+                    pendingInspectionReportId)
                 .ConfigureAwait(false);
         }
     }
@@ -795,7 +800,8 @@ internal sealed class WorkflowStageTaskProvisioningService
         WorkflowInstance instance,
         string taskTypeCode,
         int userId,
-        CancellationToken ct)
+        CancellationToken ct,
+        int? pendingInspectionReportId = null)
     {
         var already = await db.TaskLinks.AnyAsync(l =>
                 l.TaskId == taskId
@@ -821,7 +827,7 @@ internal sealed class WorkflowStageTaskProvisioningService
 
         if (reportId is null)
         {
-            if (AllowsMissingInspectionReport(taskTypeCode))
+            if (AllowsMissingInspectionReport(taskTypeCode) || pendingInspectionReportId is > 0)
                 return;
 
             throw new InvalidOperationException(

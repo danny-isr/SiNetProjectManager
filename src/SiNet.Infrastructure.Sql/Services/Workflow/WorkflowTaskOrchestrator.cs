@@ -109,7 +109,8 @@ internal sealed class WorkflowTaskOrchestrator(
         string? initialStageCode = null,
         int? jobTypeId = null,
         bool requireCurrentStageTask = false,
-        SiNetSQLDbContext? ambientDb = null)
+        SiNetSQLDbContext? ambientDb = null,
+        int? pendingInspectionReportId = null)
     {
         await PreflightStartAsync(definitionId, ct, initialStageCode).ConfigureAwait(false);
 
@@ -144,7 +145,7 @@ internal sealed class WorkflowTaskOrchestrator(
             }
 
             var tasks = await _provisioning
-                .CreateStageTasksAsync(db, instance.Id, stageId, userId, ct)
+                .CreateStageTasksAsync(db, instance.Id, stageId, userId, ct, pendingInspectionReportId)
                 .ConfigureAwait(false);
 
             if (requireCurrentStageTask && tasks.Count == 0)

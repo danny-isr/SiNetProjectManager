@@ -152,6 +152,9 @@ internal sealed class SqlWorkflowAdoptionService(
                 preview.CurrentStageName,
                 request.OriginalStartedAt,
                 request.Notes);
+            var activeReportId = request.Reports?
+                .FirstOrDefault(r => r.Mode == WorkflowAdoptionReportMode.Active)
+                ?.ReportId;
 
             var started = await _orchestrator.StartWorkflowAtomicAsync(
                     request.WorkflowDefinitionId,
@@ -165,14 +168,12 @@ internal sealed class SqlWorkflowAdoptionService(
                     initialStageCode: request.CurrentStageCode,
                     jobTypeId: request.JobTypeId,
                     requireCurrentStageTask: true,
-                    ambientDb: db)
+                    ambientDb: db,
+                    pendingInspectionReportId: activeReportId)
                 .ConfigureAwait(false);
             startedId = started.Instance.Id;
 
             int? linkId = null;
-            var activeReportId = request.Reports?
-                .FirstOrDefault(r => r.Mode == WorkflowAdoptionReportMode.Active)
-                ?.ReportId;
             if (activeReportId is int reportId)
             {
                 var taskId = await ResolveInspectionReportTaskIdAsync(db, started, ct).ConfigureAwait(false);
