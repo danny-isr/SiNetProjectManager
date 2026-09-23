@@ -647,6 +647,8 @@ Confirmed: the view queries notes by `ReportId`, navigates to `Section → Chapt
 
 ## 12. Workflow reconstruction design
 
+> **23.09.2026:** Do not implement this section as a step-by-step Advance. The new host adopts an existing process with `InitialStageCode` only. See [`docs/ADOPT_EXISTING_WORKFLOW.md`](../../../../docs/ADOPT_EXISTING_WORKFLOW.md). `REV.MaterialIntake` and final stages stay blocked in that first slice. Report content import stays in `ReportImportService`.
+
 ### 12.1. For active statuses
 
 ```

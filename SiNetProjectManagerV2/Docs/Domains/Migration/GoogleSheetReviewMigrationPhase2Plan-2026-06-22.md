@@ -3,7 +3,7 @@
 - **Date:** 22.06.2026
 - **Status:** First slice implemented 26.06.2026. Revised 27.06.2026 for cross-series deactivation fix, active sections guard, GeneralFields import, and placeholder defaults.
 - **Scope:** Import `InspectionReport` structures from existing JSON cache into the DB.  
-  Phase 2 does **not** reconstruct workflows. Phase 3 handles Workflow reconstruction.
+  Phase 2 does **not** reconstruct workflows. Placing a Review workflow at the real current stage, without replaying history, is [`docs/ADOPT_EXISTING_WORKFLOW.md`](../../../../docs/ADOPT_EXISTING_WORKFLOW.md) in the new host. This Phase 2 importer remains the report-content path and is not duplicated there.
 - **Prerequisites:** Phase 1 Preview code is implemented (read-only). Functional testing against real Google Sheet data is pending.  
   JSON cache is populated and validated via ExtractionCacheService.
 

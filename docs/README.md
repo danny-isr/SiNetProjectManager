@@ -63,6 +63,7 @@ Deploy scripts detail (root): [`DEPLOYMENT.md`](../DEPLOYMENT.md), [`SECRETS-MAN
 | [`LOGGING_MATERIAL_FAILURES.md`](./LOGGING_MATERIAL_FAILURES.md) | Material failures + Client heartbeat must reach Llog at Warning+ |
 | [`SYSTEM_HEALTH.md`](./SYSTEM_HEALTH.md) | «מצב מערכת» design and contributors |
 | [`WORKFLOW_OPS_DASHBOARD.md`](./WORKFLOW_OPS_DASHBOARD.md) | «בריאות תהליכים» runtime ops |
+| [`ADOPT_EXISTING_WORKFLOW.md`](./ADOPT_EXISTING_WORKFLOW.md) | Adopt a process that already started before SiNet, directly at the current stage |
 | [`DEV_TOOLS.md`](./DEV_TOOLS.md) | DEBUG-only Reset & Seed — not for production DB |
 | [`BUILD_SIBLING_PINS.md`](./BUILD_SIBLING_PINS.md) | Sibling repo pins for build/CI |
 | [`DATABASE_RECOVERY_BASELINE.md`](./DATABASE_RECOVERY_BASELINE.md) | SQL recovery baseline / freeze notes |
