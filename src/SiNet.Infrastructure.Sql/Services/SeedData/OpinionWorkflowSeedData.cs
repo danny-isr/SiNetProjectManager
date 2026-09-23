@@ -5,10 +5,8 @@ namespace SiNet.Infrastructure.Sql.Services.SeedData;
 /// <summary>
 /// Seed for the standalone <see cref="WorkflowCodes.Opinion"/> workflow (OPN.*).
 /// <para>
-/// Opinion (חוות דעת) is started email-driven via
-/// <c>SuggestedActionType.CreateOpinionProject</c>, which routes through
-/// <c>ActionExecutor.StartWorkflowFromActionAsync("Opinion", ...)</c>. It is
-/// not mapped to any <see cref="Models.ProjectTypeWorkflowDefinition"/>.
+/// JobType "חוות דעת" maps to this workflow. It is also started email-driven via
+/// <c>SuggestedActionType.CreateOpinionProject</c>.
 /// </para>
 /// <para>
 /// Reuses the shape of <see cref="ProposalWorkflowSeedData"/> — the same DTOs

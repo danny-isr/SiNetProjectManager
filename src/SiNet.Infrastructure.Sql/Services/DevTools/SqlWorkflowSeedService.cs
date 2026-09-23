@@ -80,19 +80,24 @@ public class SqlWorkflowSeedService
 
         // 6. Opinion (OPN.*) — independent opinion workflow. Seeded BEFORE
         //    ProjectType mappings so the CreateOpinionProject email action
-        //    finds an active definition. Opinion is started email-driven and
-        //    is NOT auto-mapped to any ProjectType.
+        //    finds an active definition. JobType "חוות דעת" is mapped to it
+        //    explicitly in step 7; other JobTypes are not substring-mapped.
         await SeedOpinionWorkflowAsync(ct);
 
         // 6b. Outsourcing (OUT.*) — simple quote → approve → payments monitor.
         //     Not auto-mapped to JobTypes; attach via admin policy when needed.
         await SeedOutsourcingWorkflowAsync(ct);
 
-        // 7. ProjectType ↔ PlanningWorkflow mapping (default workflow per JobType).
+        // 7. Canonical JobTypes, then ProjectType ↔ workflow mappings.
+        //    Review ("בדיקה") and Opinion ("חוות דעת") are explicit and must not
+        //    be pulled back onto PlanningWorkflow by a later seed run.
+        await NormalizeCanonicalJobTypesAsync(ct);
         await SeedProjectTypeWorkflowMappingsAsync(ct);
 
-        // 8. Per-ProjectType activation of PLN.* stages and disciplines.
+        // 8. Per-ProjectType stage profiles: PLN.* for planning types,
+        //    REV.* for בדיקה, OPN.* for חוות דעת.
         await SeedProjectTypeWorkflowStagesAsync(ct);
+        await EnsureCanonicalStageProfilesAsync(ct);
         await SeedProjectTypeDisciplinesAsync(ct);
     }
 
@@ -164,9 +169,6 @@ public class SqlWorkflowSeedService
             ("ניקוז",      WorkflowCodes.PlanningWorkflow, true, 1),
             ("אדריכלות",   WorkflowCodes.PlanningWorkflow, true, 1),
             ("תיאום",      WorkflowCodes.PlanningWorkflow, true, 1),
-            ("בדיקת",      WorkflowCodes.PlanningWorkflow, true, 1),
-            ("בדיקה",      WorkflowCodes.PlanningWorkflow, true, 1),
-            ("חוות דעת",   WorkflowCodes.PlanningWorkflow, true, 1),
         };
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -228,9 +230,22 @@ public class SqlWorkflowSeedService
             DevToolsLog.Info($"[WorkflowSeed] Seeded {toAdd.Count} ProjectType↔WorkflowDefinition mappings.");
         }
 
-        // Reconcile default flags: for any ProjectType that has a PlanningWorkflow mapping,
-        // it must be the IsDefault one; previous defaults are demoted to non-default.
+        // Reconcile default flags for planning types only. Review and Opinion
+        // keep their own default workflow.
         await ReconcilePlanningWorkflowAsDefaultAsync(db, ct);
+        await CanonicalJobTypeSeed.EnsureWorkflowMappingsAsync(db, ct);
+    }
+
+    private async ValueTask NormalizeCanonicalJobTypesAsync(CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        await CanonicalJobTypeSeed.NormalizeJobTypesAsync(db, ct);
+    }
+
+    private async ValueTask EnsureCanonicalStageProfilesAsync(CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        await CanonicalJobTypeSeed.EnsureStageProfilesAsync(db, ct);
     }
 
     /// <summary>
@@ -250,7 +265,13 @@ public class SqlWorkflowSeedService
 
         var projectTypeIdsWithPlanning = await db.ProjectTypeWorkflowDefinitions
             .Where(m => m.WorkflowDefinitionId == planningDefId.Value)
-            .Select(m => m.ProjectTypeId)
+            .Join(
+                db.JobTypes.Where(j =>
+                    j.Title != CanonicalJobTypeSeed.ReviewJobTypeTitle
+                    && j.Title != CanonicalJobTypeSeed.OpinionJobTypeTitle),
+                m => m.ProjectTypeId,
+                j => j.Id,
+                (m, _) => m.ProjectTypeId)
             .ToListAsync(ct);
 
         if (projectTypeIdsWithPlanning.Count == 0) return;
@@ -1428,6 +1449,9 @@ public class SqlWorkflowSeedService
 
         foreach (var jt in jobTypes)
         {
+            if (CanonicalJobTypeSeed.IsReviewOrOpinionTitle(jt.Title))
+                continue;
+
             var profile = ResolveStageProfile(jt.Title!);
 
             foreach (var stage in profile)
@@ -1487,6 +1511,9 @@ public class SqlWorkflowSeedService
 
         foreach (var jt in jobTypes)
         {
+            if (CanonicalJobTypeSeed.IsReviewOrOpinionTitle(jt.Title))
+                continue;
+
             var profile = ResolveDisciplineProfile(jt.Title!);
 
             foreach (var d in profile)
