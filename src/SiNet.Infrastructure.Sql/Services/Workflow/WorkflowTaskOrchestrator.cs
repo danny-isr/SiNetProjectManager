@@ -84,6 +84,150 @@ internal sealed class WorkflowTaskOrchestrator(
         return new WorkflowStartResultDto(instance.ToDto(), tasks.ToSummaryDtoList());
     }
 
+    /// <summary>
+    /// Starts a workflow and provisions only the current stage's tasks on one context.
+    /// On a relational provider the instance, the initial transition, and those tasks commit together.
+    /// <see cref="StartWorkflowAsync"/> is unchanged and still uses separate contexts, including
+    /// sub-workflow auto-start. This method does not start a child workflow.
+    /// </summary>
+    /// <param name="requireCurrentStageTask">
+    /// When true, an empty task list rolls the start back. Adoption uses this so a stage that
+    /// should have work cannot remain Active with no task.
+    /// </param>
+    /// <param name="ambientDb">
+    /// When set, the caller owns the context and the transaction. This method does not commit.
+    /// </param>
+    public async ValueTask<WorkflowStartResultDto> StartWorkflowAtomicAsync(
+        int definitionId,
+        int projectId,
+        WorkflowTriggerType triggerType,
+        int? triggerEntityId,
+        int userId,
+        string? notes,
+        CancellationToken ct,
+        bool isProjectBound = true,
+        string? initialStageCode = null,
+        int? jobTypeId = null,
+        bool requireCurrentStageTask = false,
+        SiNetSQLDbContext? ambientDb = null)
+    {
+        await PreflightStartAsync(definitionId, ct, initialStageCode).ConfigureAwait(false);
+
+        var ownsContext = ambientDb is null;
+        var db = ambientDb ?? await _dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        var useTransaction = ownsContext && db.Database.IsRelational();
+        var transaction = useTransaction
+            ? await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false)
+            : null;
+
+        WorkflowInstance? instance = null;
+        try
+        {
+            instance = await _engine.StartAsync(
+                    db,
+                    definitionId,
+                    projectId,
+                    triggerType,
+                    triggerEntityId,
+                    userId,
+                    notes,
+                    ct,
+                    isProjectBound,
+                    initialStageCode: initialStageCode,
+                    jobTypeId: jobTypeId)
+                .ConfigureAwait(false);
+
+            if (instance.CurrentStageId is not int stageId)
+            {
+                throw new InvalidOperationException(
+                    $"Workflow {instance.Id} started without a current stage.");
+            }
+
+            var tasks = await _provisioning
+                .CreateStageTasksAsync(db, instance.Id, stageId, userId, ct)
+                .ConfigureAwait(false);
+
+            if (requireCurrentStageTask && tasks.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Workflow stage {stageId} did not provision a current-stage task.");
+            }
+
+            if (transaction is not null)
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+
+            WorkflowDebugTrace.Step("Orchestrator.StartAtomic",
+                $"instance={instance.Id} def={definitionId} project={projectId} stageId={instance.CurrentStageId} tasks={tasks.Count} relationalTx={useTransaction}");
+
+            if (ownsContext && tasks.Count > 0)
+                NotifyUiTaskListChanged($"atomic-start instance={instance.Id} tasks={tasks.Count}");
+
+            return new WorkflowStartResultDto(instance.ToDto(), tasks.ToSummaryDtoList());
+        }
+        catch
+        {
+            if (instance is { Id: > 0 } && db.Database.CurrentTransaction is null)
+                await CompensateNonRelationalStartAsync(db, instance.Id, ct).ConfigureAwait(false);
+
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync().ConfigureAwait(false);
+            if (ownsContext)
+                await db.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// The EF InMemory provider used by unit tests cannot roll back <c>SaveChanges</c>.
+    /// Relational providers use the transaction above and do not call this cleanup.
+    /// </summary>
+    internal static Task CompensateFailedAtomicStartAsync(
+        SiNetSQLDbContext db,
+        int instanceId,
+        CancellationToken ct) =>
+        CompensateNonRelationalStartAsync(db, instanceId, ct);
+
+    private static async Task CompensateNonRelationalStartAsync(
+        SiNetSQLDbContext db,
+        int instanceId,
+        CancellationToken ct)
+    {
+        var ids = await db.WorkflowInstances
+            .Where(i => i.Id == instanceId || i.ParentWorkflowInstanceId == instanceId)
+            .Select(i => i.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var transitions = await db.WorkflowStageTransitions
+            .Where(t => ids.Contains(t.WorkflowInstanceId))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var longIds = ids.Select(id => (long)id).ToList();
+        var links = await db.TaskLinks
+            .Where(l =>
+                l.LinkedEntityType == TaskLinkEntityType.WorkflowInstance
+                && longIds.Contains(l.LinkedEntityId))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var taskIds = links.Select(l => l.TaskId).Distinct().ToList();
+        var tasks = taskIds.Count == 0
+            ? []
+            : await db.ProjectAssignments.Where(t => taskIds.Contains(t.Id)).ToListAsync(ct).ConfigureAwait(false);
+
+        db.TaskLinks.RemoveRange(links);
+        db.ProjectAssignments.RemoveRange(tasks);
+        db.WorkflowStageTransitions.RemoveRange(transitions);
+        var instances = await db.WorkflowInstances
+            .Where(i => ids.Contains(i.Id))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        db.WorkflowInstances.RemoveRange(instances);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
     public async ValueTask<WorkflowAdvanceResultDto> AdvanceWithTasksAsync(
         int instanceId,
         int targetStageId,
