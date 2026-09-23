@@ -34,6 +34,19 @@ public sealed class AdoptExistingWorkflowViewModelTests
     }
 
     [Fact]
+    public void Report_choice_automation_id_uses_report_id_not_report_number()
+    {
+        var first = new AdoptionReportRowVm(new WorkflowAdoptionReportPreview(
+            12, 1, null, false, false, "לא נבחר", 2, "E2E Adoption Test"));
+        var sameNumberOtherSeries = new AdoptionReportRowVm(new WorkflowAdoptionReportPreview(
+            99, 1, null, false, false, "לא נבחר", 8, "Other Series"));
+
+        Assert.Equal("Adoption.Report.12", first.ChoiceAutomationId);
+        Assert.Equal("Adoption.Report.99", sameNumberOtherSeries.ChoiceAutomationId);
+        Assert.NotEqual(first.ChoiceAutomationId, sameNumberOtherSeries.ChoiceAutomationId);
+    }
+
+    [Fact]
     public void Preview_textbox_binding_is_one_way()
     {
         var xaml = ReadRepoFile("src/SiNet.App.Wpf/Admin/WorkflowOps/AdoptExistingWorkflowView.xaml");

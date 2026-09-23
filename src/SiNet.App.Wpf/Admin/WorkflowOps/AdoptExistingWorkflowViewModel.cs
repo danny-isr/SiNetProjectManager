@@ -359,7 +359,7 @@ public sealed class AdoptionReportRowVm : ObservableObject
     public int ReportId { get; }
     public int ReportNumber { get; }
     public string Summary { get; }
-    public string ChoiceAutomationId => $"Adoption.Report.{ReportNumber}";
+    public string ChoiceAutomationId => $"Adoption.Report.{ReportId}";
     public static IReadOnlyList<string> Choices { get; } = ["לא נבחר", "היסטורי", "פעיל"];
 
     public event EventHandler? InputChanged;
