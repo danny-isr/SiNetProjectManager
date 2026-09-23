@@ -19,6 +19,12 @@
                     Padding="14,6"
                     Margin="0,0,12,0"
                     ToolTip="מגדיר Current Project ופותח בעבודה 2" />
+            <Button DockPanel.Dock="Left"
+                    Content="הטמעת תהליך קיים"
+                    Command="{Binding AdoptExistingWorkflowCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,12,0" />
             <TextBlock Text="{Binding StatusMessage}"
                        Style="{DynamicResource SiTextSmallStyle}"
                        Foreground="{DynamicResource SiSecondaryBrush}"

@@ -181,6 +181,8 @@ public sealed class WorkflowInstanceDetailViewModel : ObservableObject
                         var stage = t.ToStage?.Name ?? $"#{t.ToStageId}";
                         var when = t.TransitionedAtUtc.ToLocalTime().ToString("dd/MM HH:mm");
                         var by = t.TransitionedByUser?.PersonName ?? "—";
+                        if (WorkflowAdoptionMarkers.IsMarked(detail.Notes) && t.FromStageId is null)
+                            return $"{when} · {WorkflowAdoptionMarkers.TransitionLabel(stage)} ({by})";
                         return $"{when} → {stage} ({by})";
                     }));
 

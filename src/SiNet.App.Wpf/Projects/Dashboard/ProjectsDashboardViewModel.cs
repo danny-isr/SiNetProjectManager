@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
+using SiNet.App.Wpf.Admin.WorkflowOps;
 using SiNet.App.Wpf.Inbox;
 using SiNet.App.Wpf.Inspection;
 using SiNet.App.Wpf.Shared.Projects;
@@ -27,6 +28,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
     private readonly IProjectEditDialogFactory? _editDialogFactory;
     private readonly IAuthorizationQueryService? _authorization;
     private readonly IAppLogger? _logger;
+    private readonly IWorkflowAdoptionDialogLauncher? _adoptionLauncher;
 
     private CancellationTokenSource? _loadCts;
     private bool _isBusy;
@@ -60,7 +62,8 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         IPlaceCatalogService? placeCatalog = null,
         IProjectEditDialogFactory? editDialogFactory = null,
         IAuthorizationQueryService? authorization = null,
-        IAppLogger? logger = null)
+        IAppLogger? logger = null,
+        IWorkflowAdoptionDialogLauncher? adoptionLauncher = null)
     {
         _dashboardQuery = dashboardQuery ?? throw new ArgumentNullException(nameof(dashboardQuery));
         _filterOptions = filterOptions ?? throw new ArgumentNullException(nameof(filterOptions));
@@ -71,6 +74,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         _editDialogFactory = editDialogFactory;
         _authorization = authorization;
         _logger = logger;
+        _adoptionLauncher = adoptionLauncher;
 
         Rows = new ObservableCollection<ProjectsDashboardRowVm>();
         StatusFilterOptions = new ObservableCollection<ProjectFilterOptionDto>();
@@ -80,6 +84,9 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
         OpenSelectedCommand = new AsyncRelayCommand(OpenSelectedAsync, () => Selected is not null);
         EditSelectedCommand = new AsyncRelayCommand(EditSelectedAsync, () => Selected is not null);
+        AdoptExistingWorkflowCommand = new RelayCommand(
+            _ => AdoptExistingWorkflow(),
+            _ => Selected is not null && _adoptionLauncher is not null);
     }
 
     public ObservableCollection<ProjectsDashboardRowVm> Rows { get; }
@@ -217,6 +224,7 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
                 return;
             (OpenSelectedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             (EditSelectedCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (AdoptExistingWorkflowCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
     }
 
@@ -281,8 +289,8 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
 
     public ICommand RefreshCommand { get; }
     public ICommand OpenSelectedCommand { get; }
-
     public ICommand EditSelectedCommand { get; }
+    public ICommand AdoptExistingWorkflowCommand { get; }
 
     public async Task LoadAsync()
     {
@@ -349,12 +357,22 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger?.Warn($"[ProjectsDashboard] outcome=Failed op=OpenSelected detail={ex.Message}");
+            StatusMessage = $"שגיאה בפתיחה: {ex.Message}";
             MessageBox.Show(
                 $"שגיאה בפתיחת הפרויקט: {ex.Message}",
                 "ריכוז פרויקטים",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+    }
+
+    private void AdoptExistingWorkflow()
+    {
+        if (Selected is null || _adoptionLauncher is null)
+            return;
+
+        var owner = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
+        _adoptionLauncher.Show(Selected.ProjectId, owner);
     }
 
     internal async Task EditSelectedAsync()

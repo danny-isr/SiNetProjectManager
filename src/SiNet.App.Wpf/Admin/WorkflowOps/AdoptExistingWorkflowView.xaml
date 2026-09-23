@@ -1,0 +1,85 @@
+<UserControl x:Class="SiNet.App.Wpf.Admin.WorkflowOps.AdoptExistingWorkflowView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:SiNet.App.Wpf.Admin.WorkflowOps"
+             FlowDirection="RightToLeft"
+             Background="{DynamicResource SiBackgroundBrush}">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
+            <Button Content="תצוגה מקדימה"
+                    Command="{Binding PreviewCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,8,0" />
+            <Button Content="אשר והטמע"
+                    Command="{Binding CommitCommand}"
+                    Style="{DynamicResource SiPrimaryButtonStyle}"
+                    Padding="14,6"
+                    Margin="0,0,8,0" />
+            <Button Content="סגור"
+                    Command="{Binding CloseCommand}"
+                    Style="{DynamicResource SiSecondaryButtonStyle}"
+                    Padding="14,6" />
+        </StackPanel>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="הטמעת תהליך קיים"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,8" />
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{Binding StatusMessage}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12" />
+
+        <TextBlock DockPanel.Dock="Top" Text="תהליך" Margin="0,0,0,4" />
+        <ComboBox DockPanel.Dock="Top"
+                  Margin="0,0,0,8"
+                  ItemsSource="{Binding Workflows}"
+                  SelectedItem="{Binding SelectedWorkflow}"
+                  DisplayMemberPath="Name" />
+
+        <TextBlock DockPanel.Dock="Top" Text="JobType" Margin="0,0,0,4" />
+        <ComboBox DockPanel.Dock="Top"
+                  Margin="0,0,0,8"
+                  ItemsSource="{Binding JobTypes}"
+                  SelectedItem="{Binding SelectedJobType}"
+                  DisplayMemberPath="Title" />
+
+        <TextBlock DockPanel.Dock="Top" Text="שלב נוכחי" Margin="0,0,0,4" />
+        <ComboBox DockPanel.Dock="Top"
+                  Margin="0,0,0,8"
+                  ItemsSource="{Binding Stages}"
+                  SelectedItem="{Binding SelectedStage}"
+                  DisplayMemberPath="Name" />
+
+        <TextBlock DockPanel.Dock="Top" Text="משתמש אחראי" Margin="0,0,0,4" />
+        <ComboBox DockPanel.Dock="Top"
+                  Margin="0,0,0,8"
+                  ItemsSource="{Binding ResponsibleUsers}"
+                  SelectedItem="{Binding SelectedResponsible}"
+                  DisplayMemberPath="Name" />
+
+        <TextBlock DockPanel.Dock="Top" Text="דוחות קיימים" Margin="0,0,0,4" />
+        <ListBox DockPanel.Dock="Top"
+                 Height="140"
+                 Margin="0,0,0,8"
+                 ItemsSource="{Binding Reports}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <DockPanel Margin="0,2">
+                        <ComboBox DockPanel.Dock="Left" Width="140" Margin="0,0,8,0"
+                                  ItemsSource="{x:Static local:AdoptionReportRowVm.Choices}"
+                                  SelectedItem="{Binding Choice, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" />
+                    </DockPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBox Text="{Binding PreviewText}"
+                 IsReadOnly="True"
+                 TextWrapping="Wrap"
+                 AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" />
+    </DockPanel>
+</UserControl>

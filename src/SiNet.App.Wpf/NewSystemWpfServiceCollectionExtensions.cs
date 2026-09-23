@@ -63,6 +63,9 @@ public static class NewSystemWpfServiceCollectionExtensions
                 sp.GetService<IAuthorizationQueryService>()));
         services.AddTransient<WorkflowOpsDashboardWindow>();
         services.AddTransient<WorkflowStartDialogViewModel>();
+        services.AddTransient<AdoptExistingWorkflowViewModel>();
+        services.AddTransient<AdoptExistingWorkflowWindow>();
+        services.AddTransient<IWorkflowAdoptionDialogLauncher, WorkflowAdoptionDialogLauncher>();
         services.AddTransient<ProjectsDashboardViewModel>(sp =>
             new ProjectsDashboardViewModel(
                 sp.GetRequiredService<IProjectDashboardQueryService>(),
@@ -72,7 +75,8 @@ public static class NewSystemWpfServiceCollectionExtensions
                 sp.GetService<IPlaceCatalogService>(),
                 sp.GetService<IProjectEditDialogFactory>(),
                 sp.GetService<IAuthorizationQueryService>(),
-                sp.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>()));
+                sp.GetService<SiNet.Application.Abstractions.Logging.IAppLogger>(),
+                sp.GetService<IWorkflowAdoptionDialogLauncher>()));
         services.AddTransient<ProjectsDashboardWindow>();
         services.AddTransient<IBillingReviewPrompts, WpfBillingReviewPrompts>();
         services.AddTransient<BillingDashboardViewModel>(sp =>
