@@ -123,6 +123,132 @@ public sealed class CanonicalJobTypeSeedTests
         Assert.Equal(keeperId, (await verify.TypeOfProjectInProjects.SingleAsync(t => t.ProjectId == 7)).ProjectTypeId);
     }
 
+    [Fact]
+    public async Task Conflicting_bids_are_kept_and_the_merge_does_not_change_either_jobtype()
+    {
+        var (factory, options) = CreateFactory();
+        int keeperId;
+        int legacyId;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            var keeper = new JobType { Title = "בדיקה" };
+            var legacy = new JobType { Title = "בדיקה חוות דעת" };
+            db.JobTypes.AddRange(keeper, legacy);
+            await db.SaveChangesAsync();
+            keeperId = keeper.Id;
+            legacyId = legacy.Id;
+            db.Bids.Add(new Bid
+            {
+                ProjectsId = 9,
+                JobTypeId = keeperId,
+                BidValue = 1000m,
+                BidSubmission = new DateTime(2024, 1, 1),
+                Description = "keeper quote",
+            });
+            db.Bids.Add(new Bid
+            {
+                ProjectsId = 9,
+                JobTypeId = legacyId,
+                BidValue = 2500m,
+                BidSubmission = new DateTime(2024, 2, 1),
+                Description = "legacy quote",
+            });
+            db.TypeOfProjectInProjects.Add(new TypeOfProjectInProject
+            {
+                ProjectId = 9,
+                ProjectTypeId = legacyId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await new SqlWorkflowSeedService(factory).SeedAllAsync(CancellationToken.None);
+
+        await using var verify = new SiNetSQLDbContext(options);
+        Assert.Equal(2, await verify.Bids.CountAsync(b => b.ProjectsId == 9));
+        Assert.Equal(1000m, (await verify.Bids.SingleAsync(b => b.JobTypeId == keeperId)).BidValue);
+        Assert.Equal(2500m, (await verify.Bids.SingleAsync(b => b.JobTypeId == legacyId)).BidValue);
+        Assert.True(await verify.JobTypes.AnyAsync(j => j.Id == legacyId && j.Title == "בדיקה חוות דעת"));
+        Assert.Equal(legacyId, (await verify.TypeOfProjectInProjects.SingleAsync(t => t.ProjectId == 9)).ProjectTypeId);
+    }
+
+    [Fact]
+    public async Task Status_mapping_that_exists_only_on_the_legacy_jobtype_is_copied_not_rekeyed()
+    {
+        var (factory, options) = CreateFactory();
+        int keeperId;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            var keeper = new JobType { Title = "בדיקה" };
+            var legacy = new JobType { Title = "בדיקה_חוות_דעת" };
+            db.JobTypes.AddRange(keeper, legacy);
+            await db.SaveChangesAsync();
+            keeperId = keeper.Id;
+            db.ProjectTypeStatuses.Add(new ProjectTypeStatus { ProjectTypeId = legacy.Id, StatusId = 4 });
+            db.ProjectTypeTaskTypes.Add(new ProjectTypeTaskType { ProjectTypeId = legacy.Id, TaskTypeId = 6 });
+            await db.SaveChangesAsync();
+        }
+
+        var seed = new SqlWorkflowSeedService(factory);
+        await seed.SeedAllAsync(CancellationToken.None);
+        await seed.SeedAllAsync(CancellationToken.None);
+
+        await using var verify = new SiNetSQLDbContext(options);
+        Assert.False(await verify.JobTypes.AnyAsync(j => j.Title == "בדיקה_חוות_דעת"));
+        var status = await verify.ProjectTypeStatuses.SingleAsync();
+        Assert.Equal(keeperId, status.ProjectTypeId);
+        Assert.Equal(4, status.StatusId);
+        var taskType = await verify.ProjectTypeTaskTypes.SingleAsync();
+        Assert.Equal(keeperId, taskType.ProjectTypeId);
+        Assert.Equal(6, taskType.TaskTypeId);
+    }
+
+    [Fact]
+    public async Task Active_workflow_clash_leaves_both_jobtypes_and_their_links_unchanged()
+    {
+        var (factory, options) = CreateFactory();
+        int keeperId;
+        int legacyId;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            var keeper = new JobType { Title = "בדיקה" };
+            var legacy = new JobType { Title = "בדיקה חוות דעת" };
+            db.JobTypes.AddRange(keeper, legacy);
+            await db.SaveChangesAsync();
+            keeperId = keeper.Id;
+            legacyId = legacy.Id;
+            db.TypeOfProjectInProjects.Add(new TypeOfProjectInProject { ProjectId = 3, ProjectTypeId = legacyId });
+            db.WorkflowInstances.Add(new WorkflowInstance
+            {
+                ProjectId = 3,
+                WorkflowDefinitionId = 2,
+                JobTypeId = keeperId,
+                Status = WorkflowStatus.Active,
+                IsProjectBound = true,
+                CreatedByUserId = 1,
+                CreatedAtUtc = DateTime.UtcNow,
+            });
+            db.WorkflowInstances.Add(new WorkflowInstance
+            {
+                ProjectId = 3,
+                WorkflowDefinitionId = 2,
+                JobTypeId = legacyId,
+                Status = WorkflowStatus.Active,
+                IsProjectBound = true,
+                CreatedByUserId = 1,
+                CreatedAtUtc = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await new SqlWorkflowSeedService(factory).SeedAllAsync(CancellationToken.None);
+
+        await using var verify = new SiNetSQLDbContext(options);
+        Assert.True(await verify.JobTypes.AnyAsync(j => j.Id == legacyId && j.Title == "בדיקה חוות דעת"));
+        Assert.Equal(legacyId, (await verify.TypeOfProjectInProjects.SingleAsync(t => t.ProjectId == 3)).ProjectTypeId);
+        Assert.Equal(keeperId, (await verify.WorkflowInstances.SingleAsync(i => i.JobTypeId == keeperId)).JobTypeId);
+        Assert.Equal(legacyId, (await verify.WorkflowInstances.SingleAsync(i => i.JobTypeId == legacyId)).JobTypeId);
+    }
+
     private static (ProposalWorkflowHarness.StubDbContextFactory Factory, DbContextOptions<SiNetSQLDbContext> Options) CreateFactory()
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()

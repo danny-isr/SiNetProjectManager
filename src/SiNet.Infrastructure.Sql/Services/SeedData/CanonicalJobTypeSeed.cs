@@ -224,79 +224,138 @@ internal static class CanonicalJobTypeSeed
     private static async Task MergeJobTypeIntoAsync(
         SiNetSQLDbContext db, JobType source, JobType target, CancellationToken ct)
     {
-        await MoveProjectLinksAsync(db, source.Id, target.Id, ct).ConfigureAwait(false);
-        await MoveUniquePairsAsync(
-            db.ProjectTypeWorkflowDefinitions,
-            db.ProjectTypeWorkflowDefinitions.Where(m => m.ProjectTypeId == source.Id),
-            db.ProjectTypeWorkflowDefinitions.Where(m => m.ProjectTypeId == target.Id),
-            (m, id) => m.ProjectTypeId = id,
-            m => m.WorkflowDefinitionId,
-            target.Id,
-            ct).ConfigureAwait(false);
-        await MoveUniquePairsAsync(
-            db.ProjectTypeWorkflowStages,
-            db.ProjectTypeWorkflowStages.Where(m => m.ProjectTypeId == source.Id),
-            db.ProjectTypeWorkflowStages.Where(m => m.ProjectTypeId == target.Id),
-            (m, id) => m.ProjectTypeId = id,
-            m => m.WorkflowStageDefinitionId,
-            target.Id,
-            ct).ConfigureAwait(false);
-        await MoveUniquePairsAsync(
-            db.ProjectTypeDisciplines,
-            db.ProjectTypeDisciplines.Where(m => m.ProjectTypeId == source.Id),
-            db.ProjectTypeDisciplines.Where(m => m.ProjectTypeId == target.Id),
-            (m, id) => m.ProjectTypeId = id,
-            m => m.DisciplineTaskTypeId,
-            target.Id,
-            ct).ConfigureAwait(false);
-        await MoveUniquePairsAsync(
-            db.ProjectTypeStatuses,
-            db.ProjectTypeStatuses.Where(m => m.ProjectTypeId == source.Id),
-            db.ProjectTypeStatuses.Where(m => m.ProjectTypeId == target.Id),
-            (m, id) => m.ProjectTypeId = id,
-            m => m.StatusId,
-            target.Id,
-            ct).ConfigureAwait(false);
-        await MoveUniquePairsAsync(
-            db.ProjectTypeTaskTypes,
-            db.ProjectTypeTaskTypes.Where(m => m.ProjectTypeId == source.Id),
-            db.ProjectTypeTaskTypes.Where(m => m.ProjectTypeId == target.Id),
-            (m, id) => m.ProjectTypeId = id,
-            m => m.TaskTypeId,
-            target.Id,
-            ct).ConfigureAwait(false);
-        await MoveBidsAsync(db, source.Id, target.Id, ct).ConfigureAwait(false);
-        await MoveSimpleAsync(
-            db.PaymentsSteps.Where(p => p.JobTypeId == source.Id),
-            row => row.JobTypeId = target.Id,
-            ct).ConfigureAwait(false);
-        await MoveSimpleAsync(
-            db.ProjectFiles.Where(p => p.TypeProjId == source.Id),
-            row => row.TypeProjId = target.Id,
-            ct).ConfigureAwait(false);
-        var blocked = await MoveWorkflowInstancesAsync(db, source.Id, target.Id, ct).ConfigureAwait(false);
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
-
-        var stillReferenced = blocked
-            || await db.TypeOfProjectInProjects.AnyAsync(t => t.ProjectTypeId == source.Id, ct).ConfigureAwait(false)
-            || await db.ProjectTypeWorkflowDefinitions.AnyAsync(t => t.ProjectTypeId == source.Id, ct).ConfigureAwait(false)
-            || await db.ProjectTypeWorkflowStages.AnyAsync(t => t.ProjectTypeId == source.Id, ct).ConfigureAwait(false)
-            || await db.ProjectTypeDisciplines.AnyAsync(t => t.ProjectTypeId == source.Id, ct).ConfigureAwait(false)
-            || await db.ProjectTypeStatuses.AnyAsync(t => t.ProjectTypeId == source.Id, ct).ConfigureAwait(false)
-            || await db.ProjectTypeTaskTypes.AnyAsync(t => t.ProjectTypeId == source.Id, ct).ConfigureAwait(false)
-            || await db.Bids.AnyAsync(t => t.JobTypeId == source.Id, ct).ConfigureAwait(false)
-            || await db.PaymentsSteps.AnyAsync(t => t.JobTypeId == source.Id, ct).ConfigureAwait(false)
-            || await db.ProjectFiles.AnyAsync(t => t.TypeProjId == source.Id, ct).ConfigureAwait(false)
-            || await db.WorkflowInstances.AnyAsync(t => t.JobTypeId == source.Id, ct).ConfigureAwait(false);
-        if (stillReferenced)
+        var conflicts = await DescribeMergeConflictsAsync(db, source.Id, target.Id, ct).ConfigureAwait(false);
+        if (conflicts.Count > 0)
         {
-            DevToolsLog.Warn($"[WorkflowSeed] JobType #{source.Id} '{source.Title}' still has references; left in place.");
+            DevToolsLog.Warn(
+                $"[WorkflowSeed] JobType #{source.Id} '{source.Title}' was not merged into #{target.Id}. "
+                + string.Join(" ", conflicts));
             return;
         }
 
-        db.JobTypes.Remove(source);
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        DevToolsLog.Info($"[WorkflowSeed] Removed legacy JobType #{source.Id} after merging into #{target.Id}.");
+        var relational = db.Database.IsRelational();
+        await using var transaction = relational
+            ? await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false)
+            : null;
+        try
+        {
+            await MoveProjectLinksAsync(db, source.Id, target.Id, ct).ConfigureAwait(false);
+            await MoveSurrogatePairsAsync(
+                db.ProjectTypeWorkflowDefinitions,
+                db.ProjectTypeWorkflowDefinitions.Where(m => m.ProjectTypeId == source.Id),
+                db.ProjectTypeWorkflowDefinitions.Where(m => m.ProjectTypeId == target.Id),
+                (m, id) => m.ProjectTypeId = id,
+                m => m.WorkflowDefinitionId,
+                target.Id,
+                ct).ConfigureAwait(false);
+            await MoveSurrogatePairsAsync(
+                db.ProjectTypeWorkflowStages,
+                db.ProjectTypeWorkflowStages.Where(m => m.ProjectTypeId == source.Id),
+                db.ProjectTypeWorkflowStages.Where(m => m.ProjectTypeId == target.Id),
+                (m, id) => m.ProjectTypeId = id,
+                m => m.WorkflowStageDefinitionId,
+                target.Id,
+                ct).ConfigureAwait(false);
+            await MoveSurrogatePairsAsync(
+                db.ProjectTypeDisciplines,
+                db.ProjectTypeDisciplines.Where(m => m.ProjectTypeId == source.Id),
+                db.ProjectTypeDisciplines.Where(m => m.ProjectTypeId == target.Id),
+                (m, id) => m.ProjectTypeId = id,
+                m => m.DisciplineTaskTypeId,
+                target.Id,
+                ct).ConfigureAwait(false);
+            await MoveCompositePairsAsync(
+                db.ProjectTypeStatuses,
+                db.ProjectTypeStatuses.Where(m => m.ProjectTypeId == source.Id),
+                db.ProjectTypeStatuses.Where(m => m.ProjectTypeId == target.Id),
+                m => m.StatusId,
+                statusId => new ProjectTypeStatus { ProjectTypeId = target.Id, StatusId = statusId },
+                ct).ConfigureAwait(false);
+            await MoveCompositePairsAsync(
+                db.ProjectTypeTaskTypes,
+                db.ProjectTypeTaskTypes.Where(m => m.ProjectTypeId == source.Id),
+                db.ProjectTypeTaskTypes.Where(m => m.ProjectTypeId == target.Id),
+                m => m.TaskTypeId,
+                taskTypeId => new ProjectTypeTaskType { ProjectTypeId = target.Id, TaskTypeId = taskTypeId },
+                ct).ConfigureAwait(false);
+            await MoveBidsAsync(db, source.Id, target.Id, ct).ConfigureAwait(false);
+            await MoveSimpleAsync(
+                db.PaymentsSteps.Where(p => p.JobTypeId == source.Id),
+                row => row.JobTypeId = target.Id,
+                ct).ConfigureAwait(false);
+            await MoveSimpleAsync(
+                db.ProjectFiles.Where(p => p.TypeProjId == source.Id),
+                row => row.TypeProjId = target.Id,
+                ct).ConfigureAwait(false);
+            await MoveWorkflowInstancesAsync(db, source.Id, target.Id, ct).ConfigureAwait(false);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            var stillReferenced = await HasJobTypeReferencesAsync(db, source.Id, ct).ConfigureAwait(false);
+            if (stillReferenced)
+            {
+                if (transaction is not null)
+                    await transaction.CommitAsync(ct).ConfigureAwait(false);
+                DevToolsLog.Warn($"[WorkflowSeed] JobType #{source.Id} '{source.Title}' still has references; left in place.");
+                return;
+            }
+
+            db.JobTypes.Remove(source);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            if (transaction is not null)
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+            DevToolsLog.Info($"[WorkflowSeed] Removed legacy JobType #{source.Id} after merging into #{target.Id}.");
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    internal static async Task<IReadOnlyList<string>> DescribeMergeConflictsAsync(
+        SiNetSQLDbContext db, int sourceId, int targetId, CancellationToken ct)
+    {
+        var conflicts = new List<string>();
+        var targetProjects = (await db.Bids.AsNoTracking()
+            .Where(b => b.JobTypeId == targetId)
+            .Select(b => b.ProjectsId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false)).ToHashSet();
+        var sourceBids = await db.Bids.AsNoTracking()
+            .Where(b => b.JobTypeId == sourceId && targetProjects.Contains(b.ProjectsId))
+            .Select(b => new { b.Id, b.ProjectsId, b.BidValue })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        foreach (var bid in sourceBids)
+        {
+            conflicts.Add(
+                $"Conflict: Bid #{bid.Id} project {bid.ProjectsId} amount {bid.BidValue} exists on both JobTypes. Neither bid is deleted.");
+        }
+
+        var sourceLive = await db.WorkflowInstances.AsNoTracking()
+            .Where(i => i.JobTypeId == sourceId
+                && (i.Status == WorkflowStatus.Active || i.Status == WorkflowStatus.Paused))
+            .Select(i => new { i.Id, i.ProjectId, i.WorkflowDefinitionId })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        foreach (var row in sourceLive)
+        {
+            var clash = await db.WorkflowInstances.AsNoTracking().AnyAsync(
+                i => i.Id != row.Id
+                    && i.ProjectId == row.ProjectId
+                    && i.WorkflowDefinitionId == row.WorkflowDefinitionId
+                    && i.JobTypeId == targetId
+                    && (i.Status == WorkflowStatus.Active || i.Status == WorkflowStatus.Paused),
+                ct).ConfigureAwait(false);
+            if (clash)
+            {
+                conflicts.Add(
+                    $"Conflict: active workflow #{row.Id} on project {row.ProjectId} definition {row.WorkflowDefinitionId} already exists on the canonical JobType.");
+            }
+        }
+
+        return conflicts;
     }
 
     private static async Task MoveProjectLinksAsync(
@@ -323,7 +382,7 @@ internal static class CanonicalJobTypeSeed
         }
     }
 
-    private static async Task MoveUniquePairsAsync<T>(
+    private static async Task MoveSurrogatePairsAsync<T>(
         DbSet<T> set,
         IQueryable<T> sourceRows,
         IQueryable<T> targetRows,
@@ -349,22 +408,48 @@ internal static class CanonicalJobTypeSeed
         }
     }
 
-    private static async Task MoveBidsAsync(SiNetSQLDbContext db, int fromId, int toId, CancellationToken ct)
+    private static async Task MoveCompositePairsAsync<T>(
+        DbSet<T> set,
+        IQueryable<T> sourceRows,
+        IQueryable<T> targetRows,
+        Func<T, int> otherKey,
+        Func<int, T> create,
+        CancellationToken ct)
+        where T : class
     {
-        var rows = await db.Bids.Where(b => b.JobTypeId == fromId).ToListAsync(ct).ConfigureAwait(false);
-        var occupied = (await db.Bids.Where(b => b.JobTypeId == toId).Select(b => b.ProjectsId).ToListAsync(ct).ConfigureAwait(false))
+        var rows = await sourceRows.ToListAsync(ct).ConfigureAwait(false);
+        var occupied = (await targetRows.ToListAsync(ct).ConfigureAwait(false))
+            .Select(otherKey)
             .ToHashSet();
         foreach (var row in rows)
         {
-            if (!occupied.Add(row.ProjectsId))
-            {
-                db.Bids.Remove(row);
-                continue;
-            }
+            var key = otherKey(row);
+            if (occupied.Add(key))
+                set.Add(create(key));
 
-            row.JobTypeId = toId;
+            set.Remove(row);
         }
     }
+
+    private static async Task MoveBidsAsync(SiNetSQLDbContext db, int fromId, int toId, CancellationToken ct)
+    {
+        var rows = await db.Bids.Where(b => b.JobTypeId == fromId).ToListAsync(ct).ConfigureAwait(false);
+        foreach (var row in rows)
+            row.JobTypeId = toId;
+    }
+
+    private static async Task<bool> HasJobTypeReferencesAsync(
+        SiNetSQLDbContext db, int jobTypeId, CancellationToken ct) =>
+        await db.TypeOfProjectInProjects.AnyAsync(t => t.ProjectTypeId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.ProjectTypeWorkflowDefinitions.AnyAsync(t => t.ProjectTypeId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.ProjectTypeWorkflowStages.AnyAsync(t => t.ProjectTypeId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.ProjectTypeDisciplines.AnyAsync(t => t.ProjectTypeId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.ProjectTypeStatuses.AnyAsync(t => t.ProjectTypeId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.ProjectTypeTaskTypes.AnyAsync(t => t.ProjectTypeId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.Bids.AnyAsync(t => t.JobTypeId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.PaymentsSteps.AnyAsync(t => t.JobTypeId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.ProjectFiles.AnyAsync(t => t.TypeProjId == jobTypeId, ct).ConfigureAwait(false)
+        || await db.WorkflowInstances.AnyAsync(t => t.JobTypeId == jobTypeId, ct).ConfigureAwait(false);
 
     private static async Task MoveSimpleAsync<T>(
         IQueryable<T> query, Action<T> assign, CancellationToken ct)
@@ -375,30 +460,11 @@ internal static class CanonicalJobTypeSeed
             assign(row);
     }
 
-    private static async Task<bool> MoveWorkflowInstancesAsync(
+    private static async Task MoveWorkflowInstancesAsync(
         SiNetSQLDbContext db, int fromId, int toId, CancellationToken ct)
     {
         var rows = await db.WorkflowInstances.Where(i => i.JobTypeId == fromId).ToListAsync(ct).ConfigureAwait(false);
-        var blocked = false;
         foreach (var row in rows)
-        {
-            var active = row.Status is WorkflowStatus.Active or WorkflowStatus.Paused;
-            var clash = active && await db.WorkflowInstances.AnyAsync(
-                i => i.Id != row.Id
-                    && i.ProjectId == row.ProjectId
-                    && i.WorkflowDefinitionId == row.WorkflowDefinitionId
-                    && i.JobTypeId == toId
-                    && (i.Status == WorkflowStatus.Active || i.Status == WorkflowStatus.Paused),
-                ct).ConfigureAwait(false);
-            if (clash)
-            {
-                blocked = true;
-                continue;
-            }
-
             row.JobTypeId = toId;
-        }
-
-        return blocked;
     }
 }
