@@ -52,6 +52,24 @@ dotnet run --project tools/CanonicalJobTypeReconcile/CanonicalJobTypeReconcile.c
 
 There is no EF migration for this. The schema stays as it is.
 
+## Why a project can show no workflow templates
+
+Checked on 24.09.2026 against a fresh copy-only restore `SiNet_TemplateDiag_20260924` of catalog `SIData`. The source catalog was not written. Sample project **3147** (`דניבדיקה 2`) is linked to JobType **20** `בדיקה`.
+
+| Check | Result |
+| --- | --- |
+| JobType | 20 `בדיקה`, 23 `חוות דעת`. No legacy title. |
+| Definitions | PlanningWorkflow id 2 active, Review id 3 active, Opinion id 5 active. |
+| Enabled mapping | 20 → Review enabled and default. 20 → PlanningWorkflow present but disabled. 23 → Opinion enabled and default. |
+| Stage profile | 20 has 15 active `REV.*` rows and also 12 active `PLN.*` rows. 23 has 8 active `OPN.*` rows. |
+| Stage tasks | `REV.ProfessionalReview` (stage 21) has active template TaskType 57 `PerformProfessionalReview`. Most other Review and Opinion stages have templates. `REV.MaterialIntake`, `REV.Completed`, and `OPN.Close` have none; those are a sub-workflow host or a final stage. |
+| Opinion projects | 0 rows in `TypeOfProjectInProject` for JobType 23. |
+| Old task-type list | JobType 20 still has only TaskType 1 `General` and 3 `PlanReview`. JobType 23 has no `ProjectTypeTaskType` rows. |
+
+A screen that still lists only the Planning workflow for this job type is empty, because that mapping is disabled. The Review task template is present. Renaming the job type does not add it, and it is already there. The old desktop code does not look up the title `בדיקה_חוות_דעת`; that string appears only in seed comments. It keeps using JobType id 20, so the status and task-type rows above still apply. What changes for the old app is the displayed title, and any workflow list that reads enabled mappings now offers Review instead of Planning.
+
+Startup of `SiNet.App.Wpf` runs a read-only check. It does not call `--apply`. If the Review or Opinion mapping, or the current-stage task template, is missing, it shows a warning.
+
 ## Apply is one transaction
 
 `ApplyAsync` checks the full plan before it writes. The plan includes a merge of two legacy titles even when `בדיקה` does not exist yet, and it blocks when the Review or Opinion definition, or any of their seeded stages, is missing. The name change, relationship merge, workflow mappings, and stage profiles then run in one SQL transaction. A failure in a later step rolls the rename back. The merge does not open a second transaction when the caller already has one. A conflict does not return success.

@@ -17,8 +17,11 @@ using SiNet.Infrastructure.Autodesk;
 using SiNet.Infrastructure.Google;
 using SiNet.Infrastructure.Logging;
 using SiNet.Infrastructure.Secrets;
+using Microsoft.EntityFrameworkCore;
 using SiNet.Infrastructure.Sql;
 using SiNet.Infrastructure.Sql.Services.Identity;
+using SiNet.Infrastructure.Sql.Services.SeedData;
+using SiNetSQL.Data;
 
 namespace SiNet.App.Wpf;
 
@@ -190,6 +193,7 @@ public partial class App : System.Windows.Application
             shell.Show();
 
             ScheduleEmailBodyPdfRendererInit();
+            ScheduleWorkflowTemplateReadinessCheck();
 
             StandaloneHostLoggingBootstrap.Warning("[STARTUP] Client session ready");
         }
@@ -202,6 +206,41 @@ public partial class App : System.Windows.Application
     /// <summary>
     /// Non-fatal warmup for ACC Inbox <c>00_Email.pdf</c> (N4). Lazy init still happens on first render.
     /// </summary>
+    private void ScheduleWorkflowTemplateReadinessCheck()
+    {
+        Dispatcher.BeginInvoke(async () =>
+        {
+            try
+            {
+                var factory = _services?.GetService<IDbContextFactory<SiNetSQLDbContext>>();
+                if (factory is null)
+                    return;
+                await using var db = await factory.CreateDbContextAsync(_shutdownCts.Token).ConfigureAwait(true);
+                var gaps = await CanonicalJobTypeReconciliation
+                    .DescribeRuntimeGapsAsync(db, _shutdownCts.Token)
+                    .ConfigureAwait(true);
+                if (gaps.Count == 0)
+                    return;
+                MessageBox.Show(
+                    "מיפוי תבניות התהליך אינו שלם. ההתקנה לא מתקנת את זה לבד."
+                    + Environment.NewLine + Environment.NewLine
+                    + string.Join(Environment.NewLine, gaps),
+                    "תבניות תהליך",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                StandaloneHostLoggingBootstrap.Warning(
+                    ex,
+                    "[STARTUP] Workflow template readiness check failed (non-fatal).");
+            }
+        });
+    }
+
     private void ScheduleEmailBodyPdfRendererInit()
     {
         var renderer = _services?.GetService<WpfEmailBodyPdfRenderer>();

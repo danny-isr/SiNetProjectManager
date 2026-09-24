@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SiNet.Infrastructure.Sql.Constants;
 using SiNetSQL.Data;
 
 namespace SiNet.Infrastructure.Sql.Services.SeedData;
@@ -37,6 +38,74 @@ public static class CanonicalJobTypeReconciliation
             legacy.Select(j => j.Id).ToArray(),
             opinion?.Id,
             conflicts);
+    }
+
+    /// <summary>
+    /// Read-only startup check. It never writes. A non-empty result means the
+    /// workflow template screen can look empty until the one-time reconciler runs.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> DescribeRuntimeGapsAsync(
+        SiNetSQLDbContext db, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        var gaps = new List<string>();
+        await AddGapAsync(db, gaps, CanonicalJobTypeSeed.ReviewJobTypeTitle, WorkflowCodes.Review, ReviewStageCodes.ProfessionalReview, ct).ConfigureAwait(false);
+        await AddGapAsync(db, gaps, CanonicalJobTypeSeed.OpinionJobTypeTitle, WorkflowCodes.Opinion, OpinionStageCodes.ReceiveMaterial, ct).ConfigureAwait(false);
+        return gaps;
+    }
+
+    private static async Task AddGapAsync(
+        SiNetSQLDbContext db,
+        List<string> gaps,
+        string jobTypeTitle,
+        string workflowCode,
+        string stageCode,
+        CancellationToken ct)
+    {
+        var jobTypeId = await db.JobTypes.AsNoTracking()
+            .Where(j => j.Title == jobTypeTitle)
+            .Select(j => (int?)j.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (jobTypeId is null)
+        {
+            gaps.Add($"חסר סוג עבודה '{jobTypeTitle}'. תבניות התהליך לא יוצגו עד להרצת CanonicalJobTypeReconcile.");
+            return;
+        }
+
+        var workflow = await db.WorkflowDefinitions.AsNoTracking()
+            .Where(d => d.Code == workflowCode && d.IsActive)
+            .Select(d => new { d.Id })
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (workflow is null)
+        {
+            gaps.Add($"הגדרת התהליך '{workflowCode}' חסרה או אינה פעילה.");
+            return;
+        }
+
+        var enabled = await db.ProjectTypeWorkflowDefinitions.AsNoTracking()
+            .AnyAsync(m => m.ProjectTypeId == jobTypeId && m.WorkflowDefinitionId == workflow.Id && m.IsEnabled, ct)
+            .ConfigureAwait(false);
+        if (!enabled)
+            gaps.Add($"לסוג העבודה '{jobTypeTitle}' אין מיפוי מאופשר אל '{workflowCode}'.");
+
+        var stageId = await db.WorkflowStageDefinitions.AsNoTracking()
+            .Where(s => s.WorkflowDefinitionId == workflow.Id && s.Code == stageCode)
+            .Select(s => (int?)s.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (stageId is null)
+        {
+            gaps.Add($"השלב '{stageCode}' חסר בתהליך '{workflowCode}'.");
+            return;
+        }
+
+        var templates = await db.WorkflowStageTasks.AsNoTracking()
+            .CountAsync(t => t.StageDefinitionId == stageId && t.IsActive, ct)
+            .ConfigureAwait(false);
+        if (templates == 0)
+            gaps.Add($"לשלב '{stageCode}' אין תבנית משימה פעילה. המסך יישאר בלי תבניות.");
     }
 
     public static async Task ApplyAsync(SiNetSQLDbContext db, CancellationToken ct)
