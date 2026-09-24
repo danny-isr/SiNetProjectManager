@@ -83,14 +83,14 @@ public static class CanonicalJobTypeStartupUpgrade
         if (preview.LegacyJobTypeIds.Count > 0)
             return true;
 
-        if (preview.ReviewJobTypeId is int reviewId
-            && !await IsWorkflowReadyAsync(
+        if (preview.ReviewJobTypeId is not int reviewId
+            || !await IsWorkflowReadyAsync(
                 db, reviewId, WorkflowCodes.Review, ReviewWorkflowSeedData.Stages.Select(s => s.Code).ToArray(), ct)
                 .ConfigureAwait(false))
             return true;
 
-        if (preview.OpinionJobTypeId is int opinionId
-            && !await IsWorkflowReadyAsync(
+        if (preview.OpinionJobTypeId is not int opinionId
+            || !await IsWorkflowReadyAsync(
                 db, opinionId, WorkflowCodes.Opinion, OpinionWorkflowSeedData.Stages.Select(s => s.Code).ToArray(), ct)
                 .ConfigureAwait(false))
             return true;

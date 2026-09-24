@@ -79,6 +79,77 @@ public sealed class CanonicalJobTypeStartupUpgradeTests
     }
 
     [Fact]
+    public async Task Startup_creates_opinion_when_review_exists_and_second_start_does_not_write()
+    {
+        var options = await CreateDatabaseAsync();
+        int reviewId;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            await SeedWorkflowsAsync(db);
+            db.JobTypes.Add(new JobType { Title = "בדיקה" });
+            await db.SaveChangesAsync();
+            await CanonicalJobTypeReconciliation.ApplyAsync(db, CancellationToken.None);
+            reviewId = (await db.JobTypes.SingleAsync(j => j.Title == "בדיקה")).Id;
+            var opinion = await db.JobTypes.SingleAsync(j => j.Title == "חוות דעת");
+            var opinionMaps = db.ProjectTypeWorkflowDefinitions.Where(m => m.ProjectTypeId == opinion.Id);
+            var opinionStages = db.ProjectTypeWorkflowStages.Where(s => s.ProjectTypeId == opinion.Id);
+            db.ProjectTypeWorkflowDefinitions.RemoveRange(opinionMaps);
+            db.ProjectTypeWorkflowStages.RemoveRange(opinionStages);
+            db.JobTypes.Remove(opinion);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            var first = await CanonicalJobTypeStartupUpgrade.RunAsync(db, CancellationToken.None);
+            Assert.Equal(CanonicalJobTypeStartupUpgradeOutcome.Upgraded, first.Outcome);
+            Assert.Equal(reviewId, first.ReviewJobTypeId);
+        }
+
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            Assert.Equal(reviewId, (await db.JobTypes.SingleAsync(j => j.Title == "בדיקה")).Id);
+            var opinion = await db.JobTypes.SingleAsync(j => j.Title == "חוות דעת");
+            Assert.NotEqual(reviewId, opinion.Id);
+            await AssertWorkflowReadyAsync(db, reviewId, WorkflowCodes.Review);
+            await AssertWorkflowReadyAsync(db, opinion.Id, WorkflowCodes.Opinion);
+            _output.WriteLine($"REVIEW_ONLY review={reviewId} opinion={opinion.Id}");
+        }
+
+        await AssertSecondStartDoesNotWriteAsync(options, reviewId);
+    }
+
+    [Fact]
+    public async Task Startup_creates_both_job_types_when_neither_exists_and_second_start_does_not_write()
+    {
+        var options = await CreateDatabaseAsync();
+        await using (var db = new SiNetSQLDbContext(options))
+            await SeedWorkflowsAsync(db);
+
+        int reviewId;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            var first = await CanonicalJobTypeStartupUpgrade.RunAsync(db, CancellationToken.None);
+            Assert.Equal(CanonicalJobTypeStartupUpgradeOutcome.Upgraded, first.Outcome);
+            reviewId = first.ReviewJobTypeId ?? 0;
+            Assert.True(reviewId > 0);
+        }
+
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            var review = await db.JobTypes.SingleAsync(j => j.Title == "בדיקה");
+            var opinion = await db.JobTypes.SingleAsync(j => j.Title == "חוות דעת");
+            Assert.Equal(reviewId, review.Id);
+            Assert.NotEqual(review.Id, opinion.Id);
+            await AssertWorkflowReadyAsync(db, review.Id, WorkflowCodes.Review);
+            await AssertWorkflowReadyAsync(db, opinion.Id, WorkflowCodes.Opinion);
+            _output.WriteLine($"BOTH_MISSING review={review.Id} opinion={opinion.Id}");
+        }
+
+        await AssertSecondStartDoesNotWriteAsync(options, reviewId);
+    }
+
+    [Fact]
     public async Task Startup_conflict_does_not_write_and_does_not_report_success()
     {
         var options = await CreateDatabaseAsync();
@@ -181,6 +252,40 @@ public sealed class CanonicalJobTypeStartupUpgradeTests
     {
         await using var db = new SiNetSQLDbContext(options);
         return await CanonicalJobTypeStartupUpgrade.RunAsync(db, CancellationToken.None);
+    }
+
+    private static async Task AssertSecondStartDoesNotWriteAsync(
+        DbContextOptions<SiNetSQLDbContext> options, int reviewId)
+    {
+        var counter = new SaveCounter();
+        var counted = new DbContextOptionsBuilder<SiNetSQLDbContext>(options).AddInterceptors(counter).Options;
+        await using var db = new SiNetSQLDbContext(counted);
+        var second = await CanonicalJobTypeStartupUpgrade.RunAsync(db, CancellationToken.None);
+        Assert.Equal(CanonicalJobTypeStartupUpgradeOutcome.AlreadyCurrent, second.Outcome);
+        Assert.Equal(reviewId, second.ReviewJobTypeId);
+        Assert.Equal(0, counter.Calls);
+    }
+
+    private static async Task AssertWorkflowReadyAsync(SiNetSQLDbContext db, int jobTypeId, string workflowCode)
+    {
+        var workflowId = await db.WorkflowDefinitions.AsNoTracking()
+            .Where(d => d.Code == workflowCode && d.IsActive)
+            .Select(d => d.Id)
+            .SingleAsync();
+        var mapping = await db.ProjectTypeWorkflowDefinitions.AsNoTracking()
+            .SingleAsync(m => m.ProjectTypeId == jobTypeId && m.WorkflowDefinitionId == workflowId);
+        Assert.True(mapping.IsEnabled);
+        Assert.True(mapping.IsDefault);
+        var stageCount = await db.WorkflowStageDefinitions.AsNoTracking()
+            .CountAsync(s => s.WorkflowDefinitionId == workflowId);
+        var profileCount = await db.ProjectTypeWorkflowStages.AsNoTracking()
+            .CountAsync(s =>
+                s.ProjectTypeId == jobTypeId
+                && s.IsActive
+                && db.WorkflowStageDefinitions.Any(st =>
+                    st.Id == s.WorkflowStageDefinitionId && st.WorkflowDefinitionId == workflowId));
+        Assert.Equal(stageCount, profileCount);
+        Assert.True(profileCount > 0);
     }
 
     private static async Task<List<string>> WizardStageNamesAsync(SiNetSQLDbContext db, int jobTypeId)

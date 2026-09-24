@@ -6,7 +6,7 @@
 
 `SiNet.App.Wpf` runs this once on startup, before the shell opens. It does not run the DEBUG general seed and it does not use an EF migration. `SqlWorkflowSeedService` stays DEBUG-only.
 
-The startup checks the connected database first. When there is no legacy title and the Review and Opinion mappings and stage profiles are already in place, it commits nothing and shows no success message. When `בדיקה חוות דעת` or `בדיקה_חוות_דעת` is present, or an existing `בדיקה` / `חוות דעת` row is missing its enabled mapping or stage profile, it calls `CanonicalJobTypeReconciliation.ApplyAsync` inside one SQL transaction. The rename keeps `JobType.Id` and the project links. `חוות דעת` stays a separate JobType.
+The startup checks the connected database first. It writes nothing only when both `בדיקה` and `חוות דעת` already exist, neither legacy title remains, and each has its enabled default mapping and full stage profile. A missing `חוות דעת`, a missing `בדיקה`, a legacy title, or an incomplete mapping or stage profile calls `CanonicalJobTypeReconciliation.ApplyAsync` inside one SQL transaction. The rename keeps `JobType.Id` and the project links. `חוות דעת` stays a separate JobType.
 
 Two workstations cannot upgrade at once. Startup takes an exclusive `sp_getapplock` named `SiNet:CanonicalJobTypeUpgrade` for the transaction. The second process waits, then checks again. If the first process already finished, the second writes nothing. If the lock wait expires, startup shows a warning and still opens the shell.
 
