@@ -481,6 +481,22 @@ public sealed class ProjectsDashboardViewModel : ObservableObject
             _logger);
     }
 
+    internal async Task OpenSelectedForCurrentRoleAsync()
+    {
+        if (Selected is null)
+            return;
+
+        if (_authorization is not null
+            && !await _authorization.CanCurrentUserAccessFeatureAsync(
+                AppFeatureCodes.ProjectUpdate, CancellationToken.None).ConfigureAwait(true))
+        {
+            await OpenSelectedAsync().ConfigureAwait(true);
+            return;
+        }
+
+        await EditSelectedAsync().ConfigureAwait(true);
+    }
+
     internal async Task EditSelectedAsync()
     {
         if (Selected is null)

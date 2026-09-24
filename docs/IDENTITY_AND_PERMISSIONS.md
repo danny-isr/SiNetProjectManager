@@ -379,7 +379,7 @@ public interface IAuthorizationQueryService
 | `WorkflowOps.Cancel` | Administrator |
 | `WorkflowOps.Retry` | Administrator |
 | `WorkflowOps.Start` | Management |
-| `ShellOpenProjectsDashboard` | Management |
+| `ShellOpenProjectsDashboard` | Employee (browse projects; project edits remain `Project.Update` / Management) |
 | `ShellOpenBillingCenter` | Management |
 | `Billing.RecordReviewDecision` | Management |
 | `ShellOpenMasterPlanMonthlyRestore` | Management |

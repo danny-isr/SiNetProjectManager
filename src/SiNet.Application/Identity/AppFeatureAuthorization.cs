@@ -18,7 +18,7 @@ public static class AppFeatureAuthorization
             [AppFeatureCodes.DevToolsSeed] = AppRole.Management,
             [AppFeatureCodes.ProjectCreate] = AppRole.Management,
             [AppFeatureCodes.ProjectUpdate] = AppRole.Management,
-            [AppFeatureCodes.ShellOpenProjectsDashboard] = AppRole.Management,
+            [AppFeatureCodes.ShellOpenProjectsDashboard] = AppRole.Employee,
             [AppFeatureCodes.ShellOpenBillingCenter] = AppRole.Management,
             [AppFeatureCodes.BillingRecordReviewDecision] = AppRole.Management,
             [AppFeatureCodes.ReportsManagement] = AppRole.Management,

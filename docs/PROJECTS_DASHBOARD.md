@@ -22,9 +22,11 @@ It **complements** the shared Project Selector (pick one project) and the Workfl
 
 | Audience | Access |
 | --- | --- |
-| Management and above | Feature `Shell.OpenProjectsDashboard` (min role **Management**, same bar as `Project.Create`) |
-| Employee | No menu item |
-| Administrator | Included via Management+ hierarchy |
+| Active Employee and above | Feature `Shell.OpenProjectsDashboard` (min role **Employee**); browse and open projects |
+| Management and above | Can also open «עדכון פרויקט» through `Project.Update` and start adoption through `WorkflowOps.Start` |
+| Inactive / Unauthorized | No menu item |
+
+Employees update their assigned tasks through the existing task work surface. Task completion can advance the workflow and update the project's lifecycle status through its configured rules. The dashboard's status column is a read-only project status, and `Project.Update` still controls editing project metadata. An employee cannot start workflow adoption from this dashboard.
 
 ## 3. Shell placement
 
@@ -94,7 +96,7 @@ only under **תהליכים פתוחים**.
 
 | Action | Behavior |
 | --- | --- |
-| **Double-click** row | Open **עדכון פרויקט** (`ProjectEdit` dialog) for that project — see [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md) |
+| **Double-click** row | Management+ opens **עדכון פרויקט** (`ProjectEdit` dialog); Employee selects the project as Current Project and can open «בעבודה 2» from the shell menu. See [`DEV_PLAN_PROJECT_EDIT_AND_RENAME.md`](./DEV_PLAN_PROJECT_EDIT_AND_RENAME.md). |
 | Toolbar **«פתח פרויקט»** | Set `ICurrentProjectContext` from the row + open Project Work browse (`IProjectWorkSurfaceHost.TryOpenBrowseAsync`) |
 
 No workflow mutation and no status edits **inside the grid**. Metadata edits happen only in the edit dialog (feature `Project.Update`).

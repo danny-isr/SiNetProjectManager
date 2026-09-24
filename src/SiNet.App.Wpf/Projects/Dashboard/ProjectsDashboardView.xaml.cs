@@ -30,13 +30,10 @@ public partial class ProjectsDashboardView : UserControl
             $"dataContext={(DataContext is null ? "null" : DataContext.GetType().FullName)} commandNull={command is null} canExecute={command?.CanExecute(null)} selectedProjectId={vm?.Selected?.ProjectId}");
     }
 
-    private void OnProjectsGridMouseDoubleClick(object sender, MouseButtonEventArgs e)
+    private async void OnProjectsGridMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (DataContext is ProjectsDashboardViewModel vm
-            && vm.EditSelectedCommand.CanExecute(null))
-        {
-            vm.EditSelectedCommand.Execute(null);
-        }
+        if (DataContext is ProjectsDashboardViewModel vm)
+            await vm.OpenSelectedForCurrentRoleAsync();
     }
 
     private void OnProjectsGridSorting(object sender, DataGridSortingEventArgs e)
