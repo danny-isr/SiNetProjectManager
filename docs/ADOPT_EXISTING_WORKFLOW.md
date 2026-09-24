@@ -2,6 +2,7 @@
 
 > **Status:** Active
 > **Updated:** 24.09.2026
+> **Candidate:** `SiNet.App.Wpf` 1.0.43. This candidate does not import historical reports from Google Sheets or Docs, and the responsible user is still chosen from the stage group.
 > **Host:** `SiNet.App.Wpf`
 
 ## Purpose

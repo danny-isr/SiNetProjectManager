@@ -1,0 +1,19 @@
+Canonical JobType SQL proof
+Database: (localdb)\MSSQLLocalDB / SiNet_JobTypeUpgradeProof
+Test: CanonicalJobTypeSqlUpgradeTests.Old_jobtype_rows_upgrade_on_sql_server_or_roll_back
+LocalDB unavailable is a test failure, not a pass.
+
+LEGACY-PAIR-WITH-CANONICAL blocked: Canonical JobType reconciliation stopped. No rows were changed. Conflict: Bid #2 project 1 amount 2500.0000 exists on both JobTypes. Neither bid is deleted.
+TWO-LEGACY blocked: Canonical JobType reconciliation stopped. No rows were changed. Conflict: Bid #4 project 2 amount 2500.0000 exists on both JobTypes. Neither bid is deleted.
+RENAME id=6 links=1
+MERGE keeper=6 status=1 taskType=1
+ROLLBACK error=DbUpdateException
+ROLLBACK title restored and mappings=0
+SECOND jobs=2 maps=2 stages=23
+SQL_UPGRADE_OK database=SiNet_JobTypeUpgradeProof
+
+Passed: 10
+Failed: 0
+Filter: CanonicalJobTypeSeedTests|CanonicalJobTypeSqlUpgradeTests
+Elapsed: 12.1334 seconds
+Date: 24.09.2026

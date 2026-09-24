@@ -335,17 +335,14 @@ internal static class CanonicalJobTypeSeed
             {
                 conflicts.AddRange(await DescribeMergeConflictsAsync(db, legacyId, keeper, ct).ConfigureAwait(false));
             }
-
-            return conflicts;
         }
 
-        if (legacyIds.Count < 2)
-            return conflicts;
-
-        var futureKeeper = legacyIds[0];
-        foreach (var legacyId in legacyIds.Skip(1))
+        for (var i = 0; i < legacyIds.Count; i++)
         {
-            conflicts.AddRange(await DescribeMergeConflictsAsync(db, legacyId, futureKeeper, ct).ConfigureAwait(false));
+            for (var j = i + 1; j < legacyIds.Count; j++)
+            {
+                conflicts.AddRange(await DescribeMergeConflictsAsync(db, legacyIds[j], legacyIds[i], ct).ConfigureAwait(false));
+            }
         }
 
         return conflicts;

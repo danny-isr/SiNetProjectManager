@@ -66,7 +66,11 @@ Run:
 dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj --configuration Debug --filter FullyQualifiedName~CanonicalJobTypeSqlUpgradeTests
 ```
 
-Result on 24.09.2026, before the release-gate SHA of this change:
+Result on 24.09.2026. The explicit log is `docs/OPS_CANONICAL_JOBTYPE_SQL_PROOF.txt`. If LocalDB cannot be opened, the test fails.
+
+A copy-only backup of catalog `SIData` on `SI-WIN-2K19\SIDATA` was restored to `SiNet_ReconcileCopy_20260924`. The source catalog was not written. On that copy the names were already normalized (`בדיקה` id 20, `חוות דעת` id 23, no legacy title). Dry-run reported `Conflicts: 0` and wrote nothing. Two `--apply` runs both completed with the same ids and no conflicts. Afterward the copy had 2 canonical titles, 0 legacy titles, 23 workflow mappings, and 290 stage-profile rows. The source catalog was not the target of the tool.
+
+Result of the synthetic LocalDB upgrade:
 
 - Two legacy titles and two different bids, with no `בדיקה`: Apply threw, both titles and both bids stayed.
 - One legacy title: renamed in place. The same JobType id kept its project link.

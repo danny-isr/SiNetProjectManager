@@ -124,6 +124,56 @@ public sealed class CanonicalJobTypeSeedTests
     }
 
     [Fact]
+    public async Task Two_legacy_titles_conflict_with_each_other_even_when_review_exists()
+    {
+        var (_, options) = CreateFactory();
+        int keeperId;
+        int spacedId;
+        int underscoreId;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            var keeper = new JobType { Title = "בדיקה" };
+            var spaced = new JobType { Title = "בדיקה חוות דעת" };
+            var underscore = new JobType { Title = "בדיקה_חוות_דעת" };
+            db.JobTypes.AddRange(keeper, spaced, underscore);
+            await db.SaveChangesAsync();
+            keeperId = keeper.Id;
+            spacedId = spaced.Id;
+            underscoreId = underscore.Id;
+            db.Bids.Add(new Bid
+            {
+                ProjectsId = 11,
+                JobTypeId = spacedId,
+                BidValue = 1000m,
+                BidSubmission = new DateTime(2024, 1, 1),
+                Description = "spaced",
+            });
+            db.Bids.Add(new Bid
+            {
+                ProjectsId = 11,
+                JobTypeId = underscoreId,
+                BidValue = 2500m,
+                BidSubmission = new DateTime(2024, 2, 1),
+                Description = "underscore",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = new SiNetSQLDbContext(options);
+        var preview = await CanonicalJobTypeReconciliation.PreviewAsync(verify, CancellationToken.None);
+        Assert.Contains(preview.Conflicts, c => c.Contains("Conflict", StringComparison.Ordinal));
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CanonicalJobTypeReconciliation.ApplyAsync(verify, CancellationToken.None));
+        Assert.Contains("No rows were changed", thrown.Message, StringComparison.Ordinal);
+        verify.ChangeTracker.Clear();
+        Assert.Equal("בדיקה", (await verify.JobTypes.SingleAsync(j => j.Id == keeperId)).Title);
+        Assert.Equal("בדיקה חוות דעת", (await verify.JobTypes.SingleAsync(j => j.Id == spacedId)).Title);
+        Assert.Equal("בדיקה_חוות_דעת", (await verify.JobTypes.SingleAsync(j => j.Id == underscoreId)).Title);
+        Assert.Equal(1000m, (await verify.Bids.SingleAsync(b => b.JobTypeId == spacedId)).BidValue);
+        Assert.Equal(2500m, (await verify.Bids.SingleAsync(b => b.JobTypeId == underscoreId)).BidValue);
+    }
+
+    [Fact]
     public async Task Conflicting_bids_are_kept_and_the_merge_does_not_change_either_jobtype()
     {
         var (factory, options) = CreateFactory();

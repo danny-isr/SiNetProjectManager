@@ -32,8 +32,9 @@ public sealed class CanonicalJobTypeSqlUpgradeTests
         }
         catch (SqlException ex)
         {
-            _output.WriteLine("LocalDB unavailable: " + ex.Message);
-            return;
+            throw new InvalidOperationException(
+                "LocalDB is required for the release SQL gate and was not available. " + ex.Message,
+                ex);
         }
 
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>().UseSqlServer(cs).Options;
@@ -41,12 +42,52 @@ public sealed class CanonicalJobTypeSqlUpgradeTests
             await db.Database.EnsureCreatedAsync();
 
         await SeedWorkflowDefinitionsAsync(options);
+        await ProveLegacyPairConflictsWhileCanonicalExistsAsync(options);
         await ProveTwoLegacyNamesConflictAsync(options);
         var renamedId = await ProveRenameKeepsIdAsync(options);
         await ProveCleanMergeCopiesStatusAndTaskTypeAsync(options, renamedId);
         await ProveMappingFailureRollsBackRenameAsync(options);
         await ProveSecondApplyIsStableAsync(options);
         _output.WriteLine("SQL_UPGRADE_OK database=" + DatabaseName);
+    }
+
+    private async Task ProveLegacyPairConflictsWhileCanonicalExistsAsync(DbContextOptions<SiNetSQLDbContext> options)
+    {
+        int keeperId;
+        int spacedId;
+        int underscoreId;
+        await using (var db = new SiNetSQLDbContext(options))
+        {
+            var project = await AddProjectAsync(db, 9);
+            var keeper = new JobType { Title = "בדיקה" };
+            var spaced = new JobType { Title = "בדיקה חוות דעת" };
+            var underscore = new JobType { Title = "בדיקה_חוות_דעת" };
+            db.JobTypes.AddRange(keeper, spaced, underscore);
+            await db.SaveChangesAsync();
+            keeperId = keeper.Id;
+            spacedId = spaced.Id;
+            underscoreId = underscore.Id;
+            db.Bids.Add(new Bid { ProjectsId = project.Id, JobTypeId = spacedId, BidValue = 1000m, BidSubmission = DateTime.UtcNow, Description = "spaced only" });
+            db.Bids.Add(new Bid { ProjectsId = project.Id, JobTypeId = underscoreId, BidValue = 2500m, BidSubmission = DateTime.UtcNow, Description = "underscore only" });
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = new SiNetSQLDbContext(options);
+        var preview = await CanonicalJobTypeReconciliation.PreviewAsync(verify, CancellationToken.None);
+        Assert.Contains(preview.Conflicts, c => c.Contains("Conflict", StringComparison.Ordinal));
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CanonicalJobTypeReconciliation.ApplyAsync(verify, CancellationToken.None));
+        verify.ChangeTracker.Clear();
+        Assert.Equal("בדיקה", (await verify.JobTypes.SingleAsync(j => j.Id == keeperId)).Title);
+        Assert.Equal("בדיקה חוות דעת", (await verify.JobTypes.SingleAsync(j => j.Id == spacedId)).Title);
+        Assert.Equal("בדיקה_חוות_דעת", (await verify.JobTypes.SingleAsync(j => j.Id == underscoreId)).Title);
+        Assert.Equal(1000m, (await verify.Bids.SingleAsync(b => b.JobTypeId == spacedId)).BidValue);
+        Assert.Equal(2500m, (await verify.Bids.SingleAsync(b => b.JobTypeId == underscoreId)).BidValue);
+        _output.WriteLine("LEGACY-PAIR-WITH-CANONICAL blocked: " + thrown.Message);
+
+        verify.Bids.RemoveRange(verify.Bids);
+        verify.JobTypes.RemoveRange(verify.JobTypes);
+        await verify.SaveChangesAsync();
     }
 
     private async Task ProveTwoLegacyNamesConflictAsync(DbContextOptions<SiNetSQLDbContext> options)
