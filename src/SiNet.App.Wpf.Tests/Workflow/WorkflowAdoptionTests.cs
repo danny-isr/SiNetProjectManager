@@ -901,10 +901,51 @@ public sealed class WorkflowAdoptionTests
         public ValueTask<TaskQueueOperationResult> MoveDownAsync(int taskId, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
+    [Fact]
+    public async Task Reassign_db_update_failure_after_commit_keeps_the_instance_and_warns()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync(services =>
+            services.AddTransient<ITaskQueueService, DbUpdateReassignQueue>());
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            await AddAlternateReviewerAsync(options);
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var request = new WorkflowAdoptionRequest(
+                ctx.ProjectId,
+                ctx.DefinitionId,
+                ctx.JobTypeId,
+                ReviewStageCodes.ProfessionalReview,
+                ProposalWorkflowHarness.UserId,
+                ResponsibleUserId: 2);
+
+            var committed = await adoption.CommitAsync(request, CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.Committed, committed.Disposition);
+            Assert.Contains(committed.Warnings, w => w.Contains("שיוך המשתמש האחראי נכשל", StringComparison.Ordinal));
+            await using var db = new SiNetSQLDbContext(options);
+            Assert.Equal(1, await db.WorkflowInstances.CountAsync());
+        }
+    }
+
     private sealed class FailedReassignQueue : ITaskQueueService
     {
         public ValueTask<TaskQueueOperationResult> ReassignAsync(int taskId, int newUserId, int changedByUserId, CancellationToken ct = default) =>
             new(new TaskQueueOperationResult(false, "queue refused"));
+
+        public ValueTask<IReadOnlyList<TaskSummaryDto>> GetUserQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask MoveWithinBucketAsync(int taskId, int newPosition, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask ChangeBucketAsync(int taskId, int newBucket, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<int> ValidateAndRepairQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueRepairResult> RepairQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueRepairResult> RepairAllQueuesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueOperationResult> MoveUpAsync(int taskId, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueOperationResult> MoveDownAsync(int taskId, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    private sealed class DbUpdateReassignQueue : ITaskQueueService
+    {
+        public ValueTask<TaskQueueOperationResult> ReassignAsync(int taskId, int newUserId, int changedByUserId, CancellationToken ct = default) =>
+            throw new DbUpdateException("reassign update failed", new InvalidOperationException("sql"));
 
         public ValueTask<IReadOnlyList<TaskSummaryDto>> GetUserQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
         public ValueTask MoveWithinBucketAsync(int taskId, int newPosition, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();

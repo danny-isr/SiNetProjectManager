@@ -86,7 +86,7 @@ An optional responsible user is accepted only when that user is an active member
 
 Adoption uses `StartWorkflowAtomicAsync`: one context, and on SQL Server one transaction around the instance, the initial transition, the current-stage tasks, and the active-report link. If provisioning throws before that transaction commits, SQL Server rolls back. The EF InMemory provider used by tests cannot roll back `SaveChanges`, so that path deletes the rows created by the failed start. That cleanup runs only when the provider is not relational and the save has not completed. A null `CurrentTransaction` after `CommitAsync` is not treated as a failed save.
 
-Reassignment of the responsible user runs after that commit. If it throws or returns failure, the instance, transition, task, and report link stay. The commit result is still `Committed`, and `Warnings` says the task remained on the group default. The wizard shows those warnings before it closes.
+Reassignment of the responsible user runs after that commit. If it throws `InvalidOperationException`, `WorkflowStartPreflightException`, or `DbUpdateException`, or if it returns failure, the instance, transition, task, and report link stay. The commit result is still `Committed`, and `Warnings` says the task remained on the group default. The wizard shows those warnings before it closes.
 
 If the current stage provisions no task, the start is rolled back. Adoption does not leave an Active workflow with no task.
 

@@ -161,7 +161,10 @@ public sealed class CanonicalJobTypeSeedTests
             await db.SaveChangesAsync();
         }
 
-        await new SqlWorkflowSeedService(factory).SeedAllAsync(CancellationToken.None);
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new SqlWorkflowSeedService(factory).SeedAllAsync(CancellationToken.None).AsTask());
+        Assert.Contains("Conflict", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("No rows were changed", thrown.Message, StringComparison.Ordinal);
 
         await using var verify = new SiNetSQLDbContext(options);
         Assert.Equal(2, await verify.Bids.CountAsync(b => b.ProjectsId == 9));
@@ -240,7 +243,9 @@ public sealed class CanonicalJobTypeSeedTests
             await db.SaveChangesAsync();
         }
 
-        await new SqlWorkflowSeedService(factory).SeedAllAsync(CancellationToken.None);
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new SqlWorkflowSeedService(factory).SeedAllAsync(CancellationToken.None).AsTask());
+        Assert.Contains("Conflict", thrown.Message, StringComparison.Ordinal);
 
         await using var verify = new SiNetSQLDbContext(options);
         Assert.True(await verify.JobTypes.AnyAsync(j => j.Id == legacyId && j.Title == "בדיקה חוות דעת"));

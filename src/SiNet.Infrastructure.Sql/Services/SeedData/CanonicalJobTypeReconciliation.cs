@@ -25,15 +25,12 @@ public static class CanonicalJobTypeReconciliation
             .ToList();
         var opinion = jobTypes.FirstOrDefault(j => j.Title == CanonicalJobTypeSeed.OpinionJobTypeTitle);
         var conflicts = new List<string>();
-        if (canonical is not null)
-        {
-            foreach (var row in legacy)
-            {
-                conflicts.AddRange(await CanonicalJobTypeSeed
-                    .DescribeMergeConflictsAsync(db, row.Id, canonical.Id, ct)
-                    .ConfigureAwait(false));
-            }
-        }
+        conflicts.AddRange(await CanonicalJobTypeSeed
+            .DescribePlannedReviewConflictsAsync(db, canonical?.Id, legacy.Select(j => j.Id).ToArray(), ct)
+            .ConfigureAwait(false));
+        conflicts.AddRange(await CanonicalJobTypeSeed
+            .DescribeMissingWorkflowPrerequisitesAsync(db, ct)
+            .ConfigureAwait(false));
 
         return new CanonicalJobTypeReconciliationReport(
             canonical?.Id,
@@ -53,9 +50,24 @@ public static class CanonicalJobTypeReconciliation
                 + string.Join(" ", preview.Conflicts));
         }
 
-        await CanonicalJobTypeSeed.NormalizeJobTypesAsync(db, ct).ConfigureAwait(false);
-        await CanonicalJobTypeSeed.EnsureWorkflowMappingsAsync(db, ct).ConfigureAwait(false);
-        await CanonicalJobTypeSeed.EnsureStageProfilesAsync(db, ct).ConfigureAwait(false);
+        var relational = db.Database.IsRelational() && db.Database.CurrentTransaction is null;
+        await using var transaction = relational
+            ? await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false)
+            : null;
+        try
+        {
+            await CanonicalJobTypeSeed.NormalizeJobTypesAsync(db, ct).ConfigureAwait(false);
+            await CanonicalJobTypeSeed.EnsureWorkflowMappingsAsync(db, ct).ConfigureAwait(false);
+            await CanonicalJobTypeSeed.EnsureStageProfilesAsync(db, ct).ConfigureAwait(false);
+            if (transaction is not null)
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
     }
 }
 

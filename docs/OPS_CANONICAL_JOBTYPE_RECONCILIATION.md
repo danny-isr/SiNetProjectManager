@@ -51,3 +51,25 @@ dotnet run --project tools/CanonicalJobTypeReconcile/CanonicalJobTypeReconcile.c
 7. Only after that check, repeat steps 2 and 4 against production. Take a fresh backup first. This repository change does not run that production step.
 
 There is no EF migration for this. The schema stays as it is.
+
+## Apply is one transaction
+
+`ApplyAsync` checks the full plan before it writes. The plan includes a merge of two legacy titles even when `בדיקה` does not exist yet, and it blocks when the Review or Opinion definition, or any of their seeded stages, is missing. The name change, relationship merge, workflow mappings, and stage profiles then run in one SQL transaction. A failure in a later step rolls the rename back. The merge does not open a second transaction when the caller already has one. A conflict does not return success.
+
+## SQL upgrade proof
+
+`CanonicalJobTypeSqlUpgradeTests` creates private LocalDB database `SiNet_JobTypeUpgradeProof`, inserts the old JobType rows, and only then calls `ApplyAsync`. It does not read or write the DEV or production catalog. A restored copy of the live catalog was not used: that catalog was already normalized in an earlier seed, so it no longer holds the old titles.
+
+Run:
+
+```powershell
+dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj --configuration Debug --filter FullyQualifiedName~CanonicalJobTypeSqlUpgradeTests
+```
+
+Result on 24.09.2026, before the release-gate SHA of this change:
+
+- Two legacy titles and two different bids, with no `בדיקה`: Apply threw, both titles and both bids stayed.
+- One legacy title: renamed in place. The same JobType id kept its project link.
+- A second legacy title with a status row and a task-type row, and no bid or workflow clash: both rows moved to the keeper. The legacy title was removed.
+- A forced failure while inserting workflow mappings, after the rename had been staged: the title returned to `בדיקה_חוות_דעת` and the mapping count stayed 0.
+- The next Apply, and a second Apply after it, left the same counts: 2 JobTypes, 2 mappings, 23 stage-profile rows. Review and Opinion were enabled and default.

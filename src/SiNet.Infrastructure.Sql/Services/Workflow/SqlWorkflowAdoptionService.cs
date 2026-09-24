@@ -246,7 +246,7 @@ internal sealed class SqlWorkflowAdoptionService(
                         + reassign.Message);
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException or WorkflowStartPreflightException)
+            catch (Exception ex) when (ex is InvalidOperationException or WorkflowStartPreflightException or DbUpdateException)
             {
                 warnings.Add(
                     "התהליך נוצר, אבל שיוך המשתמש האחראי נכשל. המשימה נשארה על אחראי ברירת המחדל של הקבוצה. "
