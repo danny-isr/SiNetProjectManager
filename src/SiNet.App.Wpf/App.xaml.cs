@@ -183,6 +183,9 @@ public partial class App : System.Windows.Application
             await ApplySavedUserSettingsAsync().ConfigureAwait(true);
             await ApplyAccHostConfigFromSystemSettingsAsync().ConfigureAwait(true);
 
+            splash.SetStatus("בודק סוגי עבודה...");
+            await RunCanonicalJobTypeStartupUpgradeAsync().ConfigureAwait(true);
+
             splash.SetStatus("פותח את המעטפת...");
             StandaloneHostLoggingBootstrap.Info("[STARTUP] Opening NewShell...");
             var factory = _services.GetRequiredService<INewShellFactory>();
@@ -193,7 +196,6 @@ public partial class App : System.Windows.Application
             shell.Show();
 
             ScheduleEmailBodyPdfRendererInit();
-            ScheduleWorkflowTemplateReadinessCheck();
 
             StandaloneHostLoggingBootstrap.Warning("[STARTUP] Client session ready");
         }
@@ -204,41 +206,50 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Non-fatal warmup for ACC Inbox <c>00_Email.pdf</c> (N4). Lazy init still happens on first render.
+    /// Release and Debug both run the same one-time JobType upgrade. It does not
+    /// call the DEBUG general seed. A blocked or failed upgrade still opens the shell.
     /// </summary>
-    private void ScheduleWorkflowTemplateReadinessCheck()
+    private async Task RunCanonicalJobTypeStartupUpgradeAsync()
     {
-        Dispatcher.BeginInvoke(async () =>
+        try
         {
-            try
+            var factory = _services?.GetService<IDbContextFactory<SiNetSQLDbContext>>();
+            if (factory is null)
+                return;
+            await using var db = await factory.CreateDbContextAsync(_shutdownCts.Token).ConfigureAwait(true);
+            var result = await CanonicalJobTypeStartupUpgrade
+                .RunAsync(db, _shutdownCts.Token)
+                .ConfigureAwait(true);
+            StandaloneHostLoggingBootstrap.Info(
+                $"[STARTUP] Canonical JobType upgrade outcome={result.Outcome} reviewJobTypeId={result.ReviewJobTypeId}");
+            if (result.Outcome is CanonicalJobTypeStartupUpgradeOutcome.Blocked
+                or CanonicalJobTypeStartupUpgradeOutcome.Failed
+                or CanonicalJobTypeStartupUpgradeOutcome.Busy)
             {
-                var factory = _services?.GetService<IDbContextFactory<SiNetSQLDbContext>>();
-                if (factory is null)
-                    return;
-                await using var db = await factory.CreateDbContextAsync(_shutdownCts.Token).ConfigureAwait(true);
-                var gaps = await CanonicalJobTypeReconciliation
-                    .DescribeRuntimeGapsAsync(db, _shutdownCts.Token)
-                    .ConfigureAwait(true);
-                if (gaps.Count == 0)
-                    return;
                 MessageBox.Show(
-                    "מיפוי תבניות התהליך אינו שלם. ההתקנה לא מתקנת את זה לבד."
-                    + Environment.NewLine + Environment.NewLine
-                    + string.Join(Environment.NewLine, gaps),
-                    "תבניות תהליך",
+                    result.Message,
+                    "שדרוג סוגי עבודה",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
             }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                StandaloneHostLoggingBootstrap.Warning(
-                    ex,
-                    "[STARTUP] Workflow template readiness check failed (non-fatal).");
-            }
-        });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            StandaloneHostLoggingBootstrap.Warning(
+                ex,
+                "[STARTUP] Canonical JobType upgrade failed before the shell opened (non-fatal).");
+            MessageBox.Show(
+                "שדרוג סוגי העבודה נכשל והשינוי בוטל. המסד לא נשאר באמצע שדרוג."
+                + Environment.NewLine + ex.Message
+                + Environment.NewLine
+                + "אפשר להמשיך לעבוד במסכים שאינם תלויים בהטמעת תהליך.",
+                "שדרוג סוגי עבודה",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private void ScheduleEmailBodyPdfRendererInit()

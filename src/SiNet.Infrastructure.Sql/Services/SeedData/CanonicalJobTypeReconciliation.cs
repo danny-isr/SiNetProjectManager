@@ -6,7 +6,8 @@ namespace SiNet.Infrastructure.Sql.Services.SeedData;
 
 /// <summary>
 /// Explicit JobType taxonomy reconciliation for Review and Opinion.
-/// This is not part of application startup and is not the DEBUG DevTools seed.
+/// Release startup calls <see cref="CanonicalJobTypeStartupUpgrade"/>, which writes
+/// only when the database is not already canonical. This is not the DEBUG DevTools seed.
 /// Dry-run reports conflicts and writes nothing. Apply uses the same rules as the general seed.
 /// </summary>
 public static class CanonicalJobTypeReconciliation

@@ -4,9 +4,15 @@
 > **Updated:** 24.09.2026
 > **Scope:** Move JobType `בדיקה חוות דעת` / `בדיקה_חוות_דעת` to `בדיקה`, and map `בדיקה` to Review and `חוות דעת` to Opinion.
 
-Installing a Release build does not run this. `SqlWorkflowSeedService` is registered only in DEBUG. The Release seed stub throws `NotSupportedException`. Do not open DevTools on a Release build to get around that.
+`SiNet.App.Wpf` runs this once on startup, before the shell opens. It does not run the DEBUG general seed and it does not use an EF migration. `SqlWorkflowSeedService` stays DEBUG-only.
 
-The same rules live in `CanonicalJobTypeReconciliation` and in the DEBUG general seed. Production uses the explicit command below, not the general seed.
+The startup checks the connected database first. When there is no legacy title and the Review and Opinion mappings and stage profiles are already in place, it commits nothing and shows no success message. When `בדיקה חוות דעת` or `בדיקה_חוות_דעת` is present, or an existing `בדיקה` / `חוות דעת` row is missing its enabled mapping or stage profile, it calls `CanonicalJobTypeReconciliation.ApplyAsync` inside one SQL transaction. The rename keeps `JobType.Id` and the project links. `חוות דעת` stays a separate JobType.
+
+Two workstations cannot upgrade at once. Startup takes an exclusive `sp_getapplock` named `SiNet:CanonicalJobTypeUpgrade` for the transaction. The second process waits, then checks again. If the first process already finished, the second writes nothing. If the lock wait expires, startup shows a warning and still opens the shell.
+
+A conflict, a missing workflow definition or stage, or a failed write does not show success. The transaction rolls back, so a rename is not left in place without its mappings. The warning says the database was not changed, and the shell still opens so the rest of the application can be used. The adoption wizard stays without stages until the conflict is resolved outside this upgrade.
+
+The manual command below remains available for a dry-run on a copy. It is no longer required before a Release install. A check of the DEV catalog does not describe the database the installed Production application opens.
 
 ## What the command does
 
@@ -68,7 +74,7 @@ Checked on 24.09.2026 against a fresh copy-only restore `SiNet_TemplateDiag_2026
 
 A screen that still lists only the Planning workflow for this job type is empty, because that mapping is disabled. The Review task template is present. Renaming the job type does not add it, and it is already there. The old desktop code does not look up the title `בדיקה_חוות_דעת`; that string appears only in seed comments. It keeps using JobType id 20, so the status and task-type rows above still apply. What changes for the old app is the displayed title, and any workflow list that reads enabled mappings now offers Review instead of Planning.
 
-Startup of `SiNet.App.Wpf` runs a read-only check. It does not call `--apply`. If the Review or Opinion mapping, or the current-stage task template, is missing, it shows a warning.
+Startup of `SiNet.App.Wpf` performs the upgrade described above. It no longer stops at a read-only warning.
 
 ## Apply is one transaction
 
@@ -85,6 +91,8 @@ dotnet test src\SiNet.App.Wpf.Tests\SiNet.App.Wpf.Tests.csproj --configuration D
 ```
 
 Result on 24.09.2026. The explicit log is `docs/OPS_CANONICAL_JOBTYPE_SQL_PROOF.txt`. If LocalDB cannot be opened, the test fails.
+
+On 24.09.2026 the startup upgrade was run against `SiNet_TemplateDiag_20260924`, a restored copy of the DEV catalog `SIData` on `SI-WIN-2K19\SIDATA`. That copy is not the database opened by the installed Production application. The outcome was `AlreadyCurrent` for JobType 20, and the row counts stayed `legacy=0`, `maps=23`, `stages=290`. This does not prove the Production database is already normalized. The installed Release build performs the same check on whatever database it opens.
 
 A copy-only backup of catalog `SIData` on `SI-WIN-2K19\SIDATA` was restored to `SiNet_ReconcileCopy_20260924`. The source catalog was not written. On that copy the names were already normalized (`בדיקה` id 20, `חוות דעת` id 23, no legacy title). Dry-run reported `Conflicts: 0` and wrote nothing. Two `--apply` runs both completed with the same ids and no conflicts. Afterward the copy had 2 canonical titles, 0 legacy titles, 23 workflow mappings, and 290 stage-profile rows. The source catalog was not the target of the tool.
 
