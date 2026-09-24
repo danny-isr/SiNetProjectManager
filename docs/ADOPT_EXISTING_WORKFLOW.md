@@ -1,7 +1,7 @@
 # Adopt Existing Workflow
 
 > **Status:** Active
-> **Updated:** 23.09.2026
+> **Updated:** 24.09.2026
 > **Host:** `SiNet.App.Wpf`
 
 ## Purpose
@@ -49,8 +49,9 @@ For `Project + WorkflowDefinition + JobType`, root instances only:
 | Paused | `BlockedAlreadyPaused` |
 | One Completed | `RequiresReviewCompletedExists` |
 | More than one live or completed instance | `BlockedConflict` |
+| Root instance on the same project and definition with `JobTypeId` null, and status other than Cancelled | `RequiresReviewExistingWorkflow`. No second instance until that row is decided |
 
-The existing Active/Paused unique index remains the database guard. Adoption adds the Completed and same-stage rules on top of it.
+The existing Active/Paused unique index does not cover a null `JobTypeId`. Adoption blocks that row itself. It does not guess that the unlabeled instance belongs to another track.
 
 Open policy applies only when no JobType on the project has any `ProjectTypeWorkflowDefinition` row. Once any such row exists, adoption of a track requires an enabled row for that exact JobType and workflow. A mapping on another JobType, or a disabled row, does not allow it.
 
@@ -83,7 +84,9 @@ An optional responsible user is accepted only when that user is an active member
 
 `StartWorkflowAsync` (the public path) is unchanged and still uses separate contexts, including sub-workflow auto-start.
 
-Adoption uses `StartWorkflowAtomicAsync`: one context, and on SQL Server one transaction around the instance, the initial transition, and the current-stage tasks. If provisioning throws, the transaction rolls back. The EF InMemory provider used by tests cannot roll back `SaveChanges`, so that path deletes the rows created by the failed start. Relational providers do not use that cleanup.
+Adoption uses `StartWorkflowAtomicAsync`: one context, and on SQL Server one transaction around the instance, the initial transition, the current-stage tasks, and the active-report link. If provisioning throws before that transaction commits, SQL Server rolls back. The EF InMemory provider used by tests cannot roll back `SaveChanges`, so that path deletes the rows created by the failed start. That cleanup runs only when the provider is not relational and the save has not completed. A null `CurrentTransaction` after `CommitAsync` is not treated as a failed save.
+
+Reassignment of the responsible user runs after that commit. If it throws or returns failure, the instance, transition, task, and report link stay. The commit result is still `Committed`, and `Warnings` says the task remained on the group default. The wizard shows those warnings before it closes.
 
 If the current stage provisions no task, the start is rolled back. Adoption does not leave an Active workflow with no task.
 
@@ -91,13 +94,15 @@ If the current stage provisions no task, the start is rolled back. Adoption does
 
 Report content import stays in `ReportImportService` (V2 `MigrationPocWindow`). Adoption does not copy that importer.
 
-In the new host, Preview lists `InspectionReport` rows that already belong to the project, labeled with `InspectionSeries.SeriesName` and `ReportNumber` because report numbers are scoped to a series. Each selected report is Historical or Active. At most one report is Active.
+In the new host, Preview lists `InspectionReport` rows that already belong to the project in SQL, labeled with `InspectionSeries.SeriesName` and `ReportNumber` because report numbers are scoped to a series. The wizard does not search Google Sheets and does not read the linked Google Docs. It is not a historical import. Each selected report is Historical or Active. At most one report is Active.
 
 - Historical, with no export snapshot: `MarkReportAsSentAsync` is not called, and `SentAt` / `IsLockedAfterSend` are not set by hand. Preview warns that the report stays open. `MarkReportAsSentAsync` needs an export spreadsheet and a note-cell map; inventing those would fake a send.
 - Active: the current stage must have exactly one created task whose `ReviewTaskInteractionRegistry` work target is `InspectionReport`. That task is linked through `SqlInspectionReportTaskLinkService` on the existing `TaskLink` table (`Related`, `IsWorkTarget`, `Pending`). Zero matches or more than one match blocks Preview. There is no fallback to the first created task. The link is inside the adoption transaction and is idempotent.
 - All reports Historical: the current task is not linked. A task such as `PerformProfessionalReview` stays in its normal creation mode, which can open the next report through the existing inspection flow.
 
-The wizard Commit button stays disabled until Preview is run again after a change to workflow, JobType, stage, responsible user, or report choice.
+The wizard Commit button stays disabled until Preview is run again after a change to workflow, JobType, stage, responsible user, or report choice. A Preview that is still running does not enable Commit if the selection changed before it returned. Commit sends the request that the successful Preview approved, not a later selection.
+
+Responsible users offered for a stage are the active members of that stage's group, plus the group default. The wizard does not list every user in the system.
 
 `[ADOPTED]` is a Notes prefix (`StartsWith`), not a substring.
 
@@ -109,5 +114,7 @@ The wizard Commit button stays disabled until Preview is run again after a chang
 - Historical reports are not locked unless they were already sent through the real export path.
 - `REV.MaterialIntake` and final stages cannot be adopted yet.
 - An existing Active workflow is never jumped forward.
-- Reassignment of the responsible user is a second step after the workflow transaction.
+- Reassignment of the responsible user is a second step after the workflow transaction. Failure of that step keeps the saved workflow and is shown as a warning.
+- A root workflow with no JobType on the same project and definition blocks adoption until someone decides what that row is.
+- JobType title reconciliation is not part of the Release install. See `docs/OPS_CANONICAL_JOBTYPE_RECONCILIATION.md`.
 - No `IsImported` / `ImportedAtUtc` columns. Query adopted workflows by the `[ADOPTED]` notes prefix.

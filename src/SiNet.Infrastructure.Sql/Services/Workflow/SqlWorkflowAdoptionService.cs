@@ -166,6 +166,9 @@ internal sealed class SqlWorkflowAdoptionService(
             : null;
 
         int? startedId = null;
+        WorkflowStartResultDto started;
+        int? linkId = null;
+        var saved = false;
         try
         {
             var notes = WorkflowAdoptionMarkers.BuildNotes(
@@ -177,7 +180,7 @@ internal sealed class SqlWorkflowAdoptionService(
                 .FirstOrDefault(r => r.Mode == WorkflowAdoptionReportMode.Active)
                 ?.ReportId;
 
-            var started = await _orchestrator.StartWorkflowAtomicAsync(
+            started = await _orchestrator.StartWorkflowAtomicAsync(
                     request.WorkflowDefinitionId,
                     request.ProjectId,
                     WorkflowTriggerType.System,
@@ -194,7 +197,6 @@ internal sealed class SqlWorkflowAdoptionService(
                 .ConfigureAwait(false);
             startedId = started.Instance.Id;
 
-            int? linkId = null;
             if (activeReportId is int reportId)
             {
                 var taskId = await ResolveInspectionReportTaskIdAsync(db, started, ct).ConfigureAwait(false);
@@ -206,34 +208,11 @@ internal sealed class SqlWorkflowAdoptionService(
             if (transaction is not null)
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
 
-            var warnings = preview.Warnings.ToList();
-            var createdTaskId = started.CreatedTasks.FirstOrDefault()?.Id;
-            if (request.ResponsibleUserId is int responsibleId
-                && createdTaskId is int taskToAssign
-                && started.CreatedTasks[0].AssignedToId != responsibleId)
-            {
-                var reassign = await _taskQueue
-                    .ReassignAsync(taskToAssign, responsibleId, request.UserId, ct)
-                    .ConfigureAwait(false);
-                if (!reassign.Succeeded)
-                {
-                    warnings.Add(
-                        "התהליך נוצר, אבל שיוך המשתמש האחראי נכשל. המשימה נשארה על אחראי ברירת המחדל של הקבוצה. "
-                        + reassign.Message);
-                }
-            }
-
-            return new WorkflowAdoptionCommitResult(
-                WorkflowAdoptionDisposition.Committed,
-                "התהליך הוטמע בשלב הנוכחי.",
-                started.Instance.Id,
-                createdTaskId,
-                linkId,
-                warnings);
+            saved = true;
         }
         catch (Exception ex) when (ex is WorkflowStartPreflightException or InvalidOperationException)
         {
-            if (db.Database.CurrentTransaction is null && startedId is int orphanId)
+            if (!relational && !saved && startedId is int orphanId)
             {
                 await WorkflowTaskOrchestrator
                     .CompensateFailedAtomicStartAsync(db, orphanId, ct)
@@ -248,6 +227,40 @@ internal sealed class SqlWorkflowAdoptionService(
                 null,
                 preview.Warnings);
         }
+
+        var warnings = preview.Warnings.ToList();
+        var createdTaskId = started.CreatedTasks.FirstOrDefault()?.Id;
+        if (request.ResponsibleUserId is int responsibleId
+            && createdTaskId is int taskToAssign
+            && started.CreatedTasks[0].AssignedToId != responsibleId)
+        {
+            try
+            {
+                var reassign = await _taskQueue
+                    .ReassignAsync(taskToAssign, responsibleId, request.UserId, ct)
+                    .ConfigureAwait(false);
+                if (!reassign.Succeeded)
+                {
+                    warnings.Add(
+                        "התהליך נוצר, אבל שיוך המשתמש האחראי נכשל. המשימה נשארה על אחראי ברירת המחדל של הקבוצה. "
+                        + reassign.Message);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or WorkflowStartPreflightException)
+            {
+                warnings.Add(
+                    "התהליך נוצר, אבל שיוך המשתמש האחראי נכשל. המשימה נשארה על אחראי ברירת המחדל של הקבוצה. "
+                    + ex.Message);
+            }
+        }
+
+        return new WorkflowAdoptionCommitResult(
+            WorkflowAdoptionDisposition.Committed,
+            "התהליך הוטמע בשלב הנוכחי.",
+            started.Instance.Id,
+            createdTaskId,
+            linkId,
+            warnings);
     }
 
     private async ValueTask<WorkflowAdoptionPreview> EvaluateAsync(
@@ -645,6 +658,26 @@ internal sealed class SqlWorkflowAdoptionService(
         WorkflowStageDefinition selected,
         CancellationToken ct)
     {
+        var unlabeled = await db.WorkflowInstances.AsNoTracking()
+            .Include(i => i.CurrentStage)
+            .Where(i =>
+                i.ProjectId == request.ProjectId
+                && i.WorkflowDefinitionId == request.WorkflowDefinitionId
+                && i.JobTypeId == null
+                && i.ParentWorkflowInstanceId == null
+                && i.Status != WorkflowStatus.Cancelled)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        if (unlabeled.Count > 0)
+        {
+            var one = unlabeled[0];
+            return (
+                WorkflowAdoptionDisposition.RequiresReviewExistingWorkflow,
+                "קיים תהליך ישן לאותו פרויקט ותהליך בלי סוג עבודה. לא נוצר מופע נוסף עד הכרעה.",
+                one.Id,
+                one.CurrentStage?.Code);
+        }
+
         var instances = await db.WorkflowInstances.AsNoTracking()
             .Include(i => i.CurrentStage)
             .Where(i =>

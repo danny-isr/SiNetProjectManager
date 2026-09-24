@@ -167,8 +167,14 @@ internal sealed class WorkflowTaskOrchestrator(
         }
         catch
         {
-            if (instance is { Id: > 0 } && db.Database.CurrentTransaction is null)
+            // Relational CommitAsync clears CurrentTransaction. A null transaction is not
+            // proof that the save failed, so SQL Server must never run this cleanup.
+            if (!db.Database.IsRelational()
+                && instance is { Id: > 0 }
+                && db.Database.CurrentTransaction is null)
+            {
                 await CompensateNonRelationalStartAsync(db, instance.Id, ct).ConfigureAwait(false);
+            }
 
             throw;
         }
@@ -183,13 +189,20 @@ internal sealed class WorkflowTaskOrchestrator(
 
     /// <summary>
     /// The EF InMemory provider used by unit tests cannot roll back <c>SaveChanges</c>.
-    /// Relational providers use the transaction above and do not call this cleanup.
+    /// Relational providers use the transaction above. This cleanup is refused on a
+    /// relational provider even when <c>CurrentTransaction</c> is already null.
     /// </summary>
     internal static Task CompensateFailedAtomicStartAsync(
         SiNetSQLDbContext db,
         int instanceId,
-        CancellationToken ct) =>
-        CompensateNonRelationalStartAsync(db, instanceId, ct);
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        if (db.Database.IsRelational())
+            return Task.CompletedTask;
+
+        return CompensateNonRelationalStartAsync(db, instanceId, ct);
+    }
 
     private static async Task CompensateNonRelationalStartAsync(
         SiNetSQLDbContext db,

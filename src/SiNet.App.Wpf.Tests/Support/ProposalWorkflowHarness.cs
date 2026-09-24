@@ -19,7 +19,11 @@ public static class ProposalWorkflowHarness
 {
     public const int UserId = 1;
 
-    public static async Task<(Microsoft.Extensions.DependencyInjection.ServiceProvider Provider, DbContextOptions<SiNetSQLDbContext> Options)> BuildSeededProviderAsync()
+    public static Task<(Microsoft.Extensions.DependencyInjection.ServiceProvider Provider, DbContextOptions<SiNetSQLDbContext> Options)> BuildSeededProviderAsync() =>
+        BuildSeededProviderAsync(configure: null);
+
+    public static async Task<(Microsoft.Extensions.DependencyInjection.ServiceProvider Provider, DbContextOptions<SiNetSQLDbContext> Options)> BuildSeededProviderAsync(
+        Action<IServiceCollection>? configure)
     {
         var options = new DbContextOptionsBuilder<SiNetSQLDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N")).Options;
@@ -32,6 +36,7 @@ public static class ProposalWorkflowHarness
         services.AddSingleton<IDbContextFactory<SiNetSQLDbContext>>(factory);
         services.AddSingleton<ISystemSettingsQueryService>(new PermissivePilotSystemSettingsQueryService(UserId));
         services.AddSiNetProcessBackbone();
+        configure?.Invoke(services);
         return (services.BuildServiceProvider(), options);
     }
 

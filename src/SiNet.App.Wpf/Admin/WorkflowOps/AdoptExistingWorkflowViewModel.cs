@@ -22,6 +22,8 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
     private string _statusMessage = string.Empty;
     private string _previewText = string.Empty;
     private bool _canCommit;
+    private int _inputGeneration;
+    private WorkflowAdoptionRequest? _approvedRequest;
     private WorkflowAdoptionWorkflowOption? _selectedWorkflow;
     private WorkflowAdoptionJobTypeOption? _selectedJobType;
     private WorkflowAdoptionStageOption? _selectedStage;
@@ -180,6 +182,7 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
                 _logger);
             StatusMessage = options.Message ?? $"פרויקט {options.ProjectTitle}";
             PreviewText = string.Empty;
+            _approvedRequest = null;
             _canCommit = false;
         }
         catch (Exception ex)
@@ -195,18 +198,36 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
 
     internal async Task PreviewAsync()
     {
+        var generation = _inputGeneration;
+        var request = BuildRequest();
         IsBusy = true;
         try
         {
-            var preview = await _adoption.PreviewAsync(BuildRequest(), CancellationToken.None).ConfigureAwait(true);
+            var preview = await _adoption.PreviewAsync(request, CancellationToken.None).ConfigureAwait(true);
+            if (generation != _inputGeneration)
+            {
+                _approvedRequest = null;
+                _canCommit = false;
+                return;
+            }
+
             PreviewText = FormatPreview(preview);
             StatusMessage = preview.Message;
+            _approvedRequest = request;
             _canCommit = preview.CanCommit;
         }
         catch (Exception ex)
         {
+            if (generation != _inputGeneration)
+            {
+                _approvedRequest = null;
+                _canCommit = false;
+                return;
+            }
+
             PreviewText = string.Empty;
             StatusMessage = ex.Message;
+            _approvedRequest = null;
             _canCommit = false;
         }
         finally
@@ -217,15 +238,20 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
 
     private async Task CommitAsync()
     {
+        var request = _approvedRequest;
+        if (request is null || !_canCommit)
+            return;
+
         IsBusy = true;
         try
         {
-            var result = await _adoption.CommitAsync(BuildRequest(), CancellationToken.None).ConfigureAwait(true);
-            StatusMessage = result.Message;
+            var result = await _adoption.CommitAsync(request, CancellationToken.None).ConfigureAwait(true);
+            StatusMessage = FormatCommitMessage(result);
+            _approvedRequest = null;
             _canCommit = false;
             if (result.Disposition == WorkflowAdoptionDisposition.Committed)
             {
-                MessageBox.Show(result.Message, "הטמעת תהליך קיים", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(StatusMessage, "הטמעת תהליך קיים", MessageBoxButton.OK, MessageBoxImage.Information);
                 RequestClose?.Invoke(this, true);
             }
         }
@@ -237,6 +263,14 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    private static string FormatCommitMessage(WorkflowAdoptionCommitResult result)
+    {
+        if (result.Warnings.Count == 0)
+            return result.Message;
+
+        return result.Message + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, result.Warnings);
     }
 
     private WorkflowAdoptionRequest BuildRequest()
@@ -261,6 +295,8 @@ public sealed class AdoptExistingWorkflowViewModel : ObservableObject
     private void InvalidatePreview()
     {
         var hadPreview = _canCommit || !string.IsNullOrEmpty(_previewText);
+        _inputGeneration++;
+        _approvedRequest = null;
         _canCommit = false;
         if (!string.IsNullOrEmpty(_previewText))
         {

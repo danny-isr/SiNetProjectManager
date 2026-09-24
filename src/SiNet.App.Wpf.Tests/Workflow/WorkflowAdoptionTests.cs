@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SiNet.Application.Tasks;
 using SiNet.Application.Workflow;
 using SiNet.App.Wpf.Tests.Support;
 using SiNet.Infrastructure.Sql.Constants;
@@ -640,6 +641,112 @@ public sealed class WorkflowAdoptionTests
         Assert.Equal(taskTypeCode, taskType);
     }
 
+    [Fact]
+    public async Task Reassign_failure_after_commit_keeps_the_workflow_instance()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync(services =>
+            services.AddTransient<ITaskQueueService, ThrowingReassignQueue>());
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            await AddAlternateReviewerAsync(options);
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var request = new WorkflowAdoptionRequest(
+                ctx.ProjectId,
+                ctx.DefinitionId,
+                ctx.JobTypeId,
+                ReviewStageCodes.ProfessionalReview,
+                ProposalWorkflowHarness.UserId,
+                ResponsibleUserId: 2);
+
+            var committed = await adoption.CommitAsync(request, CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.Committed, committed.Disposition);
+            Assert.NotNull(committed.WorkflowInstanceId);
+            Assert.Contains(committed.Warnings, w => w.Contains("שיוך המשתמש האחראי נכשל", StringComparison.Ordinal));
+
+            await using var db = new SiNetSQLDbContext(options);
+            Assert.Equal(1, await db.WorkflowInstances.CountAsync());
+            Assert.Equal(1, await db.WorkflowStageTransitions.CountAsync());
+            Assert.True(await db.ProjectAssignments.AnyAsync(t => t.ProjectId == ctx.ProjectId));
+        }
+    }
+
+    [Fact]
+    public async Task Reassign_that_returns_failure_after_commit_keeps_the_instance_and_warns()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync(services =>
+            services.AddTransient<ITaskQueueService, FailedReassignQueue>());
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            await AddAlternateReviewerAsync(options);
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var request = new WorkflowAdoptionRequest(
+                ctx.ProjectId,
+                ctx.DefinitionId,
+                ctx.JobTypeId,
+                ReviewStageCodes.ProfessionalReview,
+                ProposalWorkflowHarness.UserId,
+                ResponsibleUserId: 2);
+
+            var committed = await adoption.CommitAsync(request, CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.Committed, committed.Disposition);
+            Assert.Contains(committed.Warnings, w => w.Contains("שיוך המשתמש האחראי נכשל", StringComparison.Ordinal));
+            await using var db = new SiNetSQLDbContext(options);
+            Assert.Equal(1, await db.WorkflowInstances.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Root_instance_without_jobtype_blocks_a_new_adoption()
+    {
+        var (provider, options) = await ProposalWorkflowHarness.BuildSeededProviderAsync();
+        await using (provider)
+        {
+            var ctx = await PrepareReviewProjectAsync(options, assignReviewers: true);
+            await using (var db = new SiNetSQLDbContext(options))
+            {
+                db.WorkflowInstances.Add(new WorkflowInstance
+                {
+                    ProjectId = ctx.ProjectId,
+                    WorkflowDefinitionId = ctx.DefinitionId,
+                    JobTypeId = null,
+                    Status = WorkflowStatus.Active,
+                    IsProjectBound = true,
+                    CreatedByUserId = ProposalWorkflowHarness.UserId,
+                    CreatedAtUtc = DateTime.UtcNow,
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var adoption = provider.GetRequiredService<IWorkflowAdoptionService>();
+            var request = Request(ctx, ReviewStageCodes.ProfessionalReview);
+            var preview = await adoption.PreviewAsync(request, CancellationToken.None);
+            Assert.Equal(WorkflowAdoptionDisposition.RequiresReviewExistingWorkflow, preview.Disposition);
+            Assert.False(preview.CanCommit);
+
+            var committed = await adoption.CommitAsync(request, CancellationToken.None);
+            Assert.NotEqual(WorkflowAdoptionDisposition.Committed, committed.Disposition);
+            await using var verify = new SiNetSQLDbContext(options);
+            Assert.Equal(1, await verify.WorkflowInstances.CountAsync());
+        }
+    }
+
+    private static async Task AddAlternateReviewerAsync(DbContextOptions<SiNetSQLDbContext> options)
+    {
+        await using var db = new SiNetSQLDbContext(options);
+        if (!await db.Siusers.AnyAsync(u => u.Id == 2))
+        {
+            db.Siusers.Add(new Siuser { Id = 2, Name = "Other Reviewer", IsActive = true });
+            await db.SaveChangesAsync();
+        }
+
+        var group = await db.UserGroups.SingleAsync(g => g.Code == ReviewUserGroupCodes.Reviewers);
+        group.DefaultAssigneeId = ProposalWorkflowHarness.UserId;
+        db.UserGroupMemberships.Add(new UserGroupMembership { UserGroupId = group.Id, SiuserId = 2 });
+        await db.SaveChangesAsync();
+    }
+
     private static WorkflowAdoptionRequest Request(
         ReviewAdoptionContext ctx,
         string stageCode,
@@ -778,4 +885,34 @@ public sealed class WorkflowAdoptionTests
                 && l.LinkedEntityId == instanceId));
 
     private sealed record ReviewAdoptionContext(int ProjectId, int JobTypeId, int DefinitionId);
+
+    private sealed class ThrowingReassignQueue : ITaskQueueService
+    {
+        public ValueTask<TaskQueueOperationResult> ReassignAsync(int taskId, int newUserId, int changedByUserId, CancellationToken ct = default) =>
+            throw new InvalidOperationException("reassign failed after commit");
+
+        public ValueTask<IReadOnlyList<TaskSummaryDto>> GetUserQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask MoveWithinBucketAsync(int taskId, int newPosition, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask ChangeBucketAsync(int taskId, int newBucket, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<int> ValidateAndRepairQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueRepairResult> RepairQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueRepairResult> RepairAllQueuesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueOperationResult> MoveUpAsync(int taskId, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueOperationResult> MoveDownAsync(int taskId, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    private sealed class FailedReassignQueue : ITaskQueueService
+    {
+        public ValueTask<TaskQueueOperationResult> ReassignAsync(int taskId, int newUserId, int changedByUserId, CancellationToken ct = default) =>
+            new(new TaskQueueOperationResult(false, "queue refused"));
+
+        public ValueTask<IReadOnlyList<TaskSummaryDto>> GetUserQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask MoveWithinBucketAsync(int taskId, int newPosition, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask ChangeBucketAsync(int taskId, int newBucket, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<int> ValidateAndRepairQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueRepairResult> RepairQueueAsync(int userId, int workQueueBucket, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueRepairResult> RepairAllQueuesAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueOperationResult> MoveUpAsync(int taskId, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<TaskQueueOperationResult> MoveDownAsync(int taskId, int changedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
+    }
 }

@@ -34,6 +34,49 @@ public sealed class AdoptExistingWorkflowViewModelTests
     }
 
     [Fact]
+    public async Task A_preview_that_finishes_after_the_selection_changed_does_not_enable_commit()
+    {
+        var gate = new TaskCompletionSource<WorkflowAdoptionPreview>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var adoption = new GatedAdoptionService(gate);
+        var vm = new AdoptExistingWorkflowViewModel(adoption);
+        vm.ProjectId = 5;
+        await vm.LoadAsync().ConfigureAwait(true);
+
+        var preview = vm.PreviewAsync();
+        vm.Reports[0].Choice = "פעיל";
+        gate.SetResult(new WorkflowAdoptionPreview(
+            WorkflowAdoptionDisposition.ReadyToAdopt,
+            true,
+            "אפשר להטמיע",
+            5,
+            "פרויקט",
+            5,
+            "Active",
+            3,
+            "בדיקה",
+            9,
+            "Review",
+            "תהליך בדיקה",
+            "REV.ProfessionalReview",
+            "בדיקה מקצועית",
+            50,
+            "Stage",
+            false,
+            null,
+            null,
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            7));
+        await preview.ConfigureAwait(true);
+
+        Assert.False(vm.CommitCommand.CanExecute(null));
+    }
+
+    [Fact]
     public void Report_choice_automation_id_uses_report_id_not_report_number()
     {
         var first = new AdoptionReportRowVm(new WorkflowAdoptionReportPreview(
@@ -102,6 +145,25 @@ public sealed class AdoptExistingWorkflowViewModelTests
         }
 
         throw new InvalidOperationException($"Repo file not found: {relativePath}");
+    }
+
+    private sealed class GatedAdoptionService(TaskCompletionSource<WorkflowAdoptionPreview> gate) : IWorkflowAdoptionService
+    {
+        public ValueTask<WorkflowAdoptionOptions> GetOptionsAsync(int projectId, CancellationToken ct)
+        {
+            var stage = new WorkflowAdoptionStageOption(
+                "REV.ProfessionalReview", "בדיקה מקצועית", 50, [new WorkflowAdoptionUserOption(7, "Dana")]);
+            var job = new WorkflowAdoptionJobTypeOption(3, "בדיקה", [stage]);
+            var workflow = new WorkflowAdoptionWorkflowOption(9, "Review", "תהליך בדיקה", [job]);
+            var report = new WorkflowAdoptionReportPreview(4, 1, null, false, false, "לא נבחר", 12, "בדיקת תנועה");
+            return new(new WorkflowAdoptionOptions(projectId, "פרויקט", [workflow], [report], null));
+        }
+
+        public async ValueTask<WorkflowAdoptionPreview> PreviewAsync(WorkflowAdoptionRequest request, CancellationToken ct) =>
+            await gate.Task.ConfigureAwait(false);
+
+        public ValueTask<WorkflowAdoptionCommitResult> CommitAsync(WorkflowAdoptionRequest request, CancellationToken ct) =>
+            throw new InvalidOperationException("Commit must stay disabled.");
     }
 
     private sealed class FakeAdoptionService : IWorkflowAdoptionService
